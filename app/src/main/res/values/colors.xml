@@ -95,17 +95,29 @@
 
     <!-- launcher palette -->
     <color name="ic_launcher_bg">#0C0D10</color>
-    <color name="launcher_bg">#0C0D10</color>
-    <color name="launcher_surface">#15171C</color>
-    <color name="launcher_surface_2">#1F222A</color>
-    <color name="launcher_stroke">#2A2E37</color>
+    <color name="launcher_bg">#070608</color>
+    <color name="launcher_surface">#17161A</color>
+    <color name="launcher_surface_2">#232227</color>
+    <color name="launcher_stroke">#1AFFFFFF</color>
     <color name="launcher_accent">#F2B32C</color>
     <color name="launcher_accent_dim">#29F2B32C</color>
-    <color name="launcher_on_accent">#131418</color>
-    <color name="launcher_text">#EDEDF0</color>
-    <color name="launcher_text_dim">#878C96</color>
+    <color name="launcher_on_accent">#15110A</color>
+    <color name="launcher_text">#F4F2EE</color>
+    <color name="launcher_text_dim">#A09C96</color>
     <color name="launcher_gold">#F2B32C</color>
-    <color name="launcher_danger">#E5484D</color>
+    <color name="launcher_danger">#F0555A</color>
+
+    <!-- launcher glass layers (drawn over the sunset backdrop) -->
+    <color name="ui_glass">#A8090A0D</color>
+    <color name="ui_backdrop_scrim">#59000000</color>
+    <color name="ui_glass_strong">#C7090809</color>
+    <color name="ui_glass_hi">#14FFFFFF</color>
+    <color name="ui_inset">#47000000</color>
+    <color name="ui_hairline">#16FFFFFF</color>
+    <color name="ui_text_faint">#6E6A65</color>
+    <color name="ui_good">#4CD080</color>
+    <color name="ui_warn">#FFA94D</color>
+    <color name="ui_bad">#F0555A</color>
 
     <color name="security">#121212</color>
     <color name="faq">#b8b8b8</color>

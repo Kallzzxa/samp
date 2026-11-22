@@ -1,0 +1,701 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/panel_audio"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:scrollbarSize="3dp"
+    android:scrollbarThumbVertical="@drawable/ui_scroll_thumb"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/_12sdp">
+
+        <!-- 卡片：音量与电台 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="游戏音量与车载电台"
+                android:textColor="@color/launcher_accent"
+                android:textSize="@dimen/_9ssp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_2sdp"
+                android:layout_marginBottom="@dimen/_6sdp"
+                android:text="调节环境音效、车载广播音乐音量与自动调频开关"
+                android:textColor="@color/launcher_text_dim"
+                android:textSize="@dimen/_7ssp" />
+
+            <!-- 游戏音效音量 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_4sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="游戏音效音量"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="控制引擎轰鸣、枪械射击、脚步与环境声大小"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/slider_sfx_volume"
+                    android:layout_width="@dimen/_115sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="0"
+                    android:valueTo="100" />
+
+                <TextView
+                    android:id="@+id/tv_sfx_volume_val"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="80%"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 音乐与电台音量 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="音乐与电台音量"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="控制车载广播电台、室内背景音乐与提示配乐大小"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/slider_music_volume"
+                    android:layout_width="@dimen/_115sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="0"
+                    android:valueTo="100" />
+
+                <TextView
+                    android:id="@+id/tv_music_volume_val"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="80%"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 默认车载电台 (FEA_RSS) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="默认车载广播电台"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="原版单机车载电台偏好频道（需完整电台音频包支持）"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaOptionView
+                    android:id="@+id/dropdown_radio_station"
+                    android:layout_width="@dimen/_120sdp"
+                    android:layout_height="@dimen/_26sdp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 车载电台自动调频 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="车载电台自动调频"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="进入载具时自动调至该车型默认的广播电台频道"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_radio_autotune"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 卡片：联机语音 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/_10sdp"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="多人语音通信"
+                android:textColor="@color/launcher_accent"
+                android:textSize="@dimen/_9ssp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="游戏内语音聊天"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="在安装了语音插件的服务器中启用实时语音收发功能"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/voice_switch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 语音接收音量 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="玩家语音接收音量"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="调节其他玩家说话时的语音播放响度"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/slider_voice_volume"
+                    android:layout_width="@dimen/_115sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="0"
+                    android:valueTo="100" />
+
+                <TextView
+                    android:id="@+id/tv_voice_volume_val"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="100%"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 启用麦克风发言 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="启用麦克风发言与屏幕按钮"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="开启后在游戏右侧显示麦克风按钮，关闭则仅听别人说话不发声"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_voice_mic_enable"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 麦克风输入增益 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="麦克风录音音量与增益"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="调节自己说话发送给其他玩家的麦克风灵敏度与响度"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/slider_voice_mic_volume"
+                    android:layout_width="@dimen/_115sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="0"
+                    android:valueTo="100" />
+
+                <TextView
+                    android:id="@+id/tv_voice_mic_volume_val"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="75%"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 麦克风操作触发方式 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="麦克风操作触发方式"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="选择长按麦克风图标说话（松手即停）或点击切换自由麦"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaOptionView
+                    android:id="@+id/dropdown_voice_mic_mode"
+                    android:layout_width="@dimen/_120sdp"
+                    android:layout_height="@dimen/_26sdp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 麦克风按钮大小 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="屏幕麦克风按钮大小"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="缩放游戏画面右侧的语音麦克风悬浮图标尺寸"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/slider_voice_btn_size"
+                    android:layout_width="@dimen/_115sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="50"
+                    android:valueTo="150" />
+
+                <TextView
+                    android:id="@+id/tv_voice_btn_size_val"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="100%"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 显示正在说话玩家列表 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="显示正在说话玩家提示"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="当附近有其他玩家开麦说话时在画面中显示喇叭图标与提示"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_voice_speaker_list"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 语音自动音量均衡 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="语音自动音量均衡"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="自动压制过大的爆麦杂音并放大微弱人声，使不同玩家声音均衡"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_voice_balancer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 环境噪音过滤 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="人声环境降噪过滤"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="启用高通音频滤波器削弱风声与低频电流底噪，让人声更清晰"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_voice_filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

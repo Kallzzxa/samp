@@ -2,11 +2,13 @@ package com.sampmobile.launcher.ui.adapter;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -26,6 +28,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import com.sampmobile.launcher.R;
+import com.sampmobile.launcher.utils.LauncherFonts;
 import com.sampmobile.launcher.utils.LauncherThemeManager;
 import com.sampmobile.launcher.utils.SampQuery;
 import com.sampmobile.launcher.utils.ServerModel;
@@ -57,6 +60,8 @@ public class ServerAdapter extends RecyclerView.Adapter<ServerAdapter.ViewHolder
         ImageView server_password;
         TextView server_gamemode;
         TextView server_players;
+        View server_status;
+        ProgressBar server_players_bar;
 
         public ViewHolder(View itemView) {
             super(itemView);
@@ -66,6 +71,41 @@ public class ServerAdapter extends RecyclerView.Adapter<ServerAdapter.ViewHolder
             server_password = itemView.findViewById(R.id.server_password);
             server_gamemode = itemView.findViewById(R.id.server_gamemode);
             server_players = itemView.findViewById(R.id.server_players);
+            server_status = itemView.findViewById(R.id.server_status);
+            server_players_bar = itemView.findViewById(R.id.server_players_bar);
+            LauncherFonts.applyCondensed(server_ping, server_players);
+        }
+    }
+
+    /** Ping quality colour: green up to 120 ms, amber up to 250 ms, red above, faint when unknown. */
+    public static int pingColor(Context ctx, String ping) {
+        int ms;
+        try {
+            ms = Integer.parseInt(ping.trim());
+        } catch (Exception e) {
+            return ctx.getColor(R.color.ui_text_faint);
+        }
+        if (ms < 0) return ctx.getColor(R.color.ui_text_faint);
+        if (ms <= 120) return ctx.getColor(R.color.ui_good);
+        if (ms <= 250) return ctx.getColor(R.color.ui_warn);
+        return ctx.getColor(R.color.ui_bad);
+    }
+
+    /** Server-reported text without a single letter or digit ("-", "..", blank) counts as absent. */
+    public static String meaningful(String s) {
+        if (s == null) return "";
+        String t = s.trim();
+        for (int i = 0; i < t.length(); i++) {
+            if (Character.isLetterOrDigit(t.charAt(i))) return t;
+        }
+        return "";
+    }
+
+    private static int parseIntSafe(String s) {
+        try {
+            return Integer.parseInt(s.trim());
+        } catch (Exception e) {
+            return 0;
         }
     }
 
@@ -174,20 +214,37 @@ public class ServerAdapter extends RecyclerView.Adapter<ServerAdapter.ViewHolder
 
         viewHolder.server_name.setText(server.server_name);
         String ping = server.server_ping;
-        viewHolder.server_ping.setText("-".equals(ping) || ping.isEmpty() ? "-" : ping + "ms");
-        viewHolder.server_gamemode.setText(server.server_gamemode);
+        boolean hasPing = !("-".equals(ping) || ping.isEmpty());
+        viewHolder.server_ping.setText(hasPing ? ping + " ms" : "—");
+        int pingColor = pingColor(activity, ping);
+        viewHolder.server_ping.setTextColor(pingColor);
+        viewHolder.server_status.setBackgroundTintList(ColorStateList.valueOf(pingColor));
+
+        String gamemode = meaningful(server.server_gamemode);
+        String lang = meaningful(server.server_language);
+        if (gamemode.isEmpty() && lang.isEmpty()) {
+            viewHolder.server_gamemode.setText(server.address());
+        } else if (gamemode.isEmpty() || lang.isEmpty()) {
+            viewHolder.server_gamemode.setText(gamemode + lang);
+        } else {
+            viewHolder.server_gamemode.setText(gamemode + "  ·  " + lang);
+        }
+
+        int players = parseIntSafe(server.server_players);
+        int maxPlayers = parseIntSafe(server.server_maxplayers);
         viewHolder.server_players.setText(server.server_players + "/" + server.server_maxplayers);
-        viewHolder.server_password.setImageResource(server.server_password.equals("1") ? R.drawable.ic_locked : R.drawable.ic_unlocked);
+        viewHolder.server_players.setTextColor(activity.getColor(players > 0 ? R.color.launcher_text : R.color.launcher_text_dim));
+        viewHolder.server_players_bar.setProgress(maxPlayers > 0 ? Math.min(100, players * 100 / maxPlayers) : 0);
+        viewHolder.server_password.setVisibility(server.server_password.equals("1") ? View.VISIBLE : View.GONE);
 
         boolean selected = server.address().equals(selectedAddress);
         int accentColor = LauncherThemeManager.getAccentColor(activity);
+        viewHolder.server_players_bar.setProgressTintList(ColorStateList.valueOf(accentColor));
         if (selected) {
             viewHolder.server_item.setBackground(LauncherThemeManager.createSelectedRowDrawable(activity, accentColor));
         } else {
-            viewHolder.server_item.setBackgroundResource(R.drawable.launcher_row_bg);
+            viewHolder.server_item.setBackgroundResource(R.drawable.ui_row_bg);
         }
-        viewHolder.server_ping.setTextColor(accentColor);
-        viewHolder.server_name.setTextColor(activity.getColor(selected ? R.color.white : R.color.launcher_text));
 
         viewHolder.server_item.setOnClickListener(v -> {
             String address = server.address();

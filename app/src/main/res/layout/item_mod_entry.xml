@@ -3,12 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="@dimen/_5sdp"
-    android:background="@drawable/launcher_input_bg"
+    android:layout_marginBottom="@dimen/_4sdp"
+    android:background="@drawable/ui_item_bg"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:paddingHorizontal="@dimen/_8sdp"
-    android:paddingVertical="@dimen/_6sdp">
+    android:paddingHorizontal="@dimen/_10sdp"
+    android:paddingVertical="@dimen/_7sdp">
 
     <LinearLayout
         android:layout_width="0dp"
@@ -38,8 +38,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="@dimen/_6sdp"
-                android:background="@drawable/launcher_btn_outline"
-                android:paddingHorizontal="@dimen/_4sdp"
+                android:background="@drawable/ui_pill"
+                android:paddingHorizontal="@dimen/_6sdp"
                 android:paddingVertical="@dimen/_1sdp"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_6ssp"
@@ -108,8 +108,6 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/_6sdp"
-        android:scaleX="0.9"
-        android:scaleY="1.05"
         android:thumb="@drawable/ic_thumb"
         android:track="@drawable/bg_track"
         tools:ignore="UseSwitchCompatOrMaterialXml,TouchTargetSizeCheck" />

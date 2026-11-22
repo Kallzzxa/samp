@@ -25,7 +25,9 @@ import android.widget.TextView;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputLayout;
 import com.sampmobile.launcher.R;
+import com.sampmobile.launcher.ui.widget.GtaOptionView;
 import com.sampmobile.launcher.ui.widget.GtaSaSliderView;
+import com.sampmobile.launcher.ui.widget.GtaTabStrip;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -98,83 +100,84 @@ public class LauncherThemeManager {
         return (Math.abs(r - 0xF2) <= 10 && Math.abs(g - 0xB3) <= 18 && Math.abs(b - 0x2C) <= 18);
     }
 
+    private static int withAlpha(int color, int alpha) {
+        return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
+    }
+
     /**
-     * Dynamically creates the selected row/tab background (replace R.drawable.launcher_row_selected)
-     * with translucent accent fill + 3dp solid accent left stripe + 1dp bottom border.
+     * Selected list row: rounded accent wash fading to the right + a short accent bar on the left edge.
      */
     public static Drawable createSelectedRowDrawable(Context ctx, int accentColor) {
         float dp = ctx.getResources().getDisplayMetrics().density;
-        int dimFill = Color.argb(0x29, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor));
 
-        GradientDrawable fill = new GradientDrawable();
-        fill.setShape(GradientDrawable.RECTANGLE);
-        fill.setColor(dimFill);
+        GradientDrawable fill = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{withAlpha(accentColor, 0x57), withAlpha(accentColor, 0x12)});
+        fill.setCornerRadius(8 * dp);
 
         GradientDrawable leftBar = new GradientDrawable();
-        leftBar.setShape(GradientDrawable.RECTANGLE);
         leftBar.setColor(accentColor);
+        leftBar.setCornerRadius(2 * dp);
         int barWidth = Math.max(2, Math.round(3 * dp));
-        leftBar.setSize(barWidth, -1);
 
-        GradientDrawable bottomLine = new GradientDrawable();
-        bottomLine.setShape(GradientDrawable.RECTANGLE);
-        bottomLine.setColor(0xFF282D37);
-        int lineHeight = Math.max(1, Math.round(1 * dp));
-        bottomLine.setSize(-1, lineHeight);
-
-        LayerDrawable layer = new LayerDrawable(new Drawable[]{fill, leftBar, bottomLine});
+        LayerDrawable layer = new LayerDrawable(new Drawable[]{fill, leftBar});
         layer.setLayerGravity(1, Gravity.LEFT | Gravity.FILL_VERTICAL);
         layer.setLayerWidth(1, barWidth);
-        layer.setLayerGravity(2, Gravity.BOTTOM | Gravity.FILL_HORIZONTAL);
-        layer.setLayerHeight(2, lineHeight);
+        int barInset = Math.round(9 * dp);
+        layer.setLayerInset(1, 0, barInset, 0, barInset);
         return layer;
     }
 
     /**
-     * Dynamically builds a themed Switch track drawable with the "ON" / "OFF" pill matching ic_switch_on / ic_switch_off,
-     * colored with the current user accentColor when checked.
+     * Nav rail selection marker: soft accent pill behind the item + accent bar hugging the rail's left edge.
+     */
+    public static Drawable createNavIndicatorDrawable(Context ctx, int accentColor) {
+        float dp = ctx.getResources().getDisplayMetrics().density;
+
+        GradientDrawable pill = new GradientDrawable();
+        pill.setColor(withAlpha(accentColor, 0x26));
+        pill.setCornerRadius(12 * dp);
+
+        GradientDrawable bar = new GradientDrawable();
+        bar.setColor(accentColor);
+        float r = 3 * dp;
+        bar.setCornerRadii(new float[]{0, 0, r, r, r, r, 0, 0});
+        int barWidth = Math.max(2, Math.round(3 * dp));
+
+        LayerDrawable layer = new LayerDrawable(new Drawable[]{pill, bar});
+        int padH = Math.round(7 * dp);
+        int padV = Math.round(3 * dp);
+        layer.setLayerInset(0, padH, padV, padH, padV);
+        layer.setLayerGravity(1, Gravity.LEFT | Gravity.FILL_VERTICAL);
+        layer.setLayerWidth(1, barWidth);
+        int barInset = Math.round(11 * dp);
+        layer.setLayerInset(1, 0, barInset, 0, barInset);
+        return layer;
+    }
+
+    /**
+     * Pill switch: accent track when checked, faint white track when off, with a short cross-fade.
      */
     public static void applySwitchTheme(Switch sw, int accentColor) {
         if (sw == null) return;
-        Context ctx = sw.getContext();
-        float dp = ctx.getResources().getDisplayMetrics().density;
-        int w = Math.max(48, Math.round(48 * dp));
-        int h = Math.max(24, Math.round(24 * dp));
-
-        Drawable onDrawable = buildSwitchTrackBitmap(ctx, w, h, dp, accentColor, true);
-        Drawable offDrawable = buildSwitchTrackBitmap(ctx, w, h, dp, 0xFF8A8A8A, false);
+        float dp = sw.getResources().getDisplayMetrics().density;
+        int w = Math.round(44 * dp);
+        int h = Math.round(22 * dp);
 
         StateListDrawable track = new StateListDrawable();
-        track.addState(new int[]{android.R.attr.state_checked}, onDrawable);
-        track.addState(new int[]{}, offDrawable);
+        track.addState(new int[]{android.R.attr.state_checked}, buildSwitchTrack(accentColor, w, h));
+        track.addState(new int[]{}, buildSwitchTrack(0x30FFFFFF, w, h));
+        track.setEnterFadeDuration(120);
+        track.setExitFadeDuration(160);
+        sw.setSwitchMinWidth(w);
         sw.setTrackDrawable(track);
     }
 
-    private static Drawable buildSwitchTrackBitmap(Context ctx, int w, int h, float dp, int pillColor, boolean isOn) {
-        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bmp);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
-        float left = (isOn ? 5f : 3f) * dp;
-        float right = (isOn ? 45f : 44f) * dp;
-        float top = 4f * dp;
-        float bottom = 20f * dp;
-        float radius = 8f * dp;
-
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(pillColor);
-        canvas.drawRoundRect(new RectF(left, top, right, bottom), radius, radius, paint);
-
-        paint.setColor(0xFF0A0C10);
-        paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD));
-        paint.setTextSize(7.5f * dp);
-        paint.setTextAlign(Paint.Align.CENTER);
-        Paint.FontMetrics fm = paint.getFontMetrics();
-        float textY = (top + bottom) / 2f - (fm.ascent + fm.descent) / 2f;
-        float textX = (isOn ? 19.5f : 29f) * dp;
-        canvas.drawText(isOn ? "ON" : "OFF", textX, textY, paint);
-
-        return new BitmapDrawable(ctx.getResources(), bmp);
+    private static Drawable buildSwitchTrack(int color, int w, int h) {
+        GradientDrawable pill = new GradientDrawable();
+        pill.setColor(color);
+        pill.setCornerRadius(h);
+        pill.setSize(w, h);
+        return pill;
     }
 
     /**
@@ -197,6 +200,16 @@ public class LauncherThemeManager {
 
         if (root instanceof Switch) {
             applySwitchTheme((Switch) root, accentColor);
+            return;
+        }
+
+        if (root instanceof GtaTabStrip) {
+            ((GtaTabStrip) root).setAccentColor(accentColor);
+            return;
+        }
+
+        if (root instanceof GtaOptionView) {
+            ((GtaOptionView) root).setAccentColor(accentColor);
             return;
         }
 

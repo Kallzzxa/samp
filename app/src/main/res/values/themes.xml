@@ -31,7 +31,7 @@
         <item name="android:navigationBarColor">@color/launcher_bg</item>
         <item name="android:statusBarColor">@color/launcher_bg</item>
         <item name="android:fontFamily">@font/roboto</item>
-        <item name="alertDialogTheme">@style/AlertDialogTheme</item>
+        <item name="alertDialogTheme">@style/LauncherAlertDialog</item>
 
         <item name="android:textAppearance">@style/TextAppearance.MaterialComponents.Body1</item>
         <item name="textAppearanceLabelLarge">@style/TextAppearance.Material3.BodyLarge</item>
@@ -88,6 +88,25 @@
 
     <style name="AlertDialogButton" parent="@style/Widget.MaterialComponents.Button.TextButton.Dialog">
         <item name="android:textColor">@color/launcher_accent</item>
+    </style>
+
+    <style name="LauncherAlertDialog" parent="@style/Theme.MaterialComponents.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/ui_alert_window_bg</item>
+        <item name="android:textColor">@color/launcher_text</item>
+        <item name="android:textColorPrimary">@color/launcher_text</item>
+        <item name="android:textColorSecondary">@color/launcher_text_dim</item>
+        <item name="colorPrimary">@color/launcher_text</item>
+        <item name="colorAccent">@color/launcher_text</item>
+        <item name="colorSurface">@color/launcher_surface</item>
+        <item name="buttonBarNegativeButtonStyle">@style/LauncherAlertDialogButton</item>
+        <item name="buttonBarNeutralButtonStyle">@style/LauncherAlertDialogButton</item>
+        <item name="buttonBarPositiveButtonStyle">@style/LauncherAlertDialogButton</item>
+    </style>
+
+    <style name="LauncherAlertDialogButton" parent="@style/Widget.MaterialComponents.Button.TextButton.Dialog">
+        <item name="android:textColor">@color/launcher_text</item>
+        <item name="android:textStyle">bold</item>
+        <item name="rippleColor">#33FFFFFF</item>
     </style>
 
     <style name="MyRatingBar" parent="Widget.AppCompat.RatingBar">

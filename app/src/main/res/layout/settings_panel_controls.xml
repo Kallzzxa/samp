@@ -1,0 +1,832 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/panel_controls"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:scrollbarSize="3dp"
+    android:scrollbarThumbVertical="@drawable/ui_scroll_thumb"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/_12sdp">
+
+        <!-- 卡片：自定义触控按键位置 (Change Button Position) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/_10sdp"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tag="theme_accent_text"
+                android:text="自定义游戏按键位置与大小"
+                android:textColor="@color/launcher_accent"
+                android:textSize="@dimen/_9ssp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_2sdp"
+                android:text="调用 GTA:SA 原生按键位置编辑器（Change Button Position），支持在游戏内自由拖拽移动、双指缩放步行与载具按键（游戏内也可随时点击底部快捷面板 HUD 键或输入 /hudedit 打开）"
+                android:textColor="@color/launcher_text_dim"
+                android:textSize="@dimen/_7ssp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_8sdp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/btn_open_hud_editor"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/_28sdp"
+                    android:layout_marginEnd="@dimen/_6sdp"
+                    android:layout_weight="1"
+                    android:background="@drawable/launcher_btn_primary"
+                    android:gravity="center"
+                    android:tag="theme_accent_bg"
+                    android:text="进入游戏时自动打开按键位置调整"
+                    android:textColor="@color/launcher_on_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_reset_hud_editor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/_28sdp"
+                    android:background="@drawable/launcher_btn_outline"
+                    android:gravity="center"
+                    android:paddingHorizontal="@dimen/_12sdp"
+                    android:text="恢复默认按键位置"
+                    android:textColor="@color/launcher_text"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 卡片：步战、摇杆与瞄准 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="步战操控与瞄准"
+                android:textColor="@color/launcher_accent"
+                android:textSize="@dimen/_9ssp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_2sdp"
+                android:layout_marginBottom="@dimen/_6sdp"
+                android:text="调整左侧移动摇杆尺寸、自动翻越障碍物以及持枪瞄准模式"
+                android:textColor="@color/launcher_text_dim"
+                android:textSize="@dimen/_7ssp" />
+
+            <!-- 虚拟摇杆大小 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_4sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="虚拟摇杆大小"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="缩放虚拟摇杆图标与推杆行程半径（50% 至 150%）"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/slider_joystick_size"
+                    android:layout_width="@dimen/_115sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="50"
+                    android:valueTo="150" />
+
+                <TextView
+                    android:id="@+id/tv_joystick_size_val"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="100%"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 射击按键触发阈值 (MOB_BTH) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="射击按键响应灵敏度"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="原版单机开火键判定阈值，调节按压开火与划动准星的区分度"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/slider_shoot_threshold"
+                    android:layout_width="@dimen/_115sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="5"
+                    android:valueTo="100" />
+
+                <TextView
+                    android:id="@+id/tv_shoot_threshold_val"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="50%"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 自动攀爬障碍物 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="自动攀爬障碍物"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="推摇杆贴近矮墙时自动翻越，关闭后仅在点击跳跃键时攀爬"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_auto_climb"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 武器瞄准方式 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="武器瞄准方式"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="锁定辅助会自动吸附附近目标，自由准星为纯手动瞄准"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaOptionView
+                    android:id="@+id/dropdown_targeting_mode"
+                    android:layout_width="@dimen/_120sdp"
+                    android:layout_height="@dimen/_26sdp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 卡片：载具驾驶与触控方式 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/_10sdp"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="载具驾驶与触控反馈"
+                android:textColor="@color/launcher_accent"
+                android:textSize="@dimen/_9ssp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_2sdp"
+                android:layout_marginBottom="@dimen/_6sdp"
+                android:text="选择习惯的汽车方向盘操控方式、按键布局、体感与震动反馈"
+                android:textColor="@color/launcher_text_dim"
+                android:textSize="@dimen/_7ssp" />
+
+            <!-- 载具转向方式 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="载具转向方式"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="驾驶载具时使用摇杆、左右方向键或滑动控制方向"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaOptionView
+                    android:id="@+id/dropdown_touch_steering"
+                    android:layout_width="@dimen/_120sdp"
+                    android:layout_height="@dimen/_26sdp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 触控按键布局 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="触控按键布局"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="切换传统按键排布或双侧自适应操作布局"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaOptionView
+                    android:id="@+id/dropdown_touch_layout"
+                    android:layout_width="@dimen/_120sdp"
+                    android:layout_height="@dimen/_26sdp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 重力感应驾驶 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="重力感应驾驶"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="倾斜手机辅助控制车辆方向与空中俯仰姿态"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaOptionView
+                    android:id="@+id/dropdown_accelerometer"
+                    android:layout_width="@dimen/_120sdp"
+                    android:layout_height="@dimen/_26sdp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 摩托车摇杆转向 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="摩托车摇杆转向"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="骑乘摩托车与自行车时使用摇杆同时控制转向与前后翘头"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_bike_steering"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 触控震动反馈 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="触控震动反馈"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="碰撞、射击与爆炸时调用手机震动马达反馈"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_vibration"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 摇杆转向灵敏度 (MOB_ANA) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="摇杆方向盘转向灵敏度"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="原版单机模拟摇杆驾驶汽车时的车轮打方向响应速度"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/slider_analog_sens"
+                    android:layout_width="@dimen/_115sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="5"
+                    android:valueTo="100" />
+
+                <TextView
+                    android:id="@+id/tv_analog_sens_val"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="50%"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 滑动转向灵敏度 (MOB_FLK) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="滑动转向灵敏度"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="选择滑动转向模式时的方向盘跟随灵敏度"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/slider_flick_sens"
+                    android:layout_width="@dimen/_115sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="5"
+                    android:valueTo="100" />
+
+                <TextView
+                    android:id="@+id/tv_flick_sens_val"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="50%"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 卡片：外接键鼠与手柄映射 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/_10sdp"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tag="theme_accent_text"
+                android:text="外接键鼠与手柄操作映射"
+                android:textColor="@color/launcher_accent"
+                android:textSize="@dimen/_9ssp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_2sdp"
+                android:layout_marginBottom="@dimen/_6sdp"
+                android:text="支持蓝牙/OTG 外接键盘鼠标、模拟器按键映射以及游戏手柄摇杆方向设置"
+                android:textColor="@color/launcher_text_dim"
+                android:textSize="@dimen/_7ssp" />
+
+            <!-- 启用键鼠快捷键映射 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="启用外接键盘与鼠标快捷键映射"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="将物理键盘按键映射为电脑端 SA-MP 标准联机指令与移动操作"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_km_enabled"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 手柄右摇杆水平反转 (MOB_JIA) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="手柄右摇杆水平视角反转"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="反转外接蓝牙手柄右摇杆的左右镜头旋转方向"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_joypad_invert_x"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 手柄右摇杆垂直反转 (MOB_JIB) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="手柄右摇杆垂直视角反转"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="反转外接蓝牙手柄右摇杆的上下镜头俯仰方向"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_joypad_invert_y"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <!-- 键鼠快捷键映射一览表 -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_6sdp"
+                android:background="@drawable/launcher_input_bg"
+                android:lineSpacingExtra="@dimen/_2sdp"
+                android:padding="@dimen/_8sdp"
+                android:text="【电脑端标准键鼠映射表】\n• W / A / S / D 或方向键：人物行走 / 载具转向 / 选人切换\n• T 或 F6：打开聊天输入框　　• TAB：查看在线玩家计分板\n• F 或 Enter：驾驶位上车/下车　• G：副驾驶/乘客位上车\n• 左 Ctrl：开火攻击 / 出生确认　• 左 Alt：慢走 / 载具武器开火\n• 空格 或 左 Shift：冲刺跑 / 载具手刹　• C：蹲下　• H：鸣笛 / 互动\n• Y / N / 2：服务器菜单确认/取消/副任务　• Q / E：左右侧看\n• 小键盘 8 / 4 / 6 / 2：飞机俯仰与液压控制　• B 或 V：语音麦克风发言\n• F7：显示/隐藏聊天框　　• F8：立即保存高清游戏截图"
+                android:textColor="@color/launcher_text_dim"
+                android:textSize="@dimen/_7ssp" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

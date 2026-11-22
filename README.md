@@ -122,8 +122,16 @@ python tools/build_gamedata.py --pc-samp "D:\Program Files (x86)\Rockstar Games\
 
 **手机端一键导入：**
 1. 将 `dist/gamedata.zip` 复制到手机任意目录（如 `Download/`），无需手动操作 `Android/data/`；
-2. 安装并打开 `SA-MP Mobile`，在 **游戏设置 → 联机设置 → 一键导入 .zip**（或点击进服时按弹窗提示）选择该文件；
+2. 安装并打开 `SA-MP Mobile`，在 **设置 → 联机 → 一键导入 .zip**（或点击进服时按弹窗提示）选择该文件；
 3. 启动器会自动流式解压至自身 `files/` 目录，同时保留已有 `settings.json` 与服务器列表，彻底规避 Android 14 目录权限与层级错位问题。
+
+### 5. 自定义启动器背景（可选）
+
+把一张横向图片命名为 `launcher_backdrop.jpg`（`.png` / `.webp` 亦可）放进 `app/src/main/res/drawable-nodpi/` 后重新编译，即替换默认渐变背景；删除该文件即恢复默认。
+
+- 建议尺寸 **2400×1080**（20:9），其他比例按居中裁切铺满；画面最左侧约 1/10 会被导航栏盖住，主体别放在那里。
+- 文件名必须全小写且只留一份（同目录不能同时存在两种扩展名）。
+- 图片上方叠有一层压暗遮罩与半透明面板以保证文字可读，透明度在 `res/values/colors.xml` 的 `ui_backdrop_scrim`（遮罩）与 `ui_glass`（面板）调整。
 
 ---
 

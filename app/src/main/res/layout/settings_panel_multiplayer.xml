@@ -1,0 +1,552 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/panel_multiplayer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:scrollbarSize="3dp"
+    android:scrollbarThumbVertical="@drawable/ui_scroll_thumb">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/_12sdp">
+
+        <!-- 卡片：游戏数据包一键导入 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/_10sdp"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="游戏数据包导入（.zip）"
+                        android:textColor="@color/launcher_accent"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_gamedata_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_2sdp"
+                        android:text="检测中..."
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/btn_import_gamedata_zip"
+                    android:tag="theme_accent_bg"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/_26sdp"
+                    android:background="@drawable/launcher_btn_primary"
+                    android:gravity="center"
+                    android:paddingHorizontal="@dimen/_12sdp"
+                    android:text="一键导入 .zip"
+                    android:textColor="@color/launcher_on_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 卡片：角色与服务器兼容 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="角色身份与协议兼容"
+                android:textColor="@color/launcher_accent"
+                android:textSize="@dimen/_9ssp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_2sdp"
+                android:layout_marginBottom="@dimen/_8sdp"
+                android:text="配置进入服务器时使用的角色名称、通信协议与文字编码"
+                android:textColor="@color/launcher_text_dim"
+                android:textSize="@dimen/_7ssp" />
+
+            <!-- 默认游戏昵称 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="默认游戏昵称"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="连接服务器时使用的角色名，支持英文、数字与下划线"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <EditText
+                    android:id="@+id/et_settings_nickname"
+                    android:layout_width="@dimen/_125sdp"
+                    android:layout_height="@dimen/_28sdp"
+                    android:background="@drawable/launcher_input_bg"
+                    android:gravity="center_vertical"
+                    android:hint="输入游戏昵称"
+                    android:imeOptions="actionDone"
+                    android:inputType="textNoSuggestions"
+                    android:maxLength="24"
+                    android:paddingHorizontal="@dimen/_8sdp"
+                    android:singleLine="true"
+                    android:textColor="@color/launcher_text"
+                    android:textColorHint="@color/launcher_text_dim"
+                    android:textSize="@dimen/_8ssp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 客户端协议版本 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="客户端协议版本"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="模拟对应的客户端版本号以适配不同服务器限制"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaOptionView
+                    android:id="@+id/samp_version"
+                    android:layout_width="@dimen/_120sdp"
+                    android:layout_height="@dimen/_26sdp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 服务器文字编码 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="服务器文字编码"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="国内服务器一般为 GBK，如遇中文乱码请切换为 UTF-8"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaOptionView
+                    android:id="@+id/charset"
+                    android:layout_width="@dimen/_120sdp"
+                    android:layout_height="@dimen/_26sdp" />
+            </LinearLayout>
+
+            <!-- 隐藏的旧字段兼容占位 -->
+            <RelativeLayout
+                android:id="@+id/game_version_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone">
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/game_version"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </RelativeLayout>
+        </LinearLayout>
+
+        <!-- 卡片：连接与数据同步 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/_10sdp"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="连接与资源选项"
+                android:textColor="@color/launcher_accent"
+                android:textSize="@dimen/_9ssp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_2sdp"
+                android:layout_marginBottom="@dimen/_8sdp"
+                android:text="管理进服连接速度、服务器自定义模型下载与本地文件校验"
+                android:textColor="@color/launcher_text_dim"
+                android:textSize="@dimen/_7ssp" />
+
+            <!-- 快速连接 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="快速连接服务器"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="缩短进服连接握手间隔，加快进入与重连服务器的速度"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/fastconnect_switch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 下载服务器自定义模型 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="下载服务器自定义模型"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="在支持自定义模型的服务器中自动接收并加载人物与建筑资源"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/dlmodels_switch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 保留本地数据包修改 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="保留本地数据包修改"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="跳过启动器原始文件完整性检查，避免手工替换的数据文件被还原"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/modify_switch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 卡片：启动器主题配色 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/_10sdp"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tag="theme_accent_text"
+                android:text="启动器主题配色"
+                android:textColor="@color/launcher_accent"
+                android:textSize="@dimen/_9ssp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_2sdp"
+                android:text="选择预设主题色或拖动下方色相条自由定制你喜欢的启动器与进度条颜色"
+                android:textColor="@color/launcher_text_dim"
+                android:textSize="@dimen/_7ssp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_8sdp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/btn_theme_gold"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:layout_marginEnd="@dimen/_4sdp"
+                    android:layout_weight="1"
+                    android:background="@drawable/launcher_btn_outline"
+                    android:gravity="center"
+                    android:text="经典金"
+                    android:textColor="#FFAE1A"
+                    android:textSize="@dimen/_7ssp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_theme_cyan"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:layout_marginEnd="@dimen/_4sdp"
+                    android:layout_weight="1"
+                    android:background="@drawable/launcher_btn_outline"
+                    android:gravity="center"
+                    android:text="霓虹青"
+                    android:textColor="#18DCFF"
+                    android:textSize="@dimen/_7ssp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_theme_green"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:layout_marginEnd="@dimen/_4sdp"
+                    android:layout_weight="1"
+                    android:background="@drawable/launcher_btn_outline"
+                    android:gravity="center"
+                    android:text="翡翠绿"
+                    android:textColor="#2ECC71"
+                    android:textSize="@dimen/_7ssp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_theme_red"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:layout_marginEnd="@dimen/_4sdp"
+                    android:layout_weight="1"
+                    android:background="@drawable/launcher_btn_outline"
+                    android:gravity="center"
+                    android:text="竞速红"
+                    android:textColor="#FF4757"
+                    android:textSize="@dimen/_7ssp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_theme_purple"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:layout_marginEnd="@dimen/_4sdp"
+                    android:layout_weight="1"
+                    android:background="@drawable/launcher_btn_outline"
+                    android:gravity="center"
+                    android:text="电光紫"
+                    android:textColor="#A55EEA"
+                    android:textSize="@dimen/_7ssp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_theme_blue"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:layout_weight="1"
+                    android:background="@drawable/launcher_btn_outline"
+                    android:gravity="center"
+                    android:text="极客蓝"
+                    android:textColor="#3788FF"
+                    android:textSize="@dimen/_7ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_8sdp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="自定义色相滑条"
+                    android:textColor="@color/launcher_text"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/slider_theme_hue"
+                    android:layout_width="@dimen/_140sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="1"
+                    android:value="38"
+                    android:valueFrom="0"
+                    android:valueTo="360" />
+
+                <TextView
+                    android:id="@+id/tv_theme_hue_val"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="38°"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

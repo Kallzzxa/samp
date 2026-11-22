@@ -1,15 +1,23 @@
 package com.sampmobile.launcher;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.view.animation.DecelerateInterpolator;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -20,8 +28,14 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.SimpleItemAnimator;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.joom.paranoid.Obfuscate;
@@ -40,7 +54,9 @@ import com.sampmobile.launcher.ui.adapter.RulesAdapter;
 import com.sampmobile.launcher.ui.adapter.ServerAdapter;
 import com.sampmobile.launcher.ui.fragment.ModsManagerFragment;
 import com.sampmobile.launcher.ui.fragment.SettingsPageFragment;
+import com.sampmobile.launcher.ui.widget.GtaTabStrip;
 import com.sampmobile.launcher.utils.GameDataImporter;
+import com.sampmobile.launcher.utils.LauncherFonts;
 import com.sampmobile.launcher.utils.LauncherThemeManager;
 import com.sampmobile.launcher.utils.SampQuery;
 import com.sampmobile.launcher.utils.ServerModel;
@@ -49,19 +65,45 @@ import com.sampmobile.launcher.utils.Utils;
 @Obfuscate
 public class MainActivity extends AppCompatActivity implements LauncherThemeManager.ThemeListener {
 
+    private static final int PAGE_SERVERS = 0;
+    private static final int PAGE_MODS = 1;
+    private static final int PAGE_SETTINGS = 2;
+
+    private static final String TAG_MODS = "frag_mods";
+    private static final String TAG_SETTINGS = "frag_settings";
+
+    private static final int[] SERVER_TAB_MODES = {
+            ServerAdapter.MODE_FAVORITES,
+            ServerAdapter.MODE_INTERNET,
+            ServerAdapter.MODE_RECENT
+    };
+
     private ServerAdapter serverAdapter;
     private List<ServerModel> serverModel;
     private SwipeRefreshLayout swipeRefreshLayout;
 
     private EditText searchEditText;
+    private TextView listCount;
+    private TextView listEmpty;
+    private boolean listLoading = true;
 
-    private ViewGroup[] tabs;
     private int currentTab = ServerAdapter.MODE_FAVORITES;
+
+    private int currentPage = PAGE_SERVERS;
+    private SettingsPageFragment.ViewBuilder settingsBuilder;
+    private View[] pageViews;
+    private ViewGroup[] navItems;
+    private View navIndicator;
 
     private View infoEmpty;
     private View infoBody;
     private TextView infoServerName;
     private TextView infoServerMeta;
+    private TextView infoAddress;
+    private View infoLock;
+    private TextView statPlayers;
+    private TextView statPing;
+    private TextView statLang;
     private View playersHeader;
     private View linksContainer;
     private View discordRow;
@@ -76,9 +118,7 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
     private RulesAdapter rulesAdapter;
     private final List<String[]> playersData = new ArrayList<>();
     private final List<String[]> rulesData = new ArrayList<>();
-
-    private View settingsContainer;
-    private boolean settingsVisible = false;
+    private String detailAddress;
 
     private volatile int detailsGeneration = 0;
     private final ExecutorService detailExecutor = Executors.newSingleThreadExecutor();
@@ -123,6 +163,13 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
             return;
         }
 
+        // draw under the display cutout: the rail and backdrop run edge to edge instead of leaving a black bar
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().setAttributes(lp);
+        }
+
         setContentView(R.layout.activity_main);
 
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
@@ -132,33 +179,58 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
                 androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
         insets.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars());
 
+        View navRail = findViewById(R.id.nav_rail);
+        View pageHost = findViewById(R.id.page_host);
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root), (v, windowInsets) -> {
+            Insets cutout = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout());
+            navRail.setPadding(cutout.left, 0, 0, 0);
+            pageHost.setPadding(0, 0, cutout.right, 0);
+            return windowInsets;
+        });
+
         getSharedPreferences("samp_settings", Context.MODE_PRIVATE).edit().putBoolean("offline_mode", false).apply();
         com.sampmobile.launcher.utils.ModManager.ensureDirectories(this);
 
         initViews();
         initServerList();
-        initTabs();
+        initNavigation();
         initButtons();
         LauncherThemeManager.addListener(this);
         onThemeColorChanged(LauncherThemeManager.getAccentColor(this));
 
-        // Pre-warm SettingsPageFragment hidden after first frame so opening Settings is instant (0ms)
-        getWindow().getDecorView().post(() -> {
-            if (!isFinishing() && !isDestroyed() && getSupportFragmentManager().findFragmentByTag("frag_settings") == null) {
-                SettingsPageFragment frag = new SettingsPageFragment();
-                getSupportFragmentManager().beginTransaction()
-                        .setReorderingAllowed(true)
-                        .add(R.id.settings_fragment, frag, "frag_settings")
-                        .hide(frag)
-                        .commitAllowingStateLoss();
+        scheduleSettingsPrewarm();
+    }
+
+    /**
+     * Pre-warms SettingsPageFragment so opening Settings is instant (0ms), one panel per idle slot:
+     * the page holds 600+ views, built in one go it froze the launcher for ~0.6 s (debug build, Redmi K50).
+     */
+    private void scheduleSettingsPrewarm() {
+        Looper.myQueue().addIdleHandler(() -> {
+            if (isFinishing() || isDestroyed()
+                    || getSupportFragmentManager().findFragmentByTag(TAG_SETTINGS) != null) {
+                return false;
             }
+            if (settingsBuilder == null) {
+                settingsBuilder = new SettingsPageFragment.ViewBuilder(getLayoutInflater(), findViewById(R.id.page_settings));
+            } else if (!settingsBuilder.step()) {
+                ensurePageFragment(PAGE_SETTINGS);
+                return false;
+            }
+            // an idle handler only fires once per idle period: queue a message so the next slot comes around
+            getWindow().getDecorView().post(this::scheduleSettingsPrewarm);
+            return false;
         });
     }
 
     private void initViews() {
         swipeRefreshLayout = findViewById(R.id.refresh);
         swipeRefreshLayout.setColorSchemeColors(getColor(R.color.launcher_accent));
+        swipeRefreshLayout.setProgressBackgroundColorSchemeColor(getColor(R.color.launcher_surface_2));
         swipeRefreshLayout.setOnRefreshListener(this::refreshServers);
+
+        listCount = findViewById(R.id.list_count);
+        listEmpty = findViewById(R.id.list_empty);
 
         searchEditText = findViewById(R.id.search_edit_text);
         searchEditText.addTextChangedListener(new TextWatcher() {
@@ -180,6 +252,12 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
         infoBody = findViewById(R.id.info_body);
         infoServerName = findViewById(R.id.info_server_name);
         infoServerMeta = findViewById(R.id.info_server_meta);
+        infoAddress = findViewById(R.id.info_address);
+        infoLock = findViewById(R.id.info_lock);
+        statPlayers = findViewById(R.id.stat_players);
+        statPing = findViewById(R.id.stat_ping);
+        statLang = findViewById(R.id.stat_lang);
+        LauncherFonts.applyCondensed(statPlayers, statPing);
         playersHeader = findViewById(R.id.players_header);
         linksContainer = findViewById(R.id.links_container);
         discordRow = findViewById(R.id.discord_row);
@@ -199,7 +277,13 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
         rulesList.setLayoutManager(new LinearLayoutManager(this));
         rulesList.setAdapter(rulesAdapter);
 
-        settingsContainer = findViewById(R.id.settings_container);
+        findViewById(R.id.info_address_row).setOnClickListener(v -> {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null && detailAddress != null) {
+                cm.setPrimaryClip(ClipData.newPlainText("server", detailAddress));
+                Toast.makeText(this, R.string.address_copied, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void initServerList() {
@@ -207,39 +291,89 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
 
         RecyclerView recyclerView = findViewById(R.id.servers_list);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        recyclerView.setHasFixedSize(true);
+        // ping results land row by row; the default change animation would make every row blink
+        if (recyclerView.getItemAnimator() instanceof SimpleItemAnimator) {
+            ((SimpleItemAnimator) recyclerView.getItemAnimator()).setSupportsChangeAnimations(false);
+        }
 
         serverAdapter = new ServerAdapter(this, serverModel, ServerAdapter.MODE_FAVORITES);
         serverAdapter.setOnServerSelectListener(this::onServerSelected);
-        serverAdapter.setOnListLoadedListener(() -> swipeRefreshLayout.setRefreshing(false));
+        serverAdapter.setOnListLoadedListener(() -> {
+            swipeRefreshLayout.setRefreshing(false);
+            listLoading = false;
+            updateListMeta();
+        });
+        serverAdapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
+            @Override
+            public void onChanged() {
+                updateListMeta();
+            }
+
+            @Override
+            public void onItemRangeInserted(int positionStart, int itemCount) {
+                updateListMeta();
+            }
+
+            @Override
+            public void onItemRangeRemoved(int positionStart, int itemCount) {
+                updateListMeta();
+            }
+        });
         recyclerView.setAdapter(serverAdapter);
 
         serverAdapter.refresh();
+        updateListMeta();
     }
 
-    private void initTabs() {
-        tabs = new ViewGroup[]{
-                findViewById(R.id.tab_favorites),
-                findViewById(R.id.tab_internet),
-                findViewById(R.id.tab_recent)
-        };
+    private void updateListMeta() {
+        int count = serverAdapter.getItemCount();
+        listCount.setText(getString(R.string.servers_count, count));
+        if (count > 0) {
+            listEmpty.setVisibility(View.GONE);
+            return;
+        }
+        int message;
+        if (listLoading) {
+            message = R.string.loading;
+        } else if (searchEditText.getText().length() > 0) {
+            message = R.string.servers_empty_search;
+        } else if (currentTab == ServerAdapter.MODE_FAVORITES) {
+            message = R.string.servers_empty_favorites;
+        } else if (currentTab == ServerAdapter.MODE_RECENT) {
+            message = R.string.servers_empty_recent;
+        } else {
+            message = R.string.servers_empty_internet;
+        }
+        listEmpty.setText(message);
+        listEmpty.setVisibility(View.VISIBLE);
+    }
 
-        int[] modes = {
-                ServerAdapter.MODE_FAVORITES,
-                ServerAdapter.MODE_INTERNET,
-                ServerAdapter.MODE_RECENT
-        };
+    private void initNavigation() {
+        GtaTabStrip serverTabs = findViewById(R.id.server_tabs);
+        serverTabs.setTabs(getString(R.string.tab_favorites), getString(R.string.tab_internet), getString(R.string.tab_recent));
+        serverTabs.setOnTabSelectedListener((index, reselected) -> selectTab(SERVER_TAB_MODES[index]));
 
-        for (int i = 0; i < tabs.length; i++) {
-            int mode = modes[i];
-            tabs[i].setOnClickListener(v -> selectTab(mode));
+        pageViews = new View[]{
+                findViewById(R.id.page_servers),
+                findViewById(R.id.page_mods),
+                findViewById(R.id.page_settings)
+        };
+        navItems = new ViewGroup[]{
+                findViewById(R.id.nav_servers),
+                findViewById(R.id.nav_mods),
+                findViewById(R.id.nav_settings)
+        };
+        navIndicator = findViewById(R.id.nav_indicator);
+        for (int i = 0; i < navItems.length; i++) {
+            final int page = i;
+            navItems[i].setOnClickListener(v -> showPage(page));
         }
 
-        findViewById(R.id.tab_mods).setOnClickListener(v -> showModsManager());
-        findViewById(R.id.tab_settings).setOnClickListener(v -> showSettings());
-        findViewById(R.id.tab_offline).setOnClickListener(v -> showOfflineDialog());
-        findViewById(R.id.tab_exit).setOnClickListener(v -> quitApp());
+        findViewById(R.id.nav_offline).setOnClickListener(v -> showOfflineDialog());
+        findViewById(R.id.nav_exit).setOnClickListener(v -> quitApp());
 
-        updateTabStyles();
+        updateNavStyles(false);
     }
 
     private void selectTab(int mode) {
@@ -248,32 +382,86 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
             return;
         }
         currentTab = mode;
+        listLoading = true;
         serverAdapter.selectMode(mode);
-        updateTabStyles();
         updateDeleteVisibility();
     }
 
-    private void updateTabStyles() {
-        int[] modes = {
-                ServerAdapter.MODE_FAVORITES,
-                ServerAdapter.MODE_INTERNET,
-                ServerAdapter.MODE_RECENT
-        };
-
+    private void updateNavStyles(boolean animate) {
         int accentColor = LauncherThemeManager.getAccentColor(this);
         int dimColor = getColor(R.color.launcher_text_dim);
 
-        for (int i = 0; i < tabs.length; i++) {
-            boolean selected = modes[i] == currentTab;
-            if (selected) {
-                tabs[i].setBackground(LauncherThemeManager.createSelectedRowDrawable(this, accentColor));
-            } else {
-                tabs[i].setBackgroundResource(android.R.color.transparent);
-            }
-            int color = selected ? accentColor : dimColor;
-            ((ImageView) tabs[i].getChildAt(0)).setColorFilter(color);
-            ((TextView) tabs[i].getChildAt(1)).setTextColor(color);
+        for (int i = 0; i < navItems.length; i++) {
+            int color = i == currentPage ? accentColor : dimColor;
+            ((ImageView) navItems[i].getChildAt(0)).setImageTintList(ColorStateList.valueOf(color));
+            ((TextView) navItems[i].getChildAt(1)).setTextColor(color);
         }
+
+        View target = navItems[currentPage];
+        if (!target.isLaidOut()) {
+            target.post(() -> updateNavStyles(false));
+            return;
+        }
+        navIndicator.setVisibility(View.VISIBLE);
+        navIndicator.animate().cancel();
+        if (animate) {
+            navIndicator.animate().translationY(target.getTop()).setDuration(240)
+                    .setInterpolator(new DecelerateInterpolator(1.8f)).start();
+        } else {
+            navIndicator.setTranslationY(target.getTop());
+        }
+    }
+
+    private Fragment ensurePageFragment(int page) {
+        String tag = page == PAGE_MODS ? TAG_MODS : TAG_SETTINGS;
+        FragmentManager fm = getSupportFragmentManager();
+        Fragment frag = fm.findFragmentByTag(tag);
+        if (frag == null && !fm.isStateSaved()) {
+            frag = page == PAGE_MODS ? new ModsManagerFragment() : new SettingsPageFragment();
+            if (page == PAGE_SETTINGS && settingsBuilder != null) {
+                ((SettingsPageFragment) frag).setPrebuiltView(settingsBuilder.finish());
+                settingsBuilder = null;
+            }
+            fm.beginTransaction()
+                    .setReorderingAllowed(true)
+                    .add(page == PAGE_MODS ? R.id.page_mods : R.id.page_settings, frag, tag)
+                    .commitNowAllowingStateLoss();
+        }
+        return frag;
+    }
+
+    private void showPage(int page) {
+        if (page == currentPage) return;
+
+        if (page != PAGE_SERVERS) {
+            Fragment frag = ensurePageFragment(page);
+            if (frag instanceof SettingsPageFragment) {
+                ((SettingsPageFragment) frag).onPageShown();
+            }
+        }
+
+        View current = getCurrentFocus();
+        if (current != null) {
+            current.clearFocus();
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.hideSoftInputFromWindow(current.getWindowToken(), 0);
+        }
+
+        View out = pageViews[currentPage];
+        View in = pageViews[page];
+        currentPage = page;
+
+        out.animate().cancel();
+        out.setVisibility(View.GONE);
+
+        in.animate().cancel();
+        in.setAlpha(0f);
+        in.setTranslationY(10f * getResources().getDisplayMetrics().density);
+        in.setVisibility(View.VISIBLE);
+        in.animate().alpha(1f).translationY(0f).setDuration(200)
+                .setInterpolator(new DecelerateInterpolator(1.6f)).start();
+
+        updateNavStyles(true);
     }
 
     @Override
@@ -282,10 +470,13 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
         if (swipeRefreshLayout != null) {
             swipeRefreshLayout.setColorSchemeColors(accentColor);
         }
-        updateTabStyles();
+        if (navIndicator != null) {
+            navIndicator.setBackground(LauncherThemeManager.createNavIndicatorDrawable(this, accentColor));
+            updateNavStyles(false);
+        }
         View btnJoin = findViewById(R.id.btn_join);
         if (btnJoin != null) {
-            btnJoin.setBackgroundTintList(android.content.res.ColorStateList.valueOf(accentColor));
+            btnJoin.setBackgroundTintList(ColorStateList.valueOf(accentColor));
         }
         if (serverAdapter != null) {
             serverAdapter.notifyDataSetChanged();
@@ -304,6 +495,7 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
 
     public void refreshServers() {
         swipeRefreshLayout.setRefreshing(true);
+        listLoading = true;
         serverAdapter.refresh();
     }
 
@@ -327,6 +519,7 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
         updateDeleteVisibility();
 
         if (server == null) {
+            detailAddress = null;
             infoEmpty.setVisibility(View.VISIBLE);
             infoBody.setVisibility(View.GONE);
             playersData.clear();
@@ -336,26 +529,48 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
             return;
         }
 
+        // the same server is re-announced whenever its query refreshes: keep the lists on screen then
+        boolean sameServer = server.address().equals(detailAddress);
+        detailAddress = server.address();
+
         infoEmpty.setVisibility(View.GONE);
         infoBody.setVisibility(View.VISIBLE);
         infoServerName.setText(server.server_name);
-        String website = sanitizeUrl(server.server_website);
-        infoServerMeta.setText(website);
-        infoServerMeta.setVisibility(website.isEmpty() ? View.GONE : View.VISIBLE);
-        infoServerMeta.setOnClickListener(null);
+        infoAddress.setText(server.address());
+        infoLock.setVisibility("1".equals(server.server_password) ? View.VISIBLE : View.GONE);
+
+        String ping = server.server_ping;
+        boolean hasPing = !("-".equals(ping) || ping.isEmpty());
+        statPlayers.setText(server.server_players + "/" + server.server_maxplayers);
+        statPing.setText(hasPing ? ping + " ms" : "—");
+        statPing.setTextColor(hasPing ? ServerAdapter.pingColor(this, ping) : getColor(R.color.launcher_text_dim));
+        String lang = ServerAdapter.meaningful(server.server_language);
+        statLang.setText(lang.isEmpty() ? "—" : lang);
+
         updateFavoriteButton(server);
         btnFavorite.setOnClickListener(v -> toggleFavorite(server));
 
-        playersData.clear();
-        playersAdapter.notifyDataSetChanged();
-        rulesData.clear();
-        rulesAdapter.notifyDataSetChanged();
-        playersList.setVisibility(View.GONE);
-        playersEmpty.setVisibility(View.VISIBLE);
-        playersEmpty.setText(R.string.loading);
-        rulesHeader.setVisibility(View.GONE);
-        rulesList.setVisibility(View.GONE);
-        updateLinkButtons(server, "", "");
+        if (!sameServer) {
+            String website = sanitizeUrl(server.server_website);
+            infoServerMeta.setText(website);
+            infoServerMeta.setVisibility(website.isEmpty() ? View.GONE : View.VISIBLE);
+            infoServerMeta.setOnClickListener(null);
+
+            playersData.clear();
+            playersAdapter.notifyDataSetChanged();
+            rulesData.clear();
+            rulesAdapter.notifyDataSetChanged();
+            playersList.setVisibility(View.GONE);
+            playersEmpty.setVisibility(View.VISIBLE);
+            playersEmpty.setText(R.string.loading);
+            rulesHeader.setVisibility(View.GONE);
+            rulesList.setVisibility(View.GONE);
+            updateLinkButtons(server, "", "");
+
+            infoBody.animate().cancel();
+            infoBody.setAlpha(0f);
+            infoBody.animate().alpha(1f).setDuration(180).start();
+        }
 
         // fetch player list & rules in background
         String address = server.address();
@@ -525,7 +740,7 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
         LauncherThemeManager.applyThemeToTree(v, accentColor);
         View joinConnectBtn = v.findViewById(R.id.join_connect);
         if (joinConnectBtn != null) {
-            joinConnectBtn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(accentColor));
+            joinConnectBtn.setBackgroundTintList(ColorStateList.valueOf(accentColor));
         }
 
         Runnable applyVersionStyles = () -> {
@@ -534,7 +749,7 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
                 versionButtons[i].setBackgroundResource(
                         selected ? R.drawable.launcher_btn_primary : R.drawable.launcher_btn_outline);
                 versionButtons[i].setBackgroundTintList(
-                        selected ? android.content.res.ColorStateList.valueOf(accentColor) : null);
+                        selected ? ColorStateList.valueOf(accentColor) : null);
                 versionButtons[i].setTextColor(getColor(
                         selected ? R.color.launcher_on_accent : R.color.launcher_text_dim));
             }
@@ -592,7 +807,7 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
         });
 
         if (!isFinishing() && !isDestroyed()) {
-            dialog.show();
+            showFormDialog(dialog);
         }
     }
 
@@ -607,7 +822,7 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
         int accentColor = LauncherThemeManager.getAccentColor(this);
         LauncherThemeManager.applyThemeToTree(v, accentColor);
         if (addButton != null) {
-            addButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(accentColor));
+            addButton.setBackgroundTintList(ColorStateList.valueOf(accentColor));
         }
 
         address.setOnEditorActionListener((textView, i, keyEvent) -> i == EditorInfo.IME_ACTION_DONE || i == EditorInfo.IME_ACTION_NEXT || i == EditorInfo.IME_ACTION_UNSPECIFIED);
@@ -644,7 +859,17 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
         });
 
         if (!isFinishing() && !isDestroyed()) {
-            dialog.show();
+            showFormDialog(dialog);
+        }
+    }
+
+    /** Form dialogs keep a compact fixed width instead of the alert default (65% of the screen). */
+    private void showFormDialog(AlertDialog dialog) {
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                    getResources().getDimensionPixelSize(com.intuit.sdp.R.dimen._300sdp),
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
         }
     }
 
@@ -673,63 +898,6 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
                 .show();
     }
 
-    public void showSettings() {
-        settingsVisible = true;
-        androidx.fragment.app.FragmentManager fm = getSupportFragmentManager();
-        androidx.fragment.app.FragmentTransaction ft = fm.beginTransaction().setReorderingAllowed(true);
-        androidx.fragment.app.Fragment modsFrag = fm.findFragmentByTag("frag_mods");
-        if (modsFrag != null && !modsFrag.isHidden()) {
-            ft.hide(modsFrag);
-        }
-        androidx.fragment.app.Fragment settingsFrag = fm.findFragmentByTag("frag_settings");
-        if (settingsFrag == null) {
-            settingsFrag = new SettingsPageFragment();
-            ft.add(R.id.settings_fragment, settingsFrag, "frag_settings");
-        } else {
-            ft.show(settingsFrag);
-            if (settingsFrag instanceof SettingsPageFragment) {
-                ((SettingsPageFragment) settingsFrag).onPageShown();
-            }
-        }
-        ft.commitNowAllowingStateLoss();
-        settingsContainer.setVisibility(View.VISIBLE);
-    }
-
-    public void showModsManager() {
-        settingsVisible = true;
-        androidx.fragment.app.FragmentManager fm = getSupportFragmentManager();
-        androidx.fragment.app.FragmentTransaction ft = fm.beginTransaction().setReorderingAllowed(true);
-        androidx.fragment.app.Fragment settingsFrag = fm.findFragmentByTag("frag_settings");
-        if (settingsFrag != null && !settingsFrag.isHidden()) {
-            ft.hide(settingsFrag);
-        }
-        androidx.fragment.app.Fragment modsFrag = fm.findFragmentByTag("frag_mods");
-        if (modsFrag == null) {
-            modsFrag = new ModsManagerFragment();
-            ft.add(R.id.settings_fragment, modsFrag, "frag_mods");
-        } else {
-            ft.show(modsFrag);
-        }
-        ft.commitNowAllowingStateLoss();
-        settingsContainer.setVisibility(View.VISIBLE);
-    }
-
-    public void hideSettings() {
-        settingsVisible = false;
-        settingsContainer.setVisibility(View.GONE);
-        androidx.fragment.app.FragmentManager fm = getSupportFragmentManager();
-        androidx.fragment.app.FragmentTransaction ft = fm.beginTransaction().setReorderingAllowed(true);
-        androidx.fragment.app.Fragment settingsFrag = fm.findFragmentByTag("frag_settings");
-        if (settingsFrag != null && !settingsFrag.isHidden()) {
-            ft.hide(settingsFrag);
-        }
-        androidx.fragment.app.Fragment modsFrag = fm.findFragmentByTag("frag_mods");
-        if (modsFrag != null && !modsFrag.isHidden()) {
-            ft.hide(modsFrag);
-        }
-        ft.commitAllowingStateLoss();
-    }
-
     @Override
     protected void onDestroy() {
         LauncherThemeManager.removeListener(this);
@@ -740,8 +908,8 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
 
     @Override
     public void onBackPressed() {
-        if (settingsVisible) {
-            hideSettings();
+        if (currentPage != PAGE_SERVERS) {
+            showPage(PAGE_SERVERS);
             return;
         }
         quitApp();

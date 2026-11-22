@@ -1,19 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#26FFFFFF">
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="@android:color/transparent" />
+            <solid android:color="#0DFFFFFF" />
+            <corners android:radius="10dp" />
         </shape>
     </item>
-    <item android:bottom="1dp">
-        <shape android:shape="rectangle">
-            <solid android:color="@android:color/transparent" />
-        </shape>
-    </item>
-    <item android:gravity="bottom">
-        <shape android:shape="rectangle">
-            <size android:height="1dp" />
-            <solid android:color="@color/launcher_stroke" />
-        </shape>
-    </item>
-</layer-list>
+</ripple>

@@ -44,7 +44,6 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
-import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 import com.joom.paranoid.Obfuscate;
 
@@ -68,10 +67,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import com.sampmobile.launcher.BuildConfig;
-import com.sampmobile.launcher.MainActivity;
 import com.sampmobile.launcher.R;
 import com.sampmobile.launcher.ui.GameDataImportDialog;
+import com.sampmobile.launcher.ui.widget.GtaOptionView;
 import com.sampmobile.launcher.ui.widget.GtaSaSliderView;
+import com.sampmobile.launcher.ui.widget.GtaTabStrip;
 import com.sampmobile.launcher.utils.GameDataImporter;
 import com.sampmobile.launcher.utils.LauncherThemeManager;
 import com.sampmobile.launcher.utils.Utils;
@@ -90,11 +90,11 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private static final int CAT_HELP_ABOUT  = 8;
 
     private static final String[] CATEGORY_TITLES = {
-            "联机设置",
-            "画面设置",
-            "镜头设置",
-            "操作设置",
-            "音频设置",
+            "联机",
+            "画面",
+            "镜头",
+            "操作",
+            "音频",
             "界面与聊天",
             "截图库",
             "问题反馈",
@@ -105,17 +105,16 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
     private View rootView;
 
-    private TextView tv_settings_section_title;
-    private TextView[] categoryTabs;
     private View[] categoryPanels;
 
     private EditText et_settings_nickname;
-    private MaterialAutoCompleteTextView samp_version, game_version, charset, fps_limit;
-    private MaterialAutoCompleteTextView dropdown_aspect_ratio, dropdown_visual_fx, dropdown_shadows, dropdown_car_reflections, dropdown_traffic_mode;
-    private MaterialAutoCompleteTextView dropdown_ped_cam_zoom, dropdown_veh_cam_height;
-    private MaterialAutoCompleteTextView dropdown_targeting_mode, dropdown_touch_steering, dropdown_touch_layout, dropdown_accelerometer;
-    private MaterialAutoCompleteTextView dropdown_radio_station, dropdown_voice_mic_mode;
-    private MaterialAutoCompleteTextView dropdown_crosshair_style, dropdown_font_family;
+    private GtaOptionView samp_version, charset, fps_limit;
+    private MaterialAutoCompleteTextView game_version;
+    private GtaOptionView dropdown_aspect_ratio, dropdown_visual_fx, dropdown_shadows, dropdown_car_reflections, dropdown_traffic_mode;
+    private GtaOptionView dropdown_ped_cam_zoom, dropdown_veh_cam_height;
+    private GtaOptionView dropdown_targeting_mode, dropdown_touch_steering, dropdown_touch_layout, dropdown_accelerometer;
+    private GtaOptionView dropdown_radio_station, dropdown_voice_mic_mode;
+    private GtaOptionView dropdown_crosshair_style, dropdown_font_family;
 
     private TextView btn_gfx_preset_low, btn_gfx_preset_med, btn_gfx_preset_high, btn_gfx_preset_ultra;
     private TextView btn_open_hud_editor, btn_reset_hud_editor;
@@ -139,8 +138,9 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private Switch switch_show_death_window, switch_show_nametags, switch_show_button_panel;
     private Switch switch_show_screenshot_btn, switch_gta_subtitles, switch_chat_shadow;
 
-    private MaterialButton restore_button;
-    private MaterialButton chat_minus, chat_strings, chat_plus;
+    private View restore_button;
+    private View chat_minus, chat_plus;
+    private TextView chat_strings;
 
     private GtaSaSliderView slider_theme_hue;
     private TextView tv_theme_hue_val;
@@ -203,12 +203,63 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private static final String[] CROSSHAIR_STYLE_ITEMS = {"原版经典准星", "精简十字准星", "中心高亮圆点", "十字加圆点", "隐藏准星"};
     private static final String[] FONT_FAMILY_ITEMS = {"默认中文黑体", "经典西文粗体", "自定义字体"};
 
+    private static final int[] PANEL_LAYOUTS = {
+            R.layout.settings_panel_multiplayer,
+            R.layout.settings_panel_graphics,
+            R.layout.settings_panel_camera,
+            R.layout.settings_panel_controls,
+            R.layout.settings_panel_audio,
+            R.layout.settings_panel_hud_chat,
+            R.layout.settings_panel_screenshots,
+            R.layout.settings_panel_logs,
+            R.layout.settings_panel_help_about
+    };
+
+    /**
+     * Inflates the settings page piecewise: the frame first, then one panel per {@link #step()}.
+     * The launcher runs a step per idle slot, so pre-warming 600+ views never blocks a frame for long.
+     */
+    public static final class ViewBuilder {
+        private final LayoutInflater inflater;
+        private final View root;
+        private final ViewGroup panels;
+        private int next;
+
+        public ViewBuilder(LayoutInflater inflater, ViewGroup parent) {
+            this.inflater = inflater;
+            this.root = inflater.inflate(R.layout.fragment_settings_page, parent, false);
+            this.panels = root.findViewById(R.id.settings_panels);
+        }
+
+        /** Inflates the next panel; returns true while panels remain. */
+        public boolean step() {
+            if (next < PANEL_LAYOUTS.length) {
+                inflater.inflate(PANEL_LAYOUTS[next++], panels, true);
+            }
+            return next < PANEL_LAYOUTS.length;
+        }
+
+        public View finish() {
+            while (step()) {
+            }
+            return root;
+        }
+    }
+
+    private View prebuiltView;
+
     public SettingsPageFragment() {
+    }
+
+    /** Hands over a page view built ahead of time by {@link ViewBuilder}. */
+    public void setPrebuiltView(View view) {
+        this.prebuiltView = view;
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.fragment_settings_page, container, false);
+        View view = prebuiltView != null ? prebuiltView : new ViewBuilder(inflater, container).finish();
+        prebuiltView = null;
         this.rootView = view;
         settings_prefs = requireActivity().getSharedPreferences("samp_settings", Context.MODE_PRIVATE);
 
@@ -220,12 +271,6 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
 
         LauncherThemeManager.addListener(this);
         onThemeColorChanged(LauncherThemeManager.getAccentColor(requireContext()));
-
-        view.findViewById(R.id.btnBackSettings).setOnClickListener(v -> {
-            if (requireActivity() instanceof MainActivity) {
-                ((MainActivity) requireActivity()).hideSettings();
-            }
-        });
 
         return view;
     }
@@ -256,7 +301,6 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     public void onThemeColorChanged(int accentColor) {
         if (rootView == null || !isAdded()) return;
         LauncherThemeManager.applyThemeToTree(rootView, accentColor);
-        updateCategoryTabColors();
         updateGraphicsPresetUI();
         updateScreenshotModeUI();
         updateHudEditorButtonUI();
@@ -266,7 +310,6 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     }
 
     private void initViews(View view) {
-        tv_settings_section_title = view.findViewById(R.id.tv_settings_section_title);
 
         et_settings_nickname = view.findViewById(R.id.et_settings_nickname);
         samp_version = view.findViewById(R.id.samp_version);
@@ -445,17 +488,6 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     }
 
     private void setupCategoryNavigation(View view) {
-        categoryTabs = new TextView[]{
-                view.findViewById(R.id.cat_multiplayer),
-                view.findViewById(R.id.cat_graphics),
-                view.findViewById(R.id.cat_camera),
-                view.findViewById(R.id.cat_controls),
-                view.findViewById(R.id.cat_audio),
-                view.findViewById(R.id.cat_hud_chat),
-                view.findViewById(R.id.cat_screenshots),
-                view.findViewById(R.id.cat_logs),
-                view.findViewById(R.id.cat_help_about)
-        };
         categoryPanels = new View[]{
                 view.findViewById(R.id.panel_multiplayer),
                 view.findViewById(R.id.panel_graphics),
@@ -468,40 +500,31 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
                 view.findViewById(R.id.panel_help_about)
         };
 
-        for (int i = 0; i < categoryTabs.length; i++) {
-            final int idx = i;
-            categoryTabs[i].setOnClickListener(v -> switchCategory(idx));
-        }
+        GtaTabStrip tabs = view.findViewById(R.id.settings_tabs);
+        tabs.setTabs(CATEGORY_TITLES);
+        tabs.setOnTabSelectedListener((index, reselected) -> {
+            if (reselected) {
+                if (categoryPanels[index] instanceof android.widget.ScrollView) {
+                    ((android.widget.ScrollView) categoryPanels[index]).smoothScrollTo(0, 0);
+                }
+                return;
+            }
+            switchCategory(index);
+            View panel = categoryPanels[index];
+            panel.animate().cancel();
+            panel.setAlpha(0f);
+            panel.setTranslationY(8f * getResources().getDisplayMetrics().density);
+            panel.animate().alpha(1f).translationY(0f).setDuration(180).start();
+        });
         switchCategory(CAT_MULTIPLAYER);
-    }
-
-    private void updateCategoryTabColors() {
-        if (categoryTabs == null || !isAdded()) return;
-        int accentColor = LauncherThemeManager.getAccentColor(requireContext());
-        int colorOnAccent = requireContext().getResources().getColor(R.color.launcher_on_accent);
-        int colorDim = requireContext().getResources().getColor(R.color.launcher_text_dim);
-
-        for (int i = 0; i < categoryTabs.length; i++) {
-            boolean active = (i == currentCategory);
-            categoryTabs[i].setBackgroundResource(active ? R.drawable.launcher_btn_primary : R.drawable.launcher_btn_outline);
-            categoryTabs[i].setBackgroundTintList(active ? ColorStateList.valueOf(accentColor) : null);
-            categoryTabs[i].setTextColor(active ? colorOnAccent : colorDim);
-        }
-        if (tv_settings_section_title != null) {
-            tv_settings_section_title.setTextColor(accentColor);
-        }
     }
 
     private void switchCategory(int catIdx) {
         currentCategory = catIdx;
-        if (tv_settings_section_title != null && catIdx >= 0 && catIdx < CATEGORY_TITLES.length) {
-            tv_settings_section_title.setText(CATEGORY_TITLES[catIdx]);
-        }
 
         for (int i = 0; i < categoryPanels.length; i++) {
             categoryPanels[i].setVisibility((i == catIdx) ? View.VISIBLE : View.GONE);
         }
-        updateCategoryTabColors();
 
         if (catIdx == CAT_SCREENSHOTS) {
             refreshScreenshotGallery();
@@ -723,7 +746,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         };
     }
 
-    private void bindIndexedDropdown(MaterialAutoCompleteTextView view, String[] items, String key, int defIdx) {
+    private void bindIndexedDropdown(GtaOptionView view, String[] items, String key, int defIdx) {
         if (view == null) return;
         ArrayAdapter<String> adapter = createDropdownAdapter(items);
         view.setAdapter(adapter);
@@ -734,7 +757,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         view.setOnItemClickListener((av, v, i, l) -> savePreference(key, i));
     }
 
-    private void bindIndexedDropdownWithPresetSync(MaterialAutoCompleteTextView view, String[] items, String key, int defIdx) {
+    private void bindIndexedDropdownWithPresetSync(GtaOptionView view, String[] items, String key, int defIdx) {
         if (view == null) return;
         ArrayAdapter<String> adapter = createDropdownAdapter(items);
         view.setAdapter(adapter);
@@ -967,11 +990,9 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private void setupChatButtons() {
         chat_minus.setOnClickListener(v -> {
             adjustChatStrings(-1);
-            chat_minus.setChecked(false);
         });
         chat_plus.setOnClickListener(v -> {
             adjustChatStrings(1);
-            chat_plus.setChecked(false);
         });
     }
 
@@ -1054,7 +1075,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         updateHudEditorButtonUI();
     }
 
-    private void setDropdownIdxText(MaterialAutoCompleteTextView view, String[] items, String key, int defIdx) {
+    private void setDropdownIdxText(GtaOptionView view, String[] items, String key, int defIdx) {
         if (view == null) return;
         int idx = Math.min(Math.max(settings_prefs.getInt(key, defIdx), 0), items.length - 1);
         view.setText(items[idx], false);
@@ -1278,7 +1299,8 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
             iv.setLayoutParams(new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, (int) (105 * dp)));
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            iv.setBackgroundResource(R.color.launcher_bg);
+            iv.setBackgroundResource(R.drawable.launcher_img_clip);
+            iv.setClipToOutline(true);
             card.addView(iv);
 
             LinearLayout titleRow = new LinearLayout(ctx);

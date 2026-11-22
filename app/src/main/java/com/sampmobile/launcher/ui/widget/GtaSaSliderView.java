@@ -10,6 +10,7 @@ import android.graphics.Shader;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewParent;
 
 import com.sampmobile.launcher.utils.LauncherThemeManager;
@@ -18,8 +19,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * GTA:SA single-player style segmented bar gauge slider.
+ * GTA:SA stat-bar style slider: a slim segmented gauge with a pill thumb.
  * Lightweight custom Canvas view that replaces heavy Material Slider (20x faster inflation).
+ * A drag only starts after a clearly horizontal move, so scrolling the page never changes a value.
  */
 public class GtaSaSliderView extends View {
 
@@ -29,6 +31,7 @@ public class GtaSaSliderView extends View {
 
     private static final String ANDROID_NS = "http://schemas.android.com/apk/res/android";
     private static final int SEGMENT_COUNT = 16;
+    private static final float TRACK_PAD_DP = 9f;
 
     private float valueFrom = 0f;
     private float valueTo = 100f;
@@ -38,17 +41,19 @@ public class GtaSaSliderView extends View {
     private int accentColor = 0xFFF5A623;
     private boolean rainbowMode = false;
     private boolean isDragging = false;
+    private float downX;
+    private float downY;
+    private int touchSlop;
+    private Shader rainbowShader;
+    private int rainbowShaderWidth = -1;
 
-    private final Paint framePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint emptyBarPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint filledBarPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint highlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint haloPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint thumbShadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint thumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    private final RectF outerRect = new RectF();
     private final RectF segRect = new RectF();
-    private final RectF topHighlightRect = new RectF();
 
     private final List<OnChangeListener> listeners = new ArrayList<>();
 
@@ -80,6 +85,7 @@ public class GtaSaSliderView extends View {
 
     private void init(Context context, AttributeSet attrs) {
         accentColor = LauncherThemeManager.getAccentColor(context);
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 
         if (attrs != null) {
             valueFrom = readAttrFloat(attrs, "valueFrom", 0f);
@@ -88,23 +94,16 @@ public class GtaSaSliderView extends View {
             value = readAttrFloat(attrs, "value", valueFrom);
         }
 
-        float density = context.getResources().getDisplayMetrics().density;
-
-        framePaint.setStyle(Paint.Style.FILL);
-        framePaint.setColor(0xFF101218);
-
-        borderPaint.setStyle(Paint.Style.STROKE);
-        borderPaint.setStrokeWidth(1.3f * density);
-        borderPaint.setColor(0xFF323644);
-
         emptyBarPaint.setStyle(Paint.Style.FILL);
-        emptyBarPaint.setColor(0xFF232631);
+        emptyBarPaint.setColor(0x2EFFFFFF);
 
         filledBarPaint.setStyle(Paint.Style.FILL);
         filledBarPaint.setColor(accentColor);
 
-        highlightPaint.setStyle(Paint.Style.FILL);
-        highlightPaint.setColor(0x40FFFFFF);
+        haloPaint.setStyle(Paint.Style.FILL);
+
+        thumbShadowPaint.setStyle(Paint.Style.FILL);
+        thumbShadowPaint.setColor(0x73000000);
 
         thumbPaint.setStyle(Paint.Style.FILL);
         thumbPaint.setColor(0xFFFFFFFF);
@@ -204,87 +203,61 @@ public class GtaSaSliderView extends View {
         int h = getHeight();
         if (w <= 0 || h <= 0) return;
 
-        float padH = 4f * density;
-        float barHeight = Math.min(h - 10f * density, 20f * density);
-        float top = (h - barHeight) * 0.5f;
-        float bottom = top + barHeight;
-        float corner = 3.5f * density;
-
-        outerRect.set(padH, top, w - padH, bottom);
-        canvas.drawRoundRect(outerRect, corner, corner, framePaint);
-
-        float innerPad = 3.2f * density;
-        float innerLeft = outerRect.left + innerPad;
-        float innerRight = outerRect.right - innerPad;
-        float innerTop = outerRect.top + innerPad;
-        float innerBottom = outerRect.bottom - innerPad;
-        float innerWidth = Math.max(1f, innerRight - innerLeft);
+        float left = TRACK_PAD_DP * density;
+        float right = Math.max(left + 1f, w - TRACK_PAD_DP * density);
+        float trackW = right - left;
+        float cy = h * 0.5f;
+        float barH = (rainbowMode ? 8f : 7f) * density;
+        float top = cy - barH * 0.5f;
+        float bottom = cy + barH * 0.5f;
 
         float range = Math.max(0.0001f, valueTo - valueFrom);
         float fraction = Math.max(0f, Math.min(1f, (value - valueFrom) / range));
+        float thumbX = left + fraction * trackW;
 
         if (rainbowMode) {
-            int[] rainbowColors = new int[]{
-                    Color.HSVToColor(new float[]{0f, 0.85f, 0.96f}),
-                    Color.HSVToColor(new float[]{60f, 0.85f, 0.96f}),
-                    Color.HSVToColor(new float[]{120f, 0.85f, 0.96f}),
-                    Color.HSVToColor(new float[]{180f, 0.85f, 0.96f}),
-                    Color.HSVToColor(new float[]{240f, 0.85f, 0.96f}),
-                    Color.HSVToColor(new float[]{300f, 0.85f, 0.96f}),
-                    Color.HSVToColor(new float[]{360f, 0.85f, 0.96f})
-            };
-            filledBarPaint.setShader(new LinearGradient(
-                    innerLeft, innerTop, innerRight, innerTop,
-                    rainbowColors, null, Shader.TileMode.CLAMP));
-            segRect.set(innerLeft, innerTop, innerRight, innerBottom);
-            canvas.drawRoundRect(segRect, 2f * density, 2f * density, filledBarPaint);
+            if (rainbowShader == null || rainbowShaderWidth != w) {
+                int[] colors = new int[7];
+                for (int i = 0; i < 7; i++) {
+                    colors[i] = Color.HSVToColor(new float[]{i * 60f, 0.84f, 0.96f});
+                }
+                rainbowShader = new LinearGradient(left, 0, right, 0, colors, null, Shader.TileMode.CLAMP);
+                rainbowShaderWidth = w;
+            }
+            filledBarPaint.setShader(rainbowShader);
+            segRect.set(left, top, right, bottom);
+            canvas.drawRoundRect(segRect, barH * 0.5f, barH * 0.5f, filledBarPaint);
             filledBarPaint.setShader(null);
-
-            float thumbX = innerLeft + fraction * innerWidth;
-            float thumbW = 3.5f * density;
-            segRect.set(thumbX - thumbW, outerRect.top - 1.5f * density, thumbX + thumbW, outerRect.bottom + 1.5f * density);
-            canvas.drawRoundRect(segRect, 2f * density, 2f * density, thumbPaint);
         } else {
-            // Classic GTA:SA segmented bar gauge (16 distinct bars)
-            float gap = 2.4f * density;
-            float totalGaps = gap * (SEGMENT_COUNT - 1);
-            float segW = Math.max(2f, (innerWidth - totalGaps) / SEGMENT_COUNT);
-            float exactFillSegments = fraction * SEGMENT_COUNT;
-
+            float gap = 2f * density;
+            float segW = Math.max(2f, (trackW - gap * (SEGMENT_COUNT - 1)) / SEGMENT_COUNT);
+            float radius = 1.6f * density;
+            float exactFill = fraction * SEGMENT_COUNT;
             filledBarPaint.setColor(accentColor);
 
             for (int i = 0; i < SEGMENT_COUNT; i++) {
-                float sLeft = innerLeft + i * (segW + gap);
-                float sRight = sLeft + segW;
-                segRect.set(sLeft, innerTop, sRight, innerBottom);
-
-                // First draw empty background slot
-                canvas.drawRoundRect(segRect, 1.5f * density, 1.5f * density, emptyBarPaint);
-
-                // Then draw filled portion (full or partial on active segment)
-                if (exactFillSegments > i) {
-                    float segFill = Math.min(1f, exactFillSegments - i);
-                    float fRight = sLeft + segW * segFill;
-                    segRect.set(sLeft, innerTop, fRight, innerBottom);
-                    canvas.drawRoundRect(segRect, 1.5f * density, 1.5f * density, filledBarPaint);
-
-                    // Classic GTA:SA top bevel sheen
-                    topHighlightRect.set(sLeft, innerTop, fRight, innerTop + (innerBottom - innerTop) * 0.35f);
-                    canvas.drawRoundRect(topHighlightRect, 1.5f * density, 1.5f * density, highlightPaint);
+                float sLeft = left + i * (segW + gap);
+                segRect.set(sLeft, top, sLeft + segW, bottom);
+                canvas.drawRoundRect(segRect, radius, radius, emptyBarPaint);
+                if (exactFill > i) {
+                    float segFill = Math.min(1f, exactFill - i);
+                    segRect.set(sLeft, top, sLeft + segW * segFill, bottom);
+                    canvas.drawRoundRect(segRect, radius, radius, filledBarPaint);
                 }
-            }
-
-            // Crisp active thumb marker when dragging
-            if (isDragging) {
-                float thumbX = innerLeft + fraction * innerWidth;
-                float thumbHalfW = 1.8f * density;
-                segRect.set(thumbX - thumbHalfW, outerRect.top - 1f * density, thumbX + thumbHalfW, outerRect.bottom + 1f * density);
-                canvas.drawRoundRect(segRect, 1.5f * density, 1.5f * density, thumbPaint);
             }
         }
 
-        borderPaint.setColor(isDragging ? accentColor : 0xFF323644);
-        canvas.drawRoundRect(outerRect, corner, corner, borderPaint);
+        if (isDragging) {
+            haloPaint.setColor((accentColor & 0x00FFFFFF) | 0x38000000);
+            canvas.drawCircle(thumbX, cy, 13f * density, haloPaint);
+        }
+        float thumbHalfW = (isDragging ? 3.2f : 2.6f) * density;
+        float thumbHalfH = Math.min(h * 0.5f - density, (isDragging ? 10.5f : 8.5f) * density);
+        segRect.set(thumbX - thumbHalfW - density, cy - thumbHalfH - density,
+                thumbX + thumbHalfW + density, cy + thumbHalfH + density);
+        canvas.drawRoundRect(segRect, thumbHalfW + density, thumbHalfW + density, thumbShadowPaint);
+        segRect.set(thumbX - thumbHalfW, cy - thumbHalfH, thumbX + thumbHalfW, cy + thumbHalfH);
+        canvas.drawRoundRect(segRect, thumbHalfW, thumbHalfW, thumbPaint);
     }
 
     @Override
@@ -293,23 +266,39 @@ public class GtaSaSliderView extends View {
         int action = event.getActionMasked();
         switch (action) {
             case MotionEvent.ACTION_DOWN:
-                ViewParent parent = getParent();
-                if (parent != null) {
-                    parent.requestDisallowInterceptTouchEvent(true);
-                }
-                isDragging = true;
-                updateFromTouchX(event.getX());
-                invalidate();
+                downX = event.getX();
+                downY = event.getY();
+                isDragging = false;
                 return true;
             case MotionEvent.ACTION_MOVE:
-                isDragging = true;
-                updateFromTouchX(event.getX());
+                if (!isDragging) {
+                    float dx = Math.abs(event.getX() - downX);
+                    float dy = Math.abs(event.getY() - downY);
+                    if (dx > touchSlop && dx > dy) {
+                        isDragging = true;
+                        ViewParent parent = getParent();
+                        if (parent != null) {
+                            parent.requestDisallowInterceptTouchEvent(true);
+                        }
+                    }
+                }
+                if (isDragging) {
+                    updateFromTouchX(event.getX());
+                    invalidate();
+                }
                 return true;
             case MotionEvent.ACTION_UP:
+                boolean tap = Math.abs(event.getX() - downX) <= touchSlop
+                        && Math.abs(event.getY() - downY) <= touchSlop;
+                if (isDragging || tap) {
+                    updateFromTouchX(event.getX());
+                }
+                isDragging = false;
+                performClick();
+                invalidate();
+                return true;
             case MotionEvent.ACTION_CANCEL:
                 isDragging = false;
-                updateFromTouchX(event.getX());
-                performClick();
                 invalidate();
                 return true;
         }
@@ -323,7 +312,7 @@ public class GtaSaSliderView extends View {
 
     private void updateFromTouchX(float touchX) {
         float density = getResources().getDisplayMetrics().density;
-        float pad = 7.2f * density;
+        float pad = TRACK_PAD_DP * density;
         float left = pad;
         float right = Math.max(left + 1f, getWidth() - pad);
         float fraction = Math.max(0f, Math.min(1f, (touchX - left) / (right - left)));

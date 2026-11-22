@@ -36,8 +36,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.joom.paranoid.Obfuscate;
-import com.sampmobile.launcher.MainActivity;
 import com.sampmobile.launcher.R;
+import com.sampmobile.launcher.ui.widget.GtaTabStrip;
 import com.sampmobile.launcher.utils.LauncherThemeManager;
 import com.sampmobile.launcher.utils.ModAssetTool;
 import com.sampmobile.launcher.utils.ModManager;
@@ -66,7 +66,7 @@ public class ModsManagerFragment extends Fragment implements LauncherThemeManage
     private SharedPreferences prefs;
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
-    private TextView[] tabViews;
+    private View modsContent;
     private TextView tvSectionTitle, tvSectionStatus, tvSectionDesc, tvSectionPath, tvModEmpty;
     private Switch switchSectionMaster;
     private TextView btnActionPrimary, btnActionSecondary, btnActionTertiary, btnActionQuaternary;
@@ -126,29 +126,25 @@ public class ModsManagerFragment extends Fragment implements LauncherThemeManage
         rootView = v;
         prefs = requireActivity().getSharedPreferences("samp_settings", Context.MODE_PRIVATE);
 
-        v.findViewById(R.id.btn_mods_back).setOnClickListener(view -> {
-            if (requireActivity() instanceof MainActivity) {
-                ((MainActivity) requireActivity()).hideSettings();
-            }
-        });
-
         TextView tvAbi = v.findViewById(R.id.tv_process_abi);
-        tvAbi.setText("当前进程：" + ModManager.getProcessAbiLabel());
+        tvAbi.setText(ModManager.getProcessAbiLabel());
 
         v.findViewById(R.id.btn_mods_logs).setOnClickListener(view -> showLogsDialog());
         v.findViewById(R.id.btn_mods_refresh).setOnClickListener(view -> reloadCurrentTab());
 
-        tabViews = new TextView[]{
-                v.findViewById(R.id.mod_tab_modloader),
-                v.findViewById(R.id.mod_tab_aml),
-                v.findViewById(R.id.mod_tab_jpatch),
-                v.findViewById(R.id.mod_tab_monet),
-                v.findViewById(R.id.mod_tab_cleo)
-        };
-        for (int i = 0; i < tabViews.length; i++) {
-            final int idx = i;
-            tabViews[i].setOnClickListener(view -> selectTab(idx));
-        }
+        modsContent = v.findViewById(R.id.mods_content);
+        GtaTabStrip modTabs = v.findViewById(R.id.mod_tabs);
+        modTabs.setTabs("Modloader", "AML 插件", "JPatch 补丁", "MonetLoader", "CLEO 脚本");
+        modTabs.setOnTabSelectedListener((index, reselected) -> {
+            if (reselected) {
+                reloadCurrentTab();
+            } else {
+                selectTab(index);
+                modsContent.animate().cancel();
+                modsContent.setAlpha(0f);
+                modsContent.animate().alpha(1f).setDuration(180).start();
+            }
+        });
 
         tvSectionTitle = v.findViewById(R.id.tv_section_title);
         tvSectionStatus = v.findViewById(R.id.tv_section_status);
@@ -186,7 +182,6 @@ public class ModsManagerFragment extends Fragment implements LauncherThemeManage
     public void onThemeColorChanged(int accentColor) {
         if (rootView == null || !isAdded()) return;
         LauncherThemeManager.applyThemeToTree(rootView, accentColor);
-        updateTabStyles();
         if (btnActionPrimary != null) {
             btnActionPrimary.setBackgroundTintList(ColorStateList.valueOf(accentColor));
         }
@@ -200,21 +195,8 @@ public class ModsManagerFragment extends Fragment implements LauncherThemeManage
 
     private void selectTab(int tab) {
         currentTab = tab;
-        updateTabStyles();
         configureSectionPanel();
         reloadCurrentTab();
-    }
-
-    private void updateTabStyles() {
-        if (tabViews == null || !isAdded()) return;
-        int accentColor = LauncherThemeManager.getAccentColor(requireContext());
-        for (int i = 0; i < tabViews.length; i++) {
-            boolean sel = (i == currentTab);
-            tabViews[i].setBackgroundResource(sel ? R.drawable.launcher_btn_primary : R.drawable.launcher_btn_outline);
-            tabViews[i].setBackgroundTintList(sel ? ColorStateList.valueOf(accentColor) : null);
-            tabViews[i].setTextColor(requireContext().getColor(
-                    sel ? R.color.launcher_on_accent : R.color.launcher_text_dim));
-        }
     }
 
     private String prefKeyForTab(int tab) {
@@ -488,13 +470,13 @@ public class ModsManagerFragment extends Fragment implements LauncherThemeManage
     private String emptyHintForTab(int tab) {
         switch (tab) {
             case TAB_MODLOADER:
-                return "暂无 Modloader 模组包\n点击左侧「导入皮肤/模型 (IMG+TXD)」或「导入完整 ZIP 模组包」，也可手动放入 files/modloader/";
+                return "暂无 Modloader 模组包\n点击右侧「导入皮肤/模型 (IMG+TXD)」或「导入完整 ZIP 模组包」，也可手动放入 files/modloader/";
             case TAB_AML:
-                return "暂无 AML 插件 (.so)\n点击左侧「导入 AML 插件 (.so)」或放入 Android/data/com.sampmobile.launcher/mods/";
+                return "暂无 AML 插件 (.so)\n点击右侧「导入 AML 插件 (.so)」或放入 Android/data/com.sampmobile.launcher/mods/";
             case TAB_MONET:
-                return "暂无 MonetLoader Lua 脚本\n点击左侧「导入 Lua 脚本 (.lua)」或放入 files/monetloader/";
+                return "暂无 MonetLoader Lua 脚本\n点击右侧「导入 Lua 脚本 (.lua)」或放入 files/monetloader/";
             case TAB_CLEO:
-                return "暂无 CLEO 脚本\n点击左侧「导入 CLEO 脚本」或放入 files/cleo/";
+                return "暂无 CLEO 脚本\n点击右侧「导入 CLEO 脚本」或放入 files/cleo/";
             default:
                 return "暂无条目";
         }

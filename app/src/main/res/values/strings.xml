@@ -129,4 +129,18 @@
     <string name="remove_favorite">取消收藏</string>
     <string name="menu_official_site">官网</string>
     <string name="menu_exit">退出</string>
+
+    <!-- launcher shell -->
+    <string name="tab_servers">联机</string>
+    <string name="nav_offline_short">单机</string>
+    <string name="add_server_short">添加</string>
+    <string name="servers_count">%1$d 个服务器</string>
+    <string name="servers_empty_favorites">收藏夹还是空的\n点右上角「添加」填入服务器地址，或到「互联网」里挑一个收藏</string>
+    <string name="servers_empty_recent">还没有进过服务器\n加入过的服务器会出现在这里</string>
+    <string name="servers_empty_search">没有匹配的服务器</string>
+    <string name="servers_empty_internet">服务器列表为空\n检查网络后点右上角刷新</string>
+    <string name="address_copied">已复制服务器地址</string>
+    <string name="stat_language">语言</string>
+    <string name="restore_defaults">恢复默认</string>
+    <string name="view_logs">日志</string>
 </resources>

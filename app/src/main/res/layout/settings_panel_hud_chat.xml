@@ -1,0 +1,1177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/panel_hud_chat"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:scrollbarSize="3dp"
+    android:scrollbarThumbVertical="@drawable/ui_scroll_thumb"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/_12sdp">
+
+        <!-- 卡片：界面显示开关 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="屏幕界面元素"
+                android:textColor="@color/launcher_accent"
+                android:textSize="@dimen/_9ssp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_2sdp"
+                android:layout_marginBottom="@dimen/_6sdp"
+                android:text="自定义 HUD、雷达小地图、准星样式、快捷按键与玩家头顶信息显示"
+                android:textColor="@color/launcher_text_dim"
+                android:textSize="@dimen/_7ssp" />
+
+            <!-- 显示 GTA 原版 HUD -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="显示 GTA 原版 HUD（血量/武器/金钱）"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="显示右上角生命值、防弹衣、武器图标、通缉星级与现金"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_show_gta_hud"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 显示左下角雷达小地图 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="显示左下角雷达小地图"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="显示圆形雷达小地图与地图标记点"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_show_radar"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 点击雷达打开大地图/暂停菜单 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="点击雷达打开大地图"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="允许轻触左下角雷达进入全屏地图，关闭可防止战斗时摇杆误触弹出地图"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_radar_tap_map"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 准星样式选择 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="武器准星样式"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="切换原版准星、竞技精简十字、中心高亮圆点或隐藏准星"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaOptionView
+                    android:id="@+id/dropdown_crosshair_style"
+                    android:layout_width="@dimen/_120sdp"
+                    android:layout_height="@dimen/_26sdp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 帧率状态显示 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="实时帧率显示"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="在屏幕边缘显示当前游戏运行帧数"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/displayfps_switch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 右侧击杀信息框 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="右侧击杀通报窗口"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="显示服务器玩家之间的击杀与死亡图标列表"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_show_death_window"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 玩家头顶昵称与血条 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="玩家头顶昵称与血条"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="渲染视野内其他玩家与机器人的名字、生命值与护甲条"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_show_nametags"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 玩家名字上方显示持有武器图标 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="玩家名字上方显示持有武器"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="在其他玩家头顶昵称正上方显示其当前手持的武器图标徽章"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_show_nametag_weapon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 底部快捷功能键盘 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="底部快捷功能键盘"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="在左下角提供可展开的 TAB、ALT、Y、N、H、G、F 快捷按键栏"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_show_button_panel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 快捷键盘显示 F8 截图键 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="快捷键盘包含 F8 截图键"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="在底部快捷功能键盘末尾显示 F8 一键截图按钮"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_show_screenshot_btn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 剧情与提示字幕 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="底部提示与剧情字幕"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="显示游戏画面底部的任务字幕与提示文本"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_gta_subtitles"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 卡片：聊天与输入法设置 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/_10sdp"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tag="theme_accent_text"
+                android:text="字体、3D 文本与聊天设置"
+                android:textColor="@color/launcher_accent"
+                android:textSize="@dimen/_9ssp"
+                android:textStyle="bold" />
+
+            <!-- 游戏字体选择 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="游戏字体样式"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="选择聊天、头顶名字与 3D 文本字体（自定义字体请放入 SAMP/fonts/custom.ttf）"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaOptionView
+                    android:id="@+id/dropdown_font_family"
+                    android:layout_width="@dimen/_120sdp"
+                    android:layout_height="@dimen/_26sdp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 玩家名字与血条缩放 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="玩家头顶名字与血条大小"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="独立缩放玩家头顶昵称、生命护甲条与武器图标尺寸"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/slider_nametag_size"
+                    android:layout_width="@dimen/_115sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="50"
+                    android:valueTo="150" />
+
+                <TextView
+                    android:id="@+id/tv_nametag_size_val"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="100%"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 3DText 场景文字大小 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="3D 场景文本 (3DText) 大小"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="独立缩放服务器在建筑物、NPC 与车牌处创建的 3D 悬浮文字大小"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/slider_textlabel_size"
+                    android:layout_width="@dimen/_115sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="50"
+                    android:valueTo="150" />
+
+                <TextView
+                    android:id="@+id/tv_textlabel_size_val"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="100%"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 使用系统输入法键盘 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_4sdp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="使用手机系统输入法"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="聊天打字时直接唤起手机输入法，方便输入中文与表情"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/systemkeyboard_switch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 聊天消息时间前缀 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="显示聊天消息时间"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="在每条聊天消息前方显示时分秒时间标记"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/timestamp_switch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 聊天文字描边阴影 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_5sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="聊天文字描边阴影"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="为聊天文字添加黑色外描边，在明亮天空背景下依然清晰易读"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switch_chat_shadow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/ic_thumb"
+                    android:track="@drawable/bg_track" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 聊天显示行数 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="聊天窗口显示行数"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="单页同时展示的聊天消息行数（5 至 20 行）"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="@dimen/_120sdp"
+                    android:layout_height="@dimen/_26sdp"
+                    android:background="@drawable/launcher_input_bg"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:id="@+id/chat_minus"
+                        android:layout_width="@dimen/_24sdp"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/ui_row_bg"
+                        android:contentDescription="-"
+                        android:paddingHorizontal="@dimen/_5sdp"
+                        android:src="@drawable/ic_chevron_left"
+                        android:tint="@color/launcher_accent" />
+
+                    <TextView
+                        android:id="@+id/chat_strings"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="8"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_8ssp"
+                        android:textStyle="bold" />
+
+                    <ImageView
+                        android:id="@+id/chat_plus"
+                        android:layout_width="@dimen/_24sdp"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/ui_row_bg"
+                        android:contentDescription="+"
+                        android:paddingHorizontal="@dimen/_5sdp"
+                        android:src="@drawable/ic_chevron_right"
+                        android:tint="@color/launcher_accent" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/launcher_stroke" />
+
+            <!-- 聊天与界面字号 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_6sdp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/_8sdp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="聊天与界面字体大小"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="调节聊天消息与服务器弹窗文字字号（默认 25）"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/fontsize_slider"
+                    android:layout_width="@dimen/_115sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="1"
+                    android:valueFrom="14"
+                    android:valueTo="40" />
+
+                <TextView
+                    android:id="@+id/fontsize_value"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="25"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 卡片：聊天窗口位置与尺寸 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/_10sdp"
+            android:background="@drawable/launcher_card"
+            android:orientation="vertical"
+            android:padding="@dimen/_12sdp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:tag="theme_accent_text"
+                        android:text="聊天窗口位置与尺寸"
+                        android:textColor="@color/launcher_accent"
+                        android:textSize="@dimen/_9ssp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_1sdp"
+                        android:text="微调聊天框在屏幕上的坐标与宽高区域"
+                        android:textColor="@color/launcher_text_dim"
+                        android:textSize="@dimen/_7ssp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/btn_reset_chat_layout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/_24sdp"
+                    android:background="@drawable/launcher_btn_outline"
+                    android:gravity="center"
+                    android:paddingHorizontal="@dimen/_8sdp"
+                    android:tag="theme_accent_text"
+                    android:text="重置聊天框布局"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_7ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- 水平位置偏移 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_6sdp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="水平位置偏移"
+                    android:textColor="@color/launcher_text"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/chatposx_slider"
+                    android:layout_width="@dimen/_125sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="5"
+                    android:valueTo="600" />
+
+                <TextView
+                    android:id="@+id/chatposx_value"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="100"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- 垂直位置偏移 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="垂直位置偏移"
+                    android:textColor="@color/launcher_text"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/chatposy_slider"
+                    android:layout_width="@dimen/_125sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="5"
+                    android:valueTo="400" />
+
+                <TextView
+                    android:id="@+id/chatposy_value"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="20"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- 窗口宽度 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="聊天窗口宽度"
+                    android:textColor="@color/launcher_text"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/chatsizex_slider"
+                    android:layout_width="@dimen/_125sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="150"
+                    android:valueTo="800" />
+
+                <TextView
+                    android:id="@+id/chatsizex_value"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="360"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- 窗口高度 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="聊天窗口高度"
+                    android:textColor="@color/launcher_text"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+
+                <com.sampmobile.launcher.ui.widget.GtaSaSliderView
+                    android:id="@+id/chatsizey_slider"
+                    android:layout_width="@dimen/_125sdp"
+                    android:layout_height="@dimen/_24sdp"
+                    android:stepSize="5"
+                    android:valueFrom="50"
+                    android:valueTo="400" />
+
+                <TextView
+                    android:id="@+id/chatsizey_value"
+                    android:layout_width="@dimen/_34sdp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:tag="theme_accent_text"
+                    android:text="110"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>
