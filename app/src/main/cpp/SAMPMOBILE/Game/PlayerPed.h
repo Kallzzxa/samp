@@ -63,7 +63,7 @@ public:
 	void ShowMarker(int nIndex);
 	void SetFightingStyle(int iStyle);
 	void SetRotation(float fRotation);
-	void ApplyCommandTask(char* szTaskName, int p1, int p2, int p3, sa::CVector* p4, int p5, int p6, int p7, int p8, int p9);
+	void ApplyCommandTask(const char* szTaskName, void* p1, int p2, int p3, sa::CVector* p4, uint8_t p5, float p6, int p7, int p8, uint8_t p9);
 	void DestroyFollowPedTask();
 	void GetTransformedBonePosition(int iBoneID, sa::CVector* vecOut);
 	void ApplyAnimation(const char* szAnimName, const char* szAnimLib, float fT, int opt1, int opt2, int opt3, int opt4, int iTime);

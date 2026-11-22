@@ -1100,7 +1100,7 @@ void CRemotePlayer::ProcessSpecialAction(unsigned char byteSpecialAction)
 			LookAt.x = Aim->pos1x + (Aim->f1x * 20.0f);
 			LookAt.y = Aim->pos1y + (Aim->f1y * 20.0f);
 			LookAt.z = Aim->pos1z + (Aim->f1z * 20.0f);
-			m_pPlayerPed->ApplyCommandTask("FollowPedSA", 0, 2000, -1, &LookAt, 0, 0.1f, 500, 3, 0);
+			m_pPlayerPed->ApplyCommandTask("FollowPedSA", nullptr, 2000, -1, &LookAt, 0, 0.1f, 500, 3, 0);
 			m_dwLastHeadUpdate = GetTickCount();
 		}
 	}

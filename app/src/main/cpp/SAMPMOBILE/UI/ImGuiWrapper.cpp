@@ -2,8 +2,8 @@
 #include "UISettings.h"
 #include "../Settings.h"
 #include "gbk_charset.h"
-#include "../game/Game.h"
-#include "../net/NetGame.h"
+#include "../Game/Game.h"
+#include "../Net/NetGame.h"
 
 extern NetGame* pNetGame;
 

@@ -423,7 +423,7 @@ void scanDirectory(const std::string& dirPath, bool scanScripts)
 
 	std::vector<std::string> names;
 	while (struct dirent* ent = readdir(d)) {
-		if (!ent->d_name || ent->d_name[0] == '.') continue;
+		if (ent->d_name[0] == '\0' || ent->d_name[0] == '.') continue;
 		names.emplace_back(ent->d_name);
 	}
 	closedir(d);

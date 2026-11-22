@@ -8,8 +8,8 @@ public:
 	Chat();
 
 	void addChatMessage(const std::string& message, const std::string& nick, const ImColor& nick_color);
-	void addInfoMessage(const std::string& format, ...);
-	void addDebugMessage(const std::string& format, ...);
+	void addInfoMessage(const char* format, ...) __attribute__((format(printf, 2, 3)));
+	void addDebugMessage(const char* format, ...) __attribute__((format(printf, 2, 3)));
 	void addClientMessage(const std::string& message, const ImColor& color);
 
 	void addClientCommand(const std::string& cmd_name, const std::function<void(const std::string&)>& callback);

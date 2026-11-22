@@ -156,7 +156,9 @@ public:
 
 	static CAnimBlendAssociation* FromLink(CAnimBlendLink* link)
 	{
-		return (CAnimBlendAssociation*) ((char*) link - offsetof(CAnimBlendAssociation, m_Link));
+		if (!link) return nullptr;
+		auto* base = reinterpret_cast<SClumpAnimAssoc*>(reinterpret_cast<char*>(link) - offsetof(SClumpAnimAssoc, m_Link));
+		return static_cast<CAnimBlendAssociation*>(base);
 	}
 
 	void SetSpeed(float speed)

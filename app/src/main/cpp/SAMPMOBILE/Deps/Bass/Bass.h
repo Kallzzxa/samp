@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bass_fx.h"
+#include "Bass_fx.h"
 
 #include <stdint.h>
 

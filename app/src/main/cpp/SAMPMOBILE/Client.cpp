@@ -320,7 +320,7 @@ void Client::process()
 			if (pUI) {
 				if (pUI->buttonpanel()) pUI->buttonpanel()->setVisible(false);
 				if (pUI->chat()) {
-					pUI->chat()->addInfoMessage("-> GTA: SA " + (VER_x32 ? std::string("v2.10 (armeabi-v7a)") : std::string("v2.10 (arm64-v8a)")) + " started");
+					pUI->chat()->addInfoMessage("-> GTA: SA %s started", VER_x32 ? "v2.10 (armeabi-v7a)" : "v2.10 (arm64-v8a)");
 					pUI->chat()->addInfoMessage("-> Type /j to start jetpack");
 					pUI->chat()->addInfoMessage("-> Click on map to teleport anywhere");
 				}

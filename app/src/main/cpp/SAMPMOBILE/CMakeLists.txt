@@ -69,10 +69,32 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         spdlog)
 
 target_compile_options(${PROJECT_NAME} PRIVATE
-        -w # Disable warnings
         -O3 # Optimize
         -fexceptions # Enable exceptions
         -fstack-protector # Stack protector
+        # High-risk diagnostics on project code (third-party Deps keep -w)
+        -Werror=return-type
+        -Werror=return-stack-address
+        -Werror=mismatched-new-delete
+        -Werror=varargs
+        -Wuninitialized
+        -Wformat
+        -Wformat-security
+        -Wint-to-pointer-cast
+        -Wpointer-to-int-cast
+        -Wsizeof-pointer-memaccess
+        -Warray-bounds
+        -Wliteral-conversion
+        -Wpointer-bool-conversion
+        -Wparentheses
+        -Wnonportable-include-path
+        -Winvalid-offsetof
+        # Silence noisy legacy patterns
+        -Wno-writable-strings
+        -Wno-null-conversion
+        -Wno-null-arithmetic
+        -Wno-deprecated-enum-enum-conversion
+        -Wno-switch
 #        -fvisibility=hidden # Hide symbols
 #        -fvisibility-inlines-hidden # Hide inline symbols
 )

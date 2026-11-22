@@ -83,14 +83,9 @@ extern "C" int cloudGetBufferLen()
 extern "C" unsigned char* cloudModReset(char* a1)
 {
 	SC_LOG("cloudModReset");
-	unsigned char* result;
-
-	*result = 0xFF;
-	if (result) {
-		*result = 0;
-	}
-
-	return result;
+	static unsigned char result = 0;
+	result = 0;
+	return &result;
 }
 
 extern "C" int GetCloudUploadResult()

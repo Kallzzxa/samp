@@ -22,25 +22,27 @@ void Chat::addChatMessage(const std::string& message, const std::string& nick, c
 	addMessage(full_message, UI::fixcolor(nick_color));
 }
 
-void Chat::addInfoMessage(const std::string& format, ...)
+void Chat::addInfoMessage(const char* format, ...)
 {
+	if (!format) return;
 	char tmp_buf[512];
 
 	va_list args;
 	va_start(args, format);
-	vsnprintf(tmp_buf, sizeof(tmp_buf), format.c_str(), args);
+	vsnprintf(tmp_buf, sizeof(tmp_buf), format, args);
 	va_end(args);
 
 	addMessage(std::string(tmp_buf), ImColor(0x88, 0xFF, 0x62));
 }
 
-void Chat::addDebugMessage(const std::string& format, ...)
+void Chat::addDebugMessage(const char* format, ...)
 {
+	if (!format) return;
 	char tmp_buf[512];
 
 	va_list args;
 	va_start(args, format);
-	vsnprintf(tmp_buf, sizeof(tmp_buf), format.c_str(), args);
+	vsnprintf(tmp_buf, sizeof(tmp_buf), format, args);
 	va_end(args);
 
 	addMessage(std::string(tmp_buf), ImColor(0xA9, 0xC4, 0xE4));

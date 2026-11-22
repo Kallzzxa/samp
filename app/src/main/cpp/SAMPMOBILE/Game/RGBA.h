@@ -90,7 +90,7 @@ public:
 
 	bool operator ==(RGBA const& rhs) const
 	{
-
+		return R == rhs.R && G == rhs.G && B == rhs.B && A == rhs.A;
 	}
 
 	RGBA& operator =(RGBA const& rhs)
@@ -99,5 +99,6 @@ public:
 		B = rhs.B;
 		G = rhs.G;
 		R = rhs.R;
+		return *this;
 	}
 };

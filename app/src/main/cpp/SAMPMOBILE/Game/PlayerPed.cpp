@@ -1589,7 +1589,7 @@ sa::CWeapon* CPlayerPed::FindWeaponSlot(uint8_t byteWeapon)
 	return nullptr;
 }
 
-void CPlayerPed::ApplyCommandTask(char* szTaskName, int p1, int p2, int p3, sa::CVector* p4, int p5, int p6, int p7, int p8, int p9)
+void CPlayerPed::ApplyCommandTask(const char* szTaskName, void* p1, int p2, int p3, sa::CVector* p4, uint8_t p5, float p6, int p7, int p8, uint8_t p9)
 {
 	if (!m_ped) {
 		return;

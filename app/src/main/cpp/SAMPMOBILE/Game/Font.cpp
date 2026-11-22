@@ -143,7 +143,7 @@ void CFont::PrintString(float fX, float fY, const char* szText)
 	// CFont::PrintString
 	Memory::callFunction("_ZN5CFont11PrintStringEffPt", fX, fY, gxt_string);
 
-	delete gxt_string;
+	delete[] gxt_string;
 
 	// CFont::RenderFontBuffer
 	Memory::callFunction("_ZN5CFont16RenderFontBufferEv");

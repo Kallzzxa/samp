@@ -78,7 +78,8 @@ const std::string& Content::inputString() const
 		return dynamic_cast<InputWidget*>(m_activeWidget)->inputString();
 	}
 
-	return "";
+	static const std::string kEmpty;
+	return kEmpty;
 }
 
 int Content::listItem() const

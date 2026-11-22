@@ -20,7 +20,8 @@ DECL_HOOK(void, CPickups_Update)
 			continue;
 		}
 
-		if (pickup.m_nFlags.bVisible = pickup.IsVisible()) {
+		pickup.m_nFlags.bVisible = pickup.IsVisible();
+		if (pickup.m_nFlags.bVisible) {
 			if (!pickup.m_nFlags.bDisabled && !pickup.m_pObject) {
 				pickup.GiveUsAPickUpObject(&pickup.m_pObject, -1);
 

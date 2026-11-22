@@ -56,7 +56,7 @@ void PlayerTags::Render(ImGuiRenderer* renderer)
 							hitEntity = ScriptCommand(&get_line_of_sight, vecPos.x, vecPos.y, vecPos.z, pCam->pos1x, pCam->pos1y, pCam->pos1z, 1, 0, 0, 1, 0);
 						}
 
-						if (!pNetGame->m_netSet->nameTagLOS || hitEntity && !pRemotePlayer->IsNPC()) {
+						if (!pNetGame->m_netSet->nameTagLOS || (hitEntity && !pRemotePlayer->IsNPC())) {
 							char* szPlayerName = pPlayerPool->GetPlayerName(playerId);
 							snprintf(szNickBuf, sizeof(szNickBuf), "%s (%d)", Encoding::cp2utf(szPlayerName ? szPlayerName : "").c_str(), playerId);
 							drawTag(renderer, &vecPos, szNickBuf, pRemotePlayer->GetPlayerColor(),

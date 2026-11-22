@@ -78,7 +78,7 @@ bool CLocalPlayer::Process()
 
 	if (m_bIsActive && m_pPlayerPed != nullptr) {
 		// local player is dead
-		if (!m_bIsWasted && m_pPlayerPed->GetActionTrigger() == ACTION_DEATH || m_pPlayerPed->IsDead()) {
+		if (!m_bIsWasted && (m_pPlayerPed->GetActionTrigger() == ACTION_DEATH || m_pPlayerPed->IsDead())) {
 			ToggleSpectating(false);
 
 			if (m_pPlayerPed->IsDancing()) {
@@ -644,7 +644,7 @@ void CLocalPlayer::SendOnFootFullSyncData()
 	ofSync.byteHealth = (uint8_t) m_pPlayerPed->GetHealth();
 	ofSync.byteArmour = (uint8_t) m_pPlayerPed->GetArmour();
 
-	ofSync.byteCurrentWeapon = (exKeys << 6) | ofSync.byteCurrentWeapon & 0x3F;
+	ofSync.byteCurrentWeapon = (exKeys << 6) | (ofSync.byteCurrentWeapon & 0x3F);
 	ofSync.byteCurrentWeapon ^= (ofSync.byteCurrentWeapon ^ m_pPlayerPed->GetCurrentWeapon()) & 0x3F;
 	ofSync.byteSpecialAction = GetSpecialAction();
 
@@ -740,7 +740,7 @@ void CLocalPlayer::SendInCarFullSyncData()
 	icSync.bytePlayerHealth = m_pPlayerPed->GetHealth();
 	icSync.bytePlayerArmour = m_pPlayerPed->GetArmour();
 
-	icSync.byteCurrentWeapon = (exKeys << 6) | icSync.byteCurrentWeapon & 0x3F;
+	icSync.byteCurrentWeapon = (exKeys << 6) | (icSync.byteCurrentWeapon & 0x3F);
 	icSync.byteCurrentWeapon ^=
 			(icSync.byteCurrentWeapon ^ m_pPlayerPed->GetCurrentWeapon()) & 0x3F;
 	icSync.TrailerID = 0;
@@ -819,9 +819,9 @@ void CLocalPlayer::SendPassengerFullSyncData()
 	psSync.byteSeatFlags ^= (psSync.byteSeatFlags ^ m_pPlayerPed->GetVehicleSeatID()) & 0x3F;
 	uint8_t byteUnk = psSync.byteSeatFlags & 0x7F;
 	if (m_pPlayerPed->IsCuffed()) byteUnk = psSync.byteSeatFlags | 0x80;
-	psSync.byteSeatFlags = (byteUnk ^ (m_bPassengerDriveByMode << 6)) & 0x40 ^ byteUnk;
+	psSync.byteSeatFlags = ((byteUnk ^ (m_bPassengerDriveByMode << 6)) & 0x40) ^ byteUnk;
 
-	psSync.byteCurrentWeapon = (exKeys << 6) | psSync.byteCurrentWeapon & 0x3F;
+	psSync.byteCurrentWeapon = (exKeys << 6) | (psSync.byteCurrentWeapon & 0x3F);
 	psSync.byteCurrentWeapon ^= (psSync.byteCurrentWeapon ^ m_pPlayerPed->GetCurrentWeapon()) & 0x3F;
 
 	RwMatrix mat = m_pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
@@ -1330,7 +1330,7 @@ void CLocalPlayer::ApplySpecialAction(uint8_t byteSpecialAction)
 			LookAt.x = Aim->pos1x + (Aim->f1x * 20.0f);
 			LookAt.y = Aim->pos1y + (Aim->f1y * 20.0f);
 			LookAt.z = Aim->pos1z + (Aim->f1z * 20.0f);
-			m_pPlayerPed->ApplyCommandTask("FollowPedSA", 0, 2000, -1, &LookAt, 0, 0.1f, 500, 3, 0);
+			m_pPlayerPed->ApplyCommandTask("FollowPedSA", nullptr, 2000, -1, &LookAt, 0, 0.1f, 500, 3, 0);
 			m_dwLastHeadUpdate = GetTickCount();
 		}
 	}

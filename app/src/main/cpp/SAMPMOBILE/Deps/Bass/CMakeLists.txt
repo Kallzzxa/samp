@@ -1,8 +1,8 @@
 project(bass)
 
 file(GLOB INCLUDE_FILES
-        bass.h
-        bass_fx.h
+        Bass.h
+        Bass_fx.h
 )
 file(GLOB SOURCE_FILES
         bass.cpp
@@ -15,6 +15,8 @@ target_sources(${PROJECT_NAME} INTERFACE
         ${SOURCE_FILES}
 )
 
-target_include_directories(${PROJECT_NAME} INTERFACE
+set_source_files_properties(${SOURCE_FILES} TARGET_DIRECTORY SAMPMOBILE PROPERTIES COMPILE_OPTIONS "-w")
+
+target_include_directories(${PROJECT_NAME} SYSTEM INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}"
 )

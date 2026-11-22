@@ -32,8 +32,8 @@ void Stream::Tick() noexcept
 			this->OnChannelStop(*channel);
 		}
 
-		if (channel->HasSpeaker() && !channel->IsActive() ||
-				!channel->HasSpeaker() && channel->IsActive()) {
+		if ((channel->HasSpeaker() && !channel->IsActive()) ||
+				(!channel->HasSpeaker() && channel->IsActive())) {
 			if (channel->playing) this->OnChannelStop(*channel);
 			channel->Reset();
 		}

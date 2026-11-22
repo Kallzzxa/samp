@@ -130,7 +130,7 @@ NetGame::NetGame(const char* host, int port, const char* playerName, const char*
 	m_lanMode = false;
 
 	if (pUI) {
-		pUI->chat()->addDebugMessage("{FFFFFF}SA-MP {B9C9BF}" + Client::sampVersion() + " {FFFFFF}Started");
+		pUI->chat()->addDebugMessage("{FFFFFF}SA-MP {B9C9BF}%s {FFFFFF}Started", Client::sampVersion().c_str());
 		pUI->chat()->addInfoMessage("-> Use /clientcmds for client commands");
 	}
 }

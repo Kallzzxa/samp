@@ -321,7 +321,7 @@ void CTextDraw::DrawImGui(ImGuiRenderer* renderer)
 
 void CTextDraw::DrawDefault()
 {
-	if (!m_szText || !strlen(m_szText)) return;
+	if (m_szText[0] == '\0') return;
 
 	int iScreenWidth = sa::RsGlobal->screenWidth;
 	int iScreenHeight = sa::RsGlobal->screenHeight;

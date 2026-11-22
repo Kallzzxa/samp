@@ -14,6 +14,8 @@ target_sources(${PROJECT_NAME} INTERFACE
         ${INCLUDE_FILES}
         ${SOURCE_FILES})
 
+set_source_files_properties(${SOURCE_FILES} TARGET_DIRECTORY SAMPMOBILE PROPERTIES COMPILE_OPTIONS "-w")
+
 
 set(iconv_path "${CMAKE_CURRENT_SOURCE_DIR}/lib/${ANDROID_ABI}/libiconv.a")
 add_library(iconv STATIC IMPORTED)
@@ -28,6 +30,6 @@ target_link_libraries(${PROJECT_NAME} INTERFACE
         charset
 )
 
-target_include_directories(${PROJECT_NAME} INTERFACE
+target_include_directories(${PROJECT_NAME} SYSTEM INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
