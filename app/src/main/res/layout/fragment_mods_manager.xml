@@ -1,0 +1,346 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/launcher_bg"
+    android:orientation="vertical">
+
+    <!-- Top Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/_42sdp"
+        android:background="@drawable/nav_rail_bg"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/_6sdp"
+        android:paddingEnd="@dimen/_12sdp">
+
+        <ImageView
+            android:id="@+id/btn_mods_back"
+            android:layout_width="@dimen/_32sdp"
+            android:layout_height="@dimen/_32sdp"
+            android:contentDescription="@string/cancel"
+            android:foreground="?attr/selectableItemBackground"
+            android:padding="@dimen/_6sdp"
+            android:src="@drawable/arrow_back"
+            android:tint="@color/launcher_text_dim" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/_6sdp"
+            android:fontFamily="@font/montserrat_bold"
+            android:letterSpacing="0.1"
+            android:text="@string/mod_manager_title"
+            android:textColor="@color/launcher_text"
+            android:textSize="@dimen/_12ssp" />
+
+        <TextView
+            android:id="@+id/tv_process_abi"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/_8sdp"
+            android:background="@drawable/launcher_btn_outline"
+            android:paddingHorizontal="@dimen/_6sdp"
+            android:paddingVertical="@dimen/_2sdp"
+            android:textColor="@color/launcher_accent"
+            android:textSize="@dimen/_7ssp"
+            android:textStyle="bold"
+            tools:text="64位 (arm64-v8a)" />
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <LinearLayout
+            android:id="@+id/btn_mods_logs"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/_24sdp"
+            android:background="@drawable/launcher_btn_outline"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="@dimen/_8sdp">
+
+            <ImageView
+                android:layout_width="@dimen/_10sdp"
+                android:layout_height="@dimen/_10sdp"
+                android:src="@drawable/ic_changelogs"
+                android:tint="@color/launcher_accent"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/_4sdp"
+                android:text="查看日志"
+                android:textColor="@color/launcher_text"
+                android:textSize="@dimen/_8ssp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/btn_mods_refresh"
+            android:layout_width="@dimen/_24sdp"
+            android:layout_height="@dimen/_24sdp"
+            android:layout_marginStart="@dimen/_6sdp"
+            android:background="@drawable/launcher_btn_outline"
+            android:contentDescription="@string/refresh"
+            android:foreground="?attr/selectableItemBackground"
+            android:padding="@dimen/_5sdp"
+            android:src="@drawable/ic_restore"
+            android:tint="@color/launcher_text" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/launcher_stroke" />
+
+    <!-- 5 Category Tabs -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/_30sdp"
+        android:background="@color/launcher_surface"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="@dimen/_8sdp">
+
+        <TextView
+            android:id="@+id/mod_tab_modloader"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/_22sdp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="@dimen/_2sdp"
+            android:gravity="center"
+            android:text="Modloader"
+            android:textSize="@dimen/_8ssp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/mod_tab_aml"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/_22sdp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="@dimen/_2sdp"
+            android:gravity="center"
+            android:text="AML 插件"
+            android:textSize="@dimen/_8ssp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/mod_tab_jpatch"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/_22sdp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="@dimen/_2sdp"
+            android:gravity="center"
+            android:text="JPatch 补丁"
+            android:textSize="@dimen/_8ssp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/mod_tab_monet"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/_22sdp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="@dimen/_2sdp"
+            android:gravity="center"
+            android:text="MonetLoader"
+            android:textSize="@dimen/_8ssp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/mod_tab_cleo"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/_22sdp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="@dimen/_2sdp"
+            android:gravity="center"
+            android:text="CLEO 脚本"
+            android:textSize="@dimen/_8ssp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/launcher_stroke" />
+
+    <!-- Main Split Content: Left Control Card + Right List -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:padding="@dimen/_8sdp">
+
+        <!-- Left Info & Actions Panel -->
+        <ScrollView
+            android:layout_width="@dimen/_178sdp"
+            android:layout_height="match_parent"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/launcher_card"
+                android:orientation="vertical"
+                android:padding="@dimen/_10sdp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tv_section_title"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:fontFamily="@font/montserrat_bold"
+                        android:textColor="@color/launcher_text"
+                        android:textSize="@dimen/_10ssp"
+                        tools:text="Modloader 资源覆写" />
+
+                    <Switch
+                        android:id="@+id/switch_section_master"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:scaleX="0.95"
+                        android:scaleY="1.1"
+                        android:thumb="@drawable/ic_thumb"
+                        android:track="@drawable/bg_track"
+                        tools:ignore="UseSwitchCompatOrMaterialXml,TouchTargetSizeCheck" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tv_section_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_6sdp"
+                    android:background="@drawable/launcher_input_bg"
+                    android:padding="@dimen/_6sdp"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_7ssp"
+                    tools:text="状态：已就绪（双 ABI 原生支持）" />
+
+                <TextView
+                    android:id="@+id/tv_section_desc"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_6sdp"
+                    android:lineSpacingExtra="2dp"
+                    android:textColor="@color/launcher_text_dim"
+                    android:textSize="@dimen/_7ssp"
+                    tools:text="说明文本" />
+
+                <TextView
+                    android:id="@+id/tv_section_path"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_6sdp"
+                    android:background="@drawable/launcher_input_bg"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:padding="@dimen/_5sdp"
+                    android:textColor="@color/launcher_text"
+                    android:textSize="@dimen/_6ssp"
+                    tools:text="目录：.../files/modloader" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginVertical="@dimen/_8sdp"
+                    android:background="@color/launcher_stroke" />
+
+                <TextView
+                    android:id="@+id/btn_action_primary"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/_26sdp"
+                    android:background="@drawable/launcher_btn_primary"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:textColor="@color/launcher_on_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold"
+                    tools:text="导入 ZIP 模组包" />
+
+                <TextView
+                    android:id="@+id/btn_action_secondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/_24sdp"
+                    android:layout_marginTop="@dimen/_5sdp"
+                    android:background="@drawable/launcher_btn_outline"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:textColor="@color/launcher_text"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold"
+                    tools:text="新建空模组目录" />
+
+                <TextView
+                    android:id="@+id/btn_action_tertiary"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/_24sdp"
+                    android:layout_marginTop="@dimen/_5sdp"
+                    android:background="@drawable/launcher_btn_outline"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:textColor="@color/launcher_accent"
+                    android:textSize="@dimen/_8ssp"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    tools:text="应用 SA-MP 安全预设" />
+
+                <TextView
+                    android:id="@+id/btn_action_quaternary"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/_24sdp"
+                    android:layout_marginTop="@dimen/_5sdp"
+                    android:background="@drawable/launcher_btn_outline"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:textColor="@color/launcher_text_dim"
+                    android:textSize="@dimen/_8ssp"
+                    android:visibility="gone"
+                    tools:text="访问 JPatch 官方页" />
+
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- Right Scrollable List -->
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="@dimen/_8sdp"
+            android:layout_weight="1"
+            android:background="@drawable/launcher_card">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_mod_items"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:padding="@dimen/_6sdp"
+                android:scrollbars="vertical" />
+
+            <TextView
+                android:id="@+id/tv_mod_empty"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:padding="@dimen/_16sdp"
+                android:textColor="@color/launcher_text_dim"
+                android:textSize="@dimen/_9ssp"
+                android:visibility="gone"
+                tools:text="暂无模组文件" />
+
+        </FrameLayout>
+
+    </LinearLayout>
+
+</LinearLayout>

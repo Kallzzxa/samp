@@ -1,0 +1,421 @@
+#include <atomic>
+#include <thread>
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <link.h>
+#include <cstring>
+
+#include "Client.h"
+#include "BackTrace.h"
+#include "Settings.h"
+#include "ClientCmds.h"
+#include "Game/Patches.h"
+#include "Game/Hooks.h"
+#include "Game/ModLoader.h"
+#include "Game/CleoEngine.h"
+#include "Game/Util.h"
+#include "Enums/WidgetIDs.h"
+#include "Java/Java.h"
+#include "Java/MultiTouch.h"
+#include "UI/UI.h"
+#include "Game/Game.h"
+#include "Game/AudioStream.h"
+#include "Net/NetGame.h"
+#include "Voice/Plugin.h"
+#include "Crashlytics.h"
+
+JavaVM* Client::java_vm = nullptr;
+std::string Client::game_dir;
+bool Client::offline_mode = false;
+std::string Client::samp_version;
+int Client::samp_netgame = 0xFD9;
+
+Java* g_java = nullptr;
+UI* pUI = nullptr;
+Game* pGame = nullptr;
+NetGame* pNetGame = nullptr;
+PlayerTags* pPlayerTags = nullptr;
+AudioStream* pAudioStream = nullptr;
+SnapShotHelper* pSnapShotHelper = nullptr;
+MaterialTextGenerator* pMaterialTextGenerator = nullptr;
+
+SymUtils* g_saSym = new SymUtils();
+JavaVM* g_vm = nullptr;
+
+void init_logger(const std::string& gameDir)
+{
+	try {
+		auto now = std::chrono::system_clock::now();
+		auto in_time_t = std::chrono::system_clock::to_time_t(now);
+		std::stringstream ss;
+		ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d_%H-%M-%S");
+		std::string dateTime = ss.str();
+
+		// Define log file path client+date+time.log
+		std::string path = gameDir + "logcat/client_" + dateTime + ".log";
+
+		// Create Android (logcat) sink
+		auto android_sink = std::make_shared<spdlog::sinks::android_sink_mt>("SAMPMOBILE");
+
+		// Create file sink
+		auto max_size = 1048576 * 10; // Max file size 10MB
+		auto max_files = 3; // Rotate files
+		auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(path, max_size, max_files);
+
+		// Combine both sinks
+		std::vector<spdlog::sink_ptr> sinks{android_sink, file_sink};
+		auto logger = std::make_shared<spdlog::logger>("SAMPMOBILE", sinks.begin(), sinks.end());
+
+		// Set log level and pattern
+		logger->set_level(spdlog::level::info);
+		logger->set_pattern("[%d-%m-%Y %H:%M:%S] [%^%l%$] %v");
+
+		// Set as default logger
+		spdlog::set_default_logger(logger);
+	}
+	catch (const spdlog::spdlog_ex& ex) {
+		__android_log_print(ANDROID_LOG_ERROR, "SAMPMOBILE", "Log initialization failed: %s", ex.what());
+	}
+}
+
+static bool g_bGameStarted = false;
+volatile pid_t g_gameThreadTid = -1;
+std::atomic<bool> g_processRan{false};
+std::atomic<bool> g_worldReady{false};
+
+void Client::initialize(const std::string& gameDir, bool offlineMode)
+{
+	// Fatal-signal handler: async-signal-safe only (no malloc/spdlog/unwind —
+	// those deadlock if the faulting thread held their locks, which turns any
+	// crash into a frozen process with no tombstone). Write a minimal
+	// breadcrumb, then restore the default disposition and return so the
+	// faulting instruction re-executes and debuggerd writes a real tombstone.
+	struct sigaction sig_action{};
+	sig_action.sa_sigaction = [](int signum, siginfo_t* info, void* ctx) {
+		static std::atomic_flag in_handler = ATOMIC_FLAG_INIT;
+		if (in_handler.test_and_set()) {
+			// nested fault inside the crash breadcrumb - bail out immediately
+			_exit(128 + signum);
+		}
+		crash_breadcrumb(signum, info, ctx);
+		signal(signum, SIG_DFL);
+	};
+	sigemptyset(&sig_action.sa_mask);
+	sig_action.sa_flags = SA_SIGINFO;
+	sigaction(SIGSEGV, &sig_action, nullptr);
+	sigaction(SIGBUS, &sig_action, nullptr);
+	sigaction(SIGILL, &sig_action, nullptr);
+	sigaction(SIGABRT, &sig_action, nullptr);
+
+	// capture library load bases once so crash breadcrumbs can report pc as
+	// an offset into libSAMPMOBILE/libGTASA (see crash_breadcrumb)
+	dl_iterate_phdr([](struct dl_phdr_info* info, size_t, void*) -> int {
+		if (info->dlpi_name && strstr(info->dlpi_name, "libSAMPMOBILE.so")) {
+			g_sampLibBase = info->dlpi_addr;
+			return 1;
+		}
+		return 0;
+	}, nullptr);
+
+	// SIGUSR2 = async-signal-safe thread identification breadcrumb only
+	// (calling spdlog/_Unwind_Backtrace/dladdr inside a signal handler can deadlock).
+	struct sigaction dump_action{};
+	dump_action.sa_sigaction = [](int, siginfo_t*, void*) {
+		char comm[64] = {};
+		int fd = open("/proc/self/comm", O_RDONLY);
+		if (fd >= 0) {
+			ssize_t n = read(fd, comm, sizeof(comm) - 1);
+			if (n > 0) comm[n] = 0;
+			close(fd);
+		}
+		char msg[128];
+		snprintf(msg, sizeof(msg), "Thread dump tid=%d comm=%s", (int) gettid(), comm);
+		__android_log_write(ANDROID_LOG_WARN, "SAMPMOBILE", msg);
+	};
+	sigemptyset(&dump_action.sa_mask);
+	dump_action.sa_flags = SA_SIGINFO;
+	sigaction(SIGUSR2, &dump_action, nullptr);
+
+	init_logger(gameDir);
+
+	spdlog::info("Initializing SAMPMOBILE client...");
+
+	java_vm = g_vm;
+	game_dir = gameDir;
+	offline_mode = offlineMode;
+	samp_version = "0.3.7";
+
+	spdlog::info("Java VM: 0x{:X}", reinterpret_cast<uintptr_t>(java_vm));
+	spdlog::info("Game version: {}", VER_x32 ? "GTA: SA v2.10 (armeabi-v7a)" : "GTA: SA v2.10 (arm64-v8a)");
+	spdlog::info("Game directory: {}", game_dir);
+	spdlog::info("Offline mode: {}", offline_mode);
+
+	Settings::initialize();
+	Encoding::setCharset(Settings::charset());
+
+	if (firebase::crashlytics::Initialize()) {
+		spdlog::info("Crashlytics initialized");
+		firebase::crashlytics::SetUserId(Settings::nick());
+	}
+
+	// index order must match the launcher's version list (SettingsPageFragment / join dialog)
+	static const struct { const char* name; int netgame; } kSampVersions[] = {
+		{"0.3.7",     0xFD9},
+		{"0.3.7-R4",  0xFD9},
+		{"0.3.7-R5",  0xFD9},
+		{"0.3.DL-R1", 0xFDE},
+	};
+	int versionIdx = Settings::sampversion();
+	if (versionIdx < 0 || versionIdx >= (int) (sizeof(kSampVersions) / sizeof(kSampVersions[0]))) {
+		versionIdx = 0;
+	}
+	samp_version = kSampVersions[versionIdx].name;
+	samp_netgame = kSampVersions[versionIdx].netgame;
+
+	spdlog::info("SA-MP version: {}", samp_version);
+
+	spdlog::info("Loading libGTASA.so...");
+	g_saSym->Open("libGTASA.so");
+
+	if (!g_saSym->GetLibAddr()) {
+		spdlog::error("Failed to load libGTASA.so!");
+		return;
+	}
+
+	spdlog::info("libGTASA.so loaded at 0x{:X}", g_saSym->GetLibAddr());
+	g_gtasaLibBase = g_saSym->GetLibAddr();
+
+	char str[100];
+	snprintf(str, sizeof(str), "0x%llx", (unsigned long long) g_saSym->GetLibAddr());
+	firebase::crashlytics::SetCustomKey("libGTASA.so", str);
+
+	sa::Initialize();
+	LoadBassLibrary();
+
+	ModLoader::initialize(game_dir);
+	CleoEngine::initialize(game_dir);
+
+	Hooks::install();
+	Patches::apply();
+
+	MultiTouch::initialize();
+
+	pGame = new Game();
+
+	if (Settings::voice()) {
+		Plugin::OnPluginLoad();
+		Plugin::OnSampLoad();
+	}
+
+	// Boot watchdog: every 5s log boot progress; if no frame was rendered
+	// after ~15s (boot stall), dump all native game threads via SIGUSR2.
+	// NOTE: ANDRunThread is the generic OS_ThreadLaunch trampoline — every
+	// GTA worker thread passes through it, so g_gameThreadTid is only the
+	// LAST spawned thread. The real render thread is comm="NVEvent".
+	std::thread([]() {
+		auto* gameStateSym = g_saSym->GetSymbol<uint32_t*>("gGameState");
+		auto* loadPctSym = g_saSym->GetSymbol<float*>("_ZN14CLoadingScreen15m_PercentLoadedE");
+#if defined(__aarch64__)
+		// libGTASA v2.10 arm64 internals (file vaddrs):
+		//   pauseA ptr at base+0x850770: "suspended" flag spun on by
+		//     NVEventAppMain's pause-wait loop and OS_SystemCheckPause
+		//   pauseB ptr at base+0x84DD18: flag that also exits that loop
+		//   resumed byte ptr at base+0x84BCC8: polled by the pre-init wait loop
+		//   nv_event queue head/tail ints at base+0x8B6108 / +0x8B610C
+		const uintptr_t base = g_saSym->GetLibAddr();
+#endif
+		for (int i = 0;; ++i) {
+			sleep(5);
+			// Boot is over once GameMain marks worldReady; avoid reading GTA
+			// globals/WORLD_PLAYERS from this background thread.
+			bool worldReady = g_worldReady.load(std::memory_order_acquire);
+			if (worldReady && g_processRan.load(std::memory_order_acquire)) {
+				spdlog::info("watchdog: world ready, going quiet");
+				return;
+			}
+			spdlog::info("watchdog: gameTid={}, processRan={}, worldReady={}",
+					(int) g_gameThreadTid, g_processRan.load(), worldReady);
+			if (i >= 2 && !worldReady && (i % 3) == 0) {
+				spdlog::warn("watchdog: no rendered frame after ~{}s (check game data files & permissions)", (i + 1) * 5);
+			}
+		}
+	}).detach();
+
+}
+
+void Client::process()
+{
+	static bool gameInited = false;
+	static bool netgameInited = false;
+	g_processRan = true;
+
+	// StartGame must run on the game thread; calling it from a spawned
+	// thread races with the game loop and crashes on some devices.
+	// GetSymbol returns 0 on failure — never dereference unchecked.
+	static uint32_t* pGameState = g_saSym->GetSymbol<uint32_t*>("gGameState");
+	if (!g_bGameStarted && pGame && pGameState && *pGameState == 7) {
+		g_bGameStarted = true;
+		Settings::applyToGtaEngine(false);
+		pGame->StartGame();
+	}
+
+	// Everything below needs the loaded world: in the frontend/menu state the
+	// local player ped doesn't exist yet (StartGame only schedules the load),
+	// and CPlayerPool/CLocalPlayer construction would dereference null inside
+	// the script command handlers. Wait until the ped shows up.
+	if (!GamePool_FindPlayerPed()) {
+		return;
+	}
+	g_worldReady.store(true, std::memory_order_release);
+
+	if (!gameInited) {
+		spdlog::info("Initializing game: subsystems...");
+		pPlayerTags = new PlayerTags();
+		pAudioStream = new AudioStream();
+		pSnapShotHelper = new SnapShotHelper();
+		pMaterialTextGenerator = new MaterialTextGenerator();
+
+		spdlog::info("Initializing game: patches...");
+		Patches::preApply();
+
+		spdlog::info("Initializing game: game/audio...");
+		pGame->Initialize();
+		pAudioStream->Initialize();
+		Settings::applyToGtaEngine(true);
+
+		spdlog::info("Initializing game: ui...");
+		if (pUI) {
+			pUI->splashscreen()->setVisible(false);
+			pUI->chat()->setVisible(true);
+			pUI->deathwindow()->setVisible(Settings::showDeathWindow());
+			pUI->buttonpanel()->setVisible(!offline_mode && Settings::showButtonPanel());
+		}
+		else {
+			spdlog::error("gameInited: pUI is null");
+		}
+
+		if (g_java) {
+			g_java->showLoadingScreen(false);
+		}
+		else {
+			spdlog::error("gameInited: g_java is null");
+		}
+
+		ClientCmds::initialize();
+
+		if (Settings::voice()) {
+			LogVoice("[dbg:samp:load] : module loading...");
+			for (const auto& loadCallback : Samp::loadCallbacks) {
+				if (loadCallback != nullptr) {
+					loadCallback();
+				}
+			}
+			Samp::loadStatus = true;
+			LogVoice("[dbg:samp:load] : module loaded");
+		}
+
+		if (offline_mode) {
+			if (pUI) {
+				if (pUI->buttonpanel()) pUI->buttonpanel()->setVisible(false);
+				if (pUI->chat()) {
+					pUI->chat()->addInfoMessage("-> GTA: SA " + (VER_x32 ? std::string("v2.10 (armeabi-v7a)") : std::string("v2.10 (arm64-v8a)")) + " started");
+					pUI->chat()->addInfoMessage("-> Type /j to start jetpack");
+					pUI->chat()->addInfoMessage("-> Click on map to teleport anywhere");
+				}
+			}
+
+			pGame->ToggleCJWalk(false); // so we can restore nop
+			pGame->ToggleCJWalk(true);
+			pGame->SetWorldTime(12, 0);
+			pGame->AddToLocalMoney(100000000);
+			pGame->GetCamera()->Restore();
+			pGame->GetCamera()->SetBehindPlayer();
+			if (CPlayerPed* pLocal = pGame->FindPlayerPed()) {
+				pLocal->SetModelIndex(271);
+				pLocal->SetHealth(1000.0f);
+				pLocal->SetArmour(1000.0f);
+
+				if (pLocal->m_ped) {
+					RwMatrix mat = pLocal->m_ped->GetMatrix().ToRwMatrix();
+					mat.pos = {2090.6255, 1164.5679, 11.6484};
+					pLocal->m_ped->SetMatrix((sa::CMatrix&) mat);
+					pLocal->SetTargetRotation(72.8293);
+					pGame->NewVehicle(411, mat.pos.x, mat.pos.y + 5.0f, mat.pos.z, 0.0f, false);
+				}
+			}
+
+			uintptr_t* widgets = GetTouchWidgets();
+			if (!widgets || !widgets[sa::WidgetIDs::WIDGET_PED_MOVE] || !widgets[sa::WidgetIDs::WIDGET_ATTACK]) {
+				spdlog::info("Widgets not inited, calling Menu_SwitchOffToGame");
+				Memory::callFunction("_Z20Menu_SwitchOffToGamev");
+			}
+			EnsureTouchWidgetsCreated();
+		}
+
+		gameInited = true;
+	}
+
+	if (!netgameInited && !offline_mode) {
+		spdlog::info("Initializing netgame...");
+		pNetGame = new NetGame(Settings::ip(), Settings::port(), Settings::nick(), Settings::pass());
+		netgameInited = true;
+	}
+
+	// Drain queued JNI inputs (keyboard chat, dialog responses, hardware keys) on GameMain.
+	Java::processPendingInputs();
+
+	if (pNetGame) {
+		pNetGame->Process();
+
+		CTextDrawPool* pTextDrawPool = pNetGame->GetTextDrawPool();
+		if (pTextDrawPool) {
+			pTextDrawPool->processPendingTouches();
+			pTextDrawPool->Draw();
+		}
+
+		if (pAudioStream) {
+			pAudioStream->Process();
+		}
+
+		if (g_java && !Game::IsGamePaused()) {
+			g_java->showWantedLevel(true);
+		}
+	}
+
+	CleoEngine::process();
+}
+
+void Client::initializeUI()
+{
+	if (Settings::voice()) {
+		for (const auto& deviceInitCallback : Render::deviceInitCallbacks) {
+			if (deviceInitCallback != nullptr) {
+				deviceInitCallback();
+			}
+		}
+	}
+
+	std::string fonts_path = std::string(Client::gameDir()) + "SAMP/fonts/";
+	UI* ui = new UI(ImVec2(sa::RsGlobal->screenWidth, sa::RsGlobal->screenHeight), fonts_path);
+	ui->initialize();
+	ui->performLayout();
+	ui->updateTouchSnapshot();
+	std::atomic_thread_fence(std::memory_order_release);
+	pUI = ui;
+}
+
+jint JNI_OnLoad(JavaVM* vm, [[maybe_unused]] void* reserved)
+{
+	__android_log_print(ANDROID_LOG_INFO, "SAMPMOBILE", "SAMPMOBILE library loaded! Build time: " __DATE__ " " __TIME__);
+
+	JNIEnv* env;
+	if (vm->GetEnv((void**) &env, JNI_VERSION_1_6) != JNI_OK) {
+		return JNI_ERR;
+	}
+
+	g_vm = vm;
+
+	return env->GetVersion();
+}
