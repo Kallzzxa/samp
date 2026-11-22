@@ -4,7 +4,7 @@
 
 > 版权、第三方组件与合规声明请参阅 [NOTICE](NOTICE)。
 
-![启动器主界面](images/3.jpg)
+![启动器主界面](images/4.jpg)
 
 ---
 
@@ -159,7 +159,7 @@ python tools/build_gamedata.py --pc-samp "D:\Program Files (x86)\Rockstar Games\
 
 ![游戏设置与自定义主题](images/2.jpg)
 
-![截图库与实机画面](images/4.jpg)
+![截图库与实机画面](images/3.jpg)
 
 ---
 
