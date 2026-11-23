@@ -117,16 +117,51 @@ bool StringHasNonAscii(const char* s)
 	return false;
 }
 
-std::string GxtToImGuiColors(const std::string& in, const std::string& resetHex)
+std::string GxtToImGuiColors(const std::string& in, const std::string& resetHex, int maxColorCodes)
 {
-	static const struct { char code; const char* hex; } colorTable[] = {
-			{'r', "FF3B3B"}, {'g', "2D8B22"}, {'b', "4A6FB5"}, {'y', "E1C846"},
-			{'p', "8F4B8B"}, {'q', "8F4B8B"}, {'o', "D98B2B"}, {'w', "FFFFFF"},
-			{'h', "FFFFFF"}, {'l', "101010"}, {'u', "9C9C9C"}, {'t', "9C9C9C"},
+	static const struct { char code; uint8_t r, g, b; } colorTable[] = {
+			{'r', 0xB4, 0x19, 0x1D}, // GTA HUD red
+			{'g', 0x36, 0x68, 0x2C}, // GTA HUD green
+			{'b', 0x32, 0x3C, 0x7F}, // GTA HUD blue
+			{'y', 0xE2, 0xC0, 0x63}, // GTA HUD yellow
+			{'p', 0xA8, 0x6E, 0xFC}, // GTA HUD purple
+			{'q', 0xA8, 0x6E, 0xFC},
+			{'o', 0xD9, 0x8B, 0x2B}, // orange
+			{'w', 0xE1, 0xE1, 0xE1}, // GTA HUD white/light gray
+			{'l', 0x10, 0x10, 0x10}, // black
+			{'u', 0x9C, 0x9C, 0x9C},
+			{'t', 0x9C, 0x9C, 0x9C},
 	};
 
+	auto parseHex = [](const std::string& hex, uint8_t& r, uint8_t& g, uint8_t& b) {
+		r = 0xE1; g = 0xE1; b = 0xE1;
+		const char* s = hex.c_str();
+		if (hex.size() >= 8 && s[0] == '{' && s[7] == '}') {
+			s += 1;
+		}
+		else if (hex.size() < 6) {
+			return;
+		}
+		unsigned int v = 0;
+		if (std::sscanf(s, "%6x", &v) == 1) {
+			r = static_cast<uint8_t>((v >> 16) & 0xFF);
+			g = static_cast<uint8_t>((v >> 8) & 0xFF);
+			b = static_cast<uint8_t>(v & 0xFF);
+		}
+	};
+
+	auto appendHex = [](std::string& dst, uint8_t r, uint8_t g, uint8_t b) {
+		char buf[10];
+		std::snprintf(buf, sizeof(buf), "{%02X%02X%02X}", r, g, b);
+		dst += buf;
+	};
+
+	uint8_t curR = 0xE1, curG = 0xE1, curB = 0xE1;
+	parseHex(resetHex, curR, curG, curB);
+	int colorCodeCount = 0;
+
 	std::string out;
-	out.reserve(in.size());
+	out.reserve(in.size() + 16);
 
 	for (size_t i = 0; i < in.size(); i++) {
 		char c = in[i];
@@ -138,27 +173,43 @@ std::string GxtToImGuiColors(const std::string& in, const std::string& resetHex)
 				out += '\n';
 				continue;
 			}
-			if (code == 's') {
-				out += resetHex;
-				continue;
-			}
 			if (code == '~') {
 				out += '~';
 				continue;
 			}
+			if (code == 's') {
+				if (maxColorCodes < 0 || colorCodeCount < maxColorCodes) {
+					++colorCodeCount;
+					parseHex(resetHex, curR, curG, curB);
+					out += resetHex;
+				}
+				continue;
+			}
+			if (code == 'h') {
+				if (maxColorCodes < 0 || colorCodeCount < maxColorCodes) {
+					++colorCodeCount;
+					// GTA:SA ~h~ lightens the active color (stackable: ~r~~h~, ~b~~h~~h~, etc.)
+					curR = static_cast<uint8_t>(std::min(255, static_cast<int>(curR) + (255 - static_cast<int>(curR)) / 2 + 24));
+					curG = static_cast<uint8_t>(std::min(255, static_cast<int>(curG) + (255 - static_cast<int>(curG)) / 2 + 24));
+					curB = static_cast<uint8_t>(std::min(255, static_cast<int>(curB) + (255 - static_cast<int>(curB)) / 2 + 24));
+					appendHex(out, curR, curG, curB);
+				}
+				continue;
+			}
 
-			bool found = false;
 			for (const auto& e : colorTable) {
 				if (e.code == code) {
-					out += '{';
-					out += e.hex;
-					out += '}';
-					found = true;
+					if (maxColorCodes < 0 || colorCodeCount < maxColorCodes) {
+						++colorCodeCount;
+						curR = e.r;
+						curG = e.g;
+						curB = e.b;
+						appendHex(out, curR, curG, curB);
+					}
 					break;
 				}
 			}
 			// Unknown codes (~x~, ~+~, ~-~, ~k~ leftovers) are stripped.
-			(void) found;
 			continue;
 		}
 		out += c;
@@ -257,12 +308,14 @@ int GetTaskTypeFromTask(sa::CTask** task)
 		return 0;
 	}
 
-	return g_saSym->CallFunction<int>(g_saSym->GetVmtFunction<uintptr_t>(vtbl, 3), *task);
+	// CTask::GetTaskType() is vtable slot 5 (+20 arm32 / +40 arm64), verified via
+	// CTaskManager::FindTaskByType; slot 3 is GetSubTask() which returns CTask*.
+	return g_saSym->CallFunction<int>(g_saSym->GetVmtFunction<uintptr_t>(vtbl, 5), *task);
 }
 
 void GameResetStats()
 {
-	// ~
+	GameResetLocalPlayerSkills();
 }
 
 /**

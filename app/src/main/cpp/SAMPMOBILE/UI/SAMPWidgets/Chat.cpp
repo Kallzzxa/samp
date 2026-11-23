@@ -1,8 +1,10 @@
 #include "../UI.h"
+#include "../../Client.h"
 #include "../../Game/Game.h"
 #include "../../Net/NetGame.h"
 #include "../../Java/Java.h"
 #include <algorithm>
+#include <cctype>
 
 extern UI* pUI;
 extern Game* pGame;
@@ -10,10 +12,55 @@ extern NetGame* pNetGame;
 
 bool Chat::m_timestamp = false;
 
+namespace {
+
+std::string formatCurrentTimePrefix()
+{
+	time_t rawtime = std::time(nullptr);
+	tm timeinfo{};
+	localtime_r(&rawtime, &timeinfo);
+	char buf[16];
+	std::strftime(buf, sizeof(buf), "[%H:%M:%S] ", &timeinfo);
+	return std::string(buf);
+}
+
+std::string stripColorCodes(const std::string& input)
+{
+	std::string out;
+	out.reserve(input.size());
+	for (size_t i = 0; i < input.size(); ++i) {
+		if (input[i] == '{' && i + 7 < input.size() && input[i + 7] == '}') {
+			bool isHex = true;
+			for (size_t j = 1; j <= 6; ++j) {
+				if (!std::isxdigit(static_cast<unsigned char>(input[i + j]))) {
+					isHex = false;
+					break;
+				}
+			}
+			if (isHex) {
+				i += 7;
+				continue;
+			}
+		}
+		out.push_back(input[i]);
+	}
+	return out;
+}
+
+} // namespace
+
 Chat::Chat()
 		: ListBox(), m_commands()
 {
 	m_timestamp = Settings::timestamp();
+}
+
+Chat::~Chat()
+{
+	if (m_chatLogFile) {
+		fclose(m_chatLogFile);
+		m_chatLogFile = nullptr;
+	}
 }
 
 void Chat::addChatMessage(const std::string& message, const std::string& nick, const ImColor& nick_color)
@@ -53,13 +100,33 @@ void Chat::addClientMessage(const std::string& message, const ImColor& color)
 	addMessage(message, UI::fixcolor(color));
 }
 
+void Chat::writeChatLog(const std::string& timePrefix, const std::string& message)
+{
+	if (!m_chatLogOpened) {
+		m_chatLogOpened = true;
+		if (const char* dir = Client::gameDir(); dir && *dir) {
+			char path[512];
+			snprintf(path, sizeof(path), "%sSAMP/chatlog.txt", dir);
+			m_chatLogFile = fopen(path, "w");
+		}
+	}
+	if (!m_chatLogFile) return;
+
+	const std::string plain = stripColorCodes(message);
+	fprintf(m_chatLogFile, "%s%s\n", timePrefix.c_str(), plain.c_str());
+	fflush(m_chatLogFile);
+}
+
 void Chat::addMessage(const std::string& message, const ImColor& color)
 {
+	const std::string timePrefix = formatCurrentTimePrefix();
+	writeChatLog(timePrefix, message);
+
 	if (this->itemsCount() > UISettings::chatMaxMessages()) {
 		this->removeItem(0);
 	}
 
-	auto item = new MessageItem(message, color);
+	auto item = new MessageItem(message, color, timePrefix);
 	this->addItem(item);
 	this->setScrollY(1.0f);
 }

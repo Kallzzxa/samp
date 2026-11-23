@@ -7,9 +7,13 @@
 #include "../UI/UI.h"
 #include "../Net/NetGame.h"
 
+#include <algorithm>
+#include <cmath>
+
 extern UI* pUI;
 extern Game* pGame;
 extern NetGame* pNetGame;
+extern MaterialTextGenerator* pMaterialTextGenerator;
 
 CVehicle::CVehicle(int iType, float fX, float fY, float fZ, float fRotation, bool bPreloaded, bool bSiren)
 {
@@ -24,6 +28,7 @@ CVehicle::CVehicle(int iType, float fX, float fY, float fZ, float fRotation, boo
 	m_bPreloaded = bPreloaded;
 	m_bIsInvulnerable = false;
 	m_bIsLocked = false;
+	m_bEngineState = false;
 	m_bLightState = false;
 	m_bDoorsLocked = false;
 	m_byteObjectiveVehicle = 0;
@@ -35,6 +40,12 @@ CVehicle::CVehicle(int iType, float fX, float fY, float fZ, float fRotation, boo
 	m_bLocalUnoccupiedSync = false;
 	m_bRemoteUnoccupiedSync = false;
 	m_dwMarkerID = 0;
+	m_bPlateDirty = false;
+	m_bPlateGenAttempts = 0;
+	m_iRemoteLandingGear = -1;
+	m_iLocalLandingGear = -1;
+	m_fRemoteBikeLean = 0.0f;
+	m_bHasRemoteBikeLean = false;
 	memset(m_szPlateText, 0, sizeof(m_szPlateText));
 
 	if ((iType != TRAIN_PASSENGER_LOCO) &&
@@ -81,6 +92,10 @@ CVehicle::CVehicle(int iType, float fX, float fY, float fZ, float fRotation, boo
 			m_pVehicle->m_fDirtLevel = 0.0f;
 			if (bSiren) {
 				m_pVehicle->m_nVehicleFlags.bSirenOrAlarm = 1;
+			}
+			if (pNetGame && pNetGame->m_netSet && pNetGame->m_netSet->manualVehicleEngineAndLight) {
+				SetEngineState(false);
+				SetLightState(false);
 			}
 
 			mat = m_pVehicle->GetMatrix().ToRwMatrix();
@@ -515,13 +530,87 @@ uint32_t CVehicle::GetHydraThrusters()
 float CVehicle::GetBikeLean()
 {
 	if (m_pVehicle && VerifyInstance()) {
-		if (GetVehicleSubtype() == VEHICLE_SUBTYPE_BIKE) {
-//			return ((sa::CBike*) m_pVehicle)->m_LeanMatrix.pos.X;
-			// todo
+		const int sub = GetVehicleSubtype();
+		if (sub == VEHICLE_SUBTYPE_BIKE || sub == VEHICLE_SUBTYPE_PUSHBIKE) {
+			return reinterpret_cast<sa::CBike*>(m_pVehicle)->RideAnimData.m_fLeanAngle;
 		}
 	}
 
 	return 0.0f;
+}
+
+void CVehicle::SetBikeLean(float fLean)
+{
+	if (!m_pVehicle || !VerifyInstance() || !std::isfinite(fLean)) {
+		return;
+	}
+	const int sub = GetVehicleSubtype();
+	if (sub == VEHICLE_SUBTYPE_BIKE || sub == VEHICLE_SUBTYPE_PUSHBIKE) {
+		auto* bike = reinterpret_cast<sa::CBike*>(m_pVehicle);
+		bike->RideAnimData.m_fLeanAngle = std::clamp(fLean, -1.0f, 1.0f);
+		bike->m_bLeanMatrix = false;
+		eng::fn::CBike_CalculateLeanMatrix(bike);
+	}
+}
+
+void CVehicle::SetRemoteBikeLean(float fLean)
+{
+	if (!std::isfinite(fLean)) {
+		return;
+	}
+	m_fRemoteBikeLean = std::clamp(fLean, -1.0f, 1.0f);
+	m_bHasRemoteBikeLean = true;
+	SetBikeLean(m_fRemoteBikeLean);
+}
+
+uint8_t CVehicle::GetLandingGearState()
+{
+	if (m_pVehicle && VerifyInstance() && GetVehicleSubtype() == VEHICLE_SUBTYPE_PLANE) {
+		auto* plane = reinterpret_cast<sa::CPlane*>(m_pVehicle);
+		return (plane->m_fLGearAngle != 0.0f) ? 1 : 0;
+	}
+	return 0;
+}
+
+void CVehicle::SetLandingGearState(uint8_t state)
+{
+	if (!m_pVehicle || !VerifyInstance() || GetVehicleSubtype() != VEHICLE_SUBTYPE_PLANE) {
+		return;
+	}
+	auto* plane = reinterpret_cast<sa::CPlane*>(m_pVehicle);
+	if (state == 1 && plane->m_fLGearAngle != 1.0f) {
+		eng::fn::CPlane_SetGearUp(plane);
+	}
+	else if (state == 0 && plane->m_fLGearAngle != 0.0f) {
+		eng::fn::CPlane_SetGearDown(plane);
+	}
+}
+
+void CVehicle::SetRemoteLandingGearState(uint8_t state)
+{
+	m_iRemoteLandingGear = (state != 0) ? 1 : 0;
+	SetLandingGearState(static_cast<uint8_t>(m_iRemoteLandingGear));
+}
+
+void CVehicle::ProcessLicensePlate()
+{
+	if (!m_bPlateDirty || !m_pVehicle || !VerifyInstance() || !pMaterialTextGenerator) {
+		return;
+	}
+	if (m_bPlateGenAttempts >= 3) {
+		m_bPlateDirty = false;
+		return;
+	}
+	++m_bPlateGenAttempts;
+
+	RwTexture* tex = pMaterialTextGenerator->CreateCustomCarPlate(m_szPlateText);
+	if (tex) {
+		if (m_pVehicle->m_pCustomCarPlate) {
+			RwTextureDestroy(m_pVehicle->m_pCustomCarPlate);
+		}
+		m_pVehicle->m_pCustomCarPlate = tex;
+		m_bPlateDirty = false;
+	}
 }
 
 int CVehicle::GetVehicleSubtype()
@@ -593,22 +682,16 @@ void CVehicle::SetComponentOpenState(int iDoor, int iComponent, float fDoorOpenR
 	ScriptCommand(&open_car_door_a_bit, m_gtaId, iDoor, fDoorOpenRatio);
 }
 
-/**
- *  todo
- * @param component
- */
 void CVehicle::OpenWindow(uint8_t component)
 {
-	if (!m_pVehicle) return;
+	if (!m_pVehicle || !VerifyInstance()) return;
+	eng::fn::CVehicle_SetWindowOpenFlag(m_pVehicle, component);
 }
 
-/**
- * todo
- * @param component
- */
 void CVehicle::CloseWindow(uint8_t component)
 {
-	if (!m_pVehicle) return;
+	if (!m_pVehicle || !VerifyInstance()) return;
+	eng::fn::CVehicle_ClearWindowOpenFlag(m_pVehicle, component);
 }
 
 /**

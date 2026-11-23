@@ -131,7 +131,7 @@ private:
 	uint8_t m_byteSpecialAction;
 
 	bool m_bWasAnimSettedFlag;
-	uint16_t m_usPlayingAnimIndex;
+	uint32_t m_dwPlayingAnim;
 
 	uint8_t m_byteSeatID;
 	bool m_bPassengerDriveByMode;

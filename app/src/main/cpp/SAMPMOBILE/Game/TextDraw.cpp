@@ -416,8 +416,7 @@ void CTextDraw::DrawTextured()
 	m_TextDrawData.bHasRectArea = true;
 
 	if (m_bHovered) {
-		uint32_t dwReversed = __builtin_bswap32(m_dwHoverColor | (0x000000FF));
-		DrawTextureUV(TextDrawTexture[m_TextDrawData.iTextureSlot], &m_rectArea, dwReversed, m_TextDrawData.dwStyle == 5 ? uv_reflected : uv_normal);
+		DrawTextureUV(TextDrawTexture[m_TextDrawData.iTextureSlot], &m_rectArea, m_dwHoverColor | 0xFF000000u, m_TextDrawData.dwStyle == 5 ? uv_reflected : uv_normal);
 	}
 	else {
 		DrawTextureUV(TextDrawTexture[m_TextDrawData.iTextureSlot], &m_rectArea, m_TextDrawData.dwLetterColor, m_TextDrawData.dwStyle == 5 ? uv_reflected : uv_normal);

@@ -369,4 +369,96 @@ struct EditAttachedObjectReply {
 	}
 };
 
+// RPC 27 (client -> server): OnPlayerSelectObject
+struct SelectObjectReply {
+	static constexpr int kRpcId = rpc::kEnterEditObject;
+	static constexpr uint8_t kVersionMask = kVerAll;
+	static constexpr const char* kName = "SelectObjectReply";
+
+	uint32_t selectType = 0;
+	uint16_t objectId = 0xFFFF;
+	uint32_t modelId = 0;
+	Vec3 position{};
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.u32(selectType) && s.u16(objectId) && s.u32(modelId) && s.vec3(position);
+	}
+};
+
+// RPC 132 (client -> server): OnPlayerSelectedMenuRow
+struct MenuSelectReq {
+	static constexpr int kRpcId = rpc::kMenuSelect;
+	static constexpr uint8_t kVersionMask = kVerAll;
+	static constexpr const char* kName = "MenuSelectReq";
+
+	uint8_t row = 0;
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.u8(row);
+	}
+};
+
+// RPC 140 (client -> server): OnPlayerExitedMenu
+struct MenuQuitReq {
+	static constexpr int kRpcId = rpc::kMenuQuit;
+	static constexpr uint8_t kVersionMask = kVerAll;
+	static constexpr const char* kName = "MenuQuitReq";
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.ok();
+	}
+};
+
+// RPC 168 (client -> server): OnPlayerCameraTarget
+struct CameraTargetReply {
+	static constexpr int kRpcId = rpc::kUpdateCameraTarget;
+	static constexpr uint8_t kVersionMask = kVerAll;
+	static constexpr const char* kName = "CameraTargetReply";
+
+	uint16_t objectId = 0xFFFF;
+	uint16_t vehicleId = 0xFFFF;
+	uint16_t playerId = 0xFFFF;
+	uint16_t actorId = 0xFFFF;
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.u16(objectId) && s.u16(vehicleId) && s.u16(playerId) && s.u16(actorId);
+	}
+};
+
+// RPC 97 (client -> server): Picked up a dropped weapon pickup
+struct PickedUpWeaponPickupReq {
+	static constexpr int kRpcId = rpc::kDestroyWeaponPickup;
+	static constexpr uint8_t kVersionMask = kVerAll;
+	static constexpr const char* kName = "PickedUpWeaponPickupReq";
+
+	uint16_t owner = 0xFFFF;
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.u16(owner);
+	}
+};
+
+// RPC 184 (client -> server, 0.3.DL): Artwork download finished notification
+struct DlFinishDownloadReq {
+	static constexpr int kRpcId = rpc::kDlFinishDownload;
+	static constexpr uint8_t kVersionMask = kVer03DL;
+	static constexpr const char* kName = "DlFinishDownloadReq";
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.ok();
+	}
+};
+
 } // namespace proto

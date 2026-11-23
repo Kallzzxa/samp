@@ -23,8 +23,9 @@ public:
 	void Process();
 
 	void New(PICKUP* pPickup, int iPickup);
+	void CreateWeapon(int iModel, float fX, float fY, float fZ, int iAmmo, PLAYERID owner);
 	void Destroy(int iPickup);
-	void DestroyWeaponByOwner(uint8_t byteOwner);
+	void DestroyWeaponByOwner(PLAYERID owner);
 	void PickedUp(int dwGTAId);
 
 private:

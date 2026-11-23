@@ -6,6 +6,7 @@
 #include "Proto/RpcCore.h"
 #include "Proto/RpcDialog.h"
 #include "Proto/RpcGangZone.h"
+#include "Proto/RpcMenu.h"
 #include "Proto/RpcObject.h"
 #include "Proto/RpcPickup.h"
 #include "Proto/RpcTextDraw.h"
@@ -46,6 +47,7 @@ void OnToggleClock(const proto::ToggleClock& p);
 void OnTimerUpdate(const proto::TimerUpdate& p);
 void OnUpdateScoresPingsIPs(const proto::UpdateScoresPingsIPs& p);
 void OnClientCheck(const proto::ClientCheckRequest& p);
+void OnSetPlayerSkillLevel(const proto::SetPlayerSkillLevel& p);
 
 // Batch 2: Core upper half (ScriptRPC)
 void OnSetGravity(const proto::SetGravity& p);
@@ -57,7 +59,7 @@ void OnSetPlayerArmour(const proto::SetPlayerArmour& p);
 void OnSetPlayerColor(const proto::SetPlayerColor& p);
 void OnSetPlayerTeam(const proto::SetPlayerTeam& p);
 void OnSetPlayerName(const proto::SetPlayerName& p);
-void OnSetPlayerSkinLegacyT03(const proto::SetPlayerSkinLegacyT03& p);
+void OnSetPlayerSkin(const proto::SetPlayerSkin& p);
 void OnSetPlayerInterior(const proto::SetPlayerInterior& p);
 void OnTogglePlayerControllable(const proto::TogglePlayerControllable& p);
 void OnSetWorldBounds(const proto::SetWorldBounds& p);
@@ -102,9 +104,11 @@ void OnTogglePlayerSpectating(const proto::TogglePlayerSpectating& p);
 void OnSpectatePlayer(const proto::SpectatePlayer& p);
 void OnSpectateVehicle(const proto::SpectateVehicle& p);
 void OnToggleWidescreen(const proto::ToggleWidescreen& p);
+void OnEnableCameraTarget(const proto::EnableCameraTarget& p);
 void OnRequestClass(const proto::RequestClassReply& p);
 void OnRequestSpawn(const proto::RequestSpawnReply& p);
 void OnSetSpawnInfo(const proto::SetSpawnInfo& p);
+void OnForceClassSelection(const proto::ForceClassSelection& p);
 
 // Batch 4: Vehicle
 void OnWorldVehicleAdd(const proto::WorldVehicleAdd& p);
@@ -130,7 +134,7 @@ void OnRemovePlayerFromVehicle(const proto::RemovePlayerFromVehicle& p);
 
 // Batch 5: Object, Actor, TextDraw
 void OnCreateObject(const proto::CreateObject& p);
-void OnSetObjectPosLegacyT36(const proto::SetObjectPosLegacyT36& p);
+void OnSetObjectPos(const proto::SetObjectPos& p);
 void OnSetObjectRotation(const proto::SetObjectRotation& p);
 void OnDestroyObject(const proto::DestroyObject& p);
 void OnMoveObject(const proto::MoveObject& p);
@@ -154,5 +158,24 @@ void OnShowTextDraw(const proto::ShowTextDraw& p);
 void OnHideTextDraw(const proto::HideTextDraw& p);
 void OnTextDrawSetString(const proto::TextDrawSetString& p);
 void OnSelectTextDraw(const proto::SelectTextDraw& p);
+
+// Menu (T11)
+void OnInitMenu(const proto::InitMenu& p);
+void OnShowMenu(const proto::ShowMenu& p);
+void OnHideMenu(const proto::HideMenu& p);
+
+// Shop & Crime Report (T25)
+void OnSetPlayerShopName(const proto::SetPlayerShopName& p);
+void OnPlayCrimeReport(const proto::PlayCrimeReport& p);
+
+// Network Stats (T28)
+void OnSvrStats(const proto::SvrStats& p);
+
+// 0.3.DL Artwork Handshake Placeholder (T30)
+void OnSetPlayerVirtualWorld(const proto::SetPlayerVirtualWorld& p);
+void OnDlModelRequest(const proto::DlModelRequest& p);
+void OnDlModelReset(const proto::DlModelReset& p);
+void OnDlModelUrl(const proto::DlModelUrl& p);
+void OnDlDownloadCompleted(const proto::DlDownloadCompleted& p);
 
 } // namespace RpcHandlers

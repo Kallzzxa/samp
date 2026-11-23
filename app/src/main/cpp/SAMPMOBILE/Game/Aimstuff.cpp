@@ -16,6 +16,8 @@ float fCameraExtZoom[PLAYER_PED_SLOTS];
 float fCameraAspectRatio[PLAYER_PED_SLOTS];
 float fLocalCameraExtZoom;
 float fLocalAspectRatio;
+float fLocalPlayerSkills[kWeaponSkillCount];
+float fRemotePlayerSkills[PLAYER_PED_SLOTS][kWeaponSkillCount];
 
 /**
  * @return
@@ -61,6 +63,12 @@ void GameAimSyncInit()
 	for (int i = 0; i < PLAYER_PED_SLOTS; ++i) {
 		fCameraAspectRatio[i] = 0.333333f;
 		fCameraExtZoom[i] = 1.0f;
+		for (int s = 0; s < kWeaponSkillCount; ++s) {
+			fRemotePlayerSkills[i][s] = 999.0f;
+		}
+	}
+	for (int s = 0; s < kWeaponSkillCount; ++s) {
+		fLocalPlayerSkills[s] = 999.0f;
 	}
 
 	sa::CCamera& TheCamera = sa::getTheCamera();
@@ -165,4 +173,45 @@ void GameSetPlayerCameraExtZoomAndAspect(uint8_t bytePlayerNumber, float fExtZoo
 	if (bytePlayerNumber >= PLAYER_PED_SLOTS) return;
 	fCameraExtZoom[bytePlayerNumber] = fExtZoom;
 	fCameraAspectRatio[bytePlayerNumber] = fAspectRatio;
+}
+
+float* GameGetWeaponSkillStatsPtr()
+{
+	auto* stats = eng::as<float*>(eng::Sym::CStats_StatTypesFloat);
+	return stats ? (stats + kWeaponSkillStatBase) : nullptr;
+}
+
+void GameSetLocalPlayerSkill(int skill, uint16_t level)
+{
+	if (skill < 0 || skill >= kWeaponSkillCount) return;
+	const float val = static_cast<float>(level);
+	fLocalPlayerSkills[skill] = val;
+	if (float* stats = GameGetWeaponSkillStatsPtr()) {
+		stats[skill] = val;
+	}
+}
+
+void GameSetRemotePlayerSkill(uint8_t bytePlayerNumber, int skill, uint16_t level)
+{
+	if (bytePlayerNumber >= PLAYER_PED_SLOTS || skill < 0 || skill >= kWeaponSkillCount) return;
+	fRemotePlayerSkills[bytePlayerNumber][skill] = static_cast<float>(level);
+}
+
+void GameApplyRemotePlayerSkills(uint8_t bytePlayerNumber)
+{
+	if (bytePlayerNumber >= PLAYER_PED_SLOTS) return;
+	if (float* stats = GameGetWeaponSkillStatsPtr()) {
+		memcpy(stats, fRemotePlayerSkills[bytePlayerNumber], sizeof(float) * kWeaponSkillCount);
+	}
+}
+
+void GameResetLocalPlayerSkills()
+{
+	float* stats = GameGetWeaponSkillStatsPtr();
+	for (int s = 0; s < kWeaponSkillCount; ++s) {
+		fLocalPlayerSkills[s] = 999.0f;
+		if (stats) {
+			stats[s] = 999.0f;
+		}
+	}
 }

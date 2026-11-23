@@ -39,3 +39,13 @@ void GameStoreLocalPlayerCameraExtZoomAndAspect();
 void GameSetPlayerCameraExtZoomAndAspect(uint8_t bytePlayerNumber, float fExtZoom, float fAspectRatio);
 
 void calculateAimVector(sa::CVector* vec1, sa::CVector* vec2);
+
+/* Weapon Skills (T08: CStats::StatTypesFloat[69..79]) */
+static constexpr int kWeaponSkillCount = 11;
+static constexpr int kWeaponSkillStatBase = 69;
+
+float* GameGetWeaponSkillStatsPtr();
+void GameSetLocalPlayerSkill(int skill, uint16_t level);
+void GameSetRemotePlayerSkill(uint8_t bytePlayerNumber, int skill, uint16_t level);
+void GameApplyRemotePlayerSkills(uint8_t bytePlayerNumber);
+void GameResetLocalPlayerSkills();

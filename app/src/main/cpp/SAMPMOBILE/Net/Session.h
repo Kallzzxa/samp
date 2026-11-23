@@ -48,6 +48,7 @@ struct SessionState {
 	proto::ProtoVersion protoVersion = proto::ProtoVersion::V037;
 	char hostName[256 + 1]{};
 	bool lanMode = false;
+	bool cameraTargetEnabled = false;
 
 	void reset(ResetReason reason);
 	void dumpToLog() const;

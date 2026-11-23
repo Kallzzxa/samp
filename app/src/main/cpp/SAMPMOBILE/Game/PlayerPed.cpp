@@ -131,6 +131,10 @@ CPlayerPed::~CPlayerPed()
 			RemoveAllAttachedObjects();
 		}
 
+		if (m_iStuffType != STUFF_TYPE_NONE || m_dwStuffObject != 0) {
+			DropStuff();
+		}
+
 		if (m_ped->IsInVehicle()) {
 			RemoveFromVehicleAndPutAt(100.0f, 100.0f, 20.0f);
 		}
@@ -330,61 +334,41 @@ void CPlayerPed::SetSpecialAction(uint8_t byteSpecialAction)
 		TogglePissing(false);
 	}
 
-	// 保留：T17 — dancing & drinking/smoking special actions
-	// dancing:start
-	/*if (GetDanceStyle() == -1) {
-		if (byteSpecialAction == SPECIAL_ACTION_DANCE1) {
-			StartDancing(0);
-		}
-		if (byteSpecialAction == SPECIAL_ACTION_DANCE2) {
-			StartDancing(1);
-		}
-		if (byteSpecialAction == SPECIAL_ACTION_DANCE3) {
-			StartDancing(2);
-		}
-		if (byteSpecialAction == SPECIAL_ACTION_DANCE4) {
-			StartDancing(3);
+	// T17: dancing special actions (5..8)
+	int targetDance = -1;
+	switch (byteSpecialAction) {
+		case SPECIAL_ACTION_DANCE1: targetDance = 0; break;
+		case SPECIAL_ACTION_DANCE2: targetDance = 1; break;
+		case SPECIAL_ACTION_DANCE3: targetDance = 2; break;
+		case SPECIAL_ACTION_DANCE4: targetDance = 3; break;
+		default: break;
+	}
+	if (targetDance != -1) {
+		if (GetDanceStyle() != targetDance) {
+			StartDancing(targetDance);
 		}
 	}
-
-	// dancing:stop
-	if (GetDanceStyle() != -1) {
-		if (byteSpecialAction != SPECIAL_ACTION_DANCE1 &&
-				byteSpecialAction != SPECIAL_ACTION_DANCE2 &&
-				byteSpecialAction != SPECIAL_ACTION_DANCE3 &&
-				byteSpecialAction != SPECIAL_ACTION_DANCE4) {
-			StopDancing();
-		}
-	}*/
-
-	// stuff:start
-	/*if (GetStuff() == eStuffType::STUFF_TYPE_NONE) {
-		if (byteSpecialAction == SPECIAL_ACTION_DRINK_BEER) {
-			GiveStuff(eStuffType::STUFF_TYPE_BEER);
-		}
-
-		if (byteSpecialAction == SPECIAL_ACTION_SMOKE_CIGGY) {
-			GiveStuff(eStuffType::STUFF_TYPE_CIGGI);
-		}
-
-		if (byteSpecialAction == SPECIAL_ACTION_DRINK_WINE) {
-			GiveStuff(eStuffType::STUFF_TYPE_DYN_BEER);
-		}
-
-		if (byteSpecialAction == SPECIAL_ACTION_DRINK_SPRUNK) {
-			GiveStuff(eStuffType::STUFF_TYPE_PINT_GLASS);
-		}
+	else if (GetDanceStyle() != -1) {
+		StopDancing();
 	}
 
-	// stuff:stop
-	if (GetStuff() != eStuffType::STUFF_TYPE_NONE) {
-		if (byteSpecialAction != SPECIAL_ACTION_DRINK_BEER ||
-				byteSpecialAction != SPECIAL_ACTION_SMOKE_CIGGY ||
-				byteSpecialAction != SPECIAL_ACTION_DRINK_WINE ||
-				byteSpecialAction != SPECIAL_ACTION_DRINK_SPRUNK) {
-			DropStuff();
+	// T17: drinking & smoking special actions (20..23)
+	int targetStuff = STUFF_TYPE_NONE;
+	switch (byteSpecialAction) {
+		case SPECIAL_ACTION_DRINK_BEER:   targetStuff = STUFF_TYPE_BEER; break;
+		case SPECIAL_ACTION_SMOKE_CIGGY:  targetStuff = STUFF_TYPE_CIGGI; break;
+		case SPECIAL_ACTION_DRINK_WINE:   targetStuff = STUFF_TYPE_DYN_BEER; break;
+		case SPECIAL_ACTION_DRINK_SPRUNK: targetStuff = STUFF_TYPE_PINT_GLASS; break;
+		default: break;
+	}
+	if (targetStuff != STUFF_TYPE_NONE) {
+		if (GetStuff() != targetStuff) {
+			GiveStuff(targetStuff);
 		}
-	}*/
+	}
+	else if (GetStuff() != STUFF_TYPE_NONE) {
+		DropStuff();
+	}
 
 	ProcessDancing();
 	ProcessParachutes();
@@ -420,19 +404,14 @@ uint8_t CPlayerPed::GetSpecialAction()
 		return SPECIAL_ACTION_CARRY;
 	}
 
-	// 保留：T17 — dance style reporting
-	/*if (GetDanceStyle() != -1) {
+	if (GetDanceStyle() != -1) {
 		switch (GetDanceStyle()) {
 			case 0: return SPECIAL_ACTION_DANCE1;
-				break;
 			case 1: return SPECIAL_ACTION_DANCE2;
-				break;
 			case 2: return SPECIAL_ACTION_DANCE3;
-				break;
 			case 3: return SPECIAL_ACTION_DANCE4;
-				break;
 		}
-	}*/
+	}
 
 	if (HasHandsUp()) {
 		return SPECIAL_ACTION_HANDSUP;
@@ -446,21 +425,21 @@ uint8_t CPlayerPed::GetSpecialAction()
 		return SPECIAL_ACTION_PISSING;
 	}
 
-	/*if (GetStuff() == eStuffType::STUFF_TYPE_BEER) {
+	if (GetStuff() == STUFF_TYPE_BEER) {
 		return SPECIAL_ACTION_DRINK_BEER;
 	}
 
-	if (GetStuff() == eStuffType::STUFF_TYPE_DYN_BEER) {
+	if (GetStuff() == STUFF_TYPE_DYN_BEER) {
 		return SPECIAL_ACTION_DRINK_WINE;
 	}
 
-	if (GetStuff() == eStuffType::STUFF_TYPE_PINT_GLASS) {
+	if (GetStuff() == STUFF_TYPE_PINT_GLASS) {
 		return SPECIAL_ACTION_DRINK_SPRUNK;
 	}
 
-	if (GetStuff() == eStuffType::STUFF_TYPE_CIGGI) {
+	if (GetStuff() == STUFF_TYPE_CIGGI) {
 		return SPECIAL_ACTION_SMOKE_CIGGY;
-	}*/
+	}
 
 	return SPECIAL_ACTION_NONE;
 }
@@ -497,10 +476,15 @@ bool CPlayerPed::IsDancing()
 void CPlayerPed::StopDancing()
 {
 	if (!m_ped || !IsAdded()) {
+		m_iDanceState = 0;
+		m_iDanceStyle = -1;
+		m_iLastDanceMove = -1;
 		return;
 	}
 
 	m_iDanceState = 0;
+	m_iDanceStyle = -1;
+	m_iLastDanceMove = -1;
 	RwMatrix mat = m_ped->GetMatrix().ToRwMatrix();
 	TeleportTo(mat.pos.x, mat.pos.y, mat.pos.z);
 }
@@ -511,84 +495,47 @@ void CPlayerPed::ProcessDancing()
 		return;
 	}
 
-	if (!m_iDanceState) return;
+	if (!m_iDanceState || m_iDanceStyle < 0 || m_iDanceStyle > 3) return;
+	if (m_bytePlayerNumber != 0) return;
 
-	// 保留：T17 — dance input & animation loop
-	/*uint16_t wKeysUpDown, wKeysLeftRight, iExtra;
-	if (!m_bytePlayerNumber) {
-		wKeysUpDown = LocalPlayerKeys.wKeyUD;
-		wKeysLeftRight = LocalPlayerKeys.wKeyLR;
-		iExtra = LocalPlayerKeys.bKeys[ePadKeys::KEY_SPRINT];
-	}
-	else {
-		wKeysUpDown = RemotePlayerKeys[m_bytePlayerNumber].wKeyUD;
-		wKeysLeftRight = RemotePlayerKeys[m_bytePlayerNumber].wKeyLR;
-		iExtra = RemotePlayerKeys[m_bytePlayerNumber].bKeys[ePadKeys::KEY_SPRINT];
+	float fDummyBlend = 4.0f;
+	if (GetCurrentAnimationIndex(fDummyBlend) == 0) {
+		m_iLastDanceMove = -1;
+		ApplyAnimation(DanceIdleLoops[m_iDanceStyle], DanceStyleLibs[m_iDanceStyle], 4.0f, 1, 0, 0, 0, 0);
 	}
 
-	if (!m_ped->m_pIntelligence->m_TaskMgr.m_aSecondaryTasks[sa::TASK_PRIMARY_PRIMARY]) {
-		ApplyAnimation(DanceIdleLoops[m_iDanceStyle], DanceStyleLibs[m_iDanceStyle], 4.0, 1, 0, 0, 0, -1);
-	}
+	const int16_t sUD = static_cast<int16_t>(LocalPlayerKeys.wKeyUD);
+	const int16_t sLR = static_cast<int16_t>(LocalPlayerKeys.wKeyLR);
+	const bool bExtra = LocalPlayerKeys.bKeys[ePadKeys::KEY_SPRINT];
 
-	int iNewMove = 0;
-	if (wKeysUpDown > 128 && !wKeysLeftRight && !iExtra) {
-		iNewMove = 0; // UP
+	int iNewMove = -1;
+	if (sUD < 0) {
+		iNewMove = (sLR < 0) ? 4 : (sLR > 0) ? 5 : 0; // UP / UP-LEFT / UP-RIGHT
 	}
-	else if (wKeysUpDown < 128 && !wKeysLeftRight && !iExtra) {
-		iNewMove = 1; // DOWN
+	else if (sUD > 0) {
+		iNewMove = (sLR < 0) ? 6 : (sLR > 0) ? 7 : 1; // DOWN / DOWN-LEFT / DOWN-RIGHT
 	}
-	else if (!wKeysUpDown && wKeysLeftRight < 128 && !iExtra) {
+	else if (sLR < 0) {
 		iNewMove = 2; // LEFT
 	}
-	else if (!wKeysUpDown && wKeysLeftRight > 128 && !iExtra) {
+	else if (sLR > 0) {
 		iNewMove = 3; // RIGHT
 	}
-	else if (wKeysUpDown > 128 && wKeysLeftRight < 128 && !iExtra) {
-		iNewMove = 4; // UP-LEFT
+	else {
+		return;
 	}
-	else if (wKeysUpDown > 128 && wKeysLeftRight > 128 && !iExtra) {
-		iNewMove = 5; // UP-RIGHT
+
+	if (bExtra) {
+		iNewMove += 8;
 	}
-	else if (wKeysUpDown < 128 && wKeysLeftRight < 128 && !iExtra) {
-		iNewMove = 6; // DOWN-LEFT
-	}
-	else if (wKeysUpDown < 128 && wKeysLeftRight > 128 && !iExtra) {
-		iNewMove = 7; // DOWN-RIGHT
-	}
-	else if (wKeysUpDown > 128 && !wKeysLeftRight && iExtra) {
-		iNewMove = 8; // UP/EX
-	}
-	else if (wKeysUpDown < 128 && !wKeysLeftRight && iExtra) {
-		iNewMove = 9; // DOWN/EX
-	}
-	else if (!wKeysUpDown && wKeysLeftRight < 128 && iExtra) {
-		iNewMove = 10; // LEFT/EX
-	}
-	else if (!wKeysUpDown && wKeysLeftRight > 128 && iExtra) {
-		iNewMove = 11; // RIGHT/EX
-	}
-	else if (wKeysUpDown > 128 && wKeysLeftRight < 128 && iExtra) {
-		iNewMove = 12; // UP-LEFT/EX
-	}
-	else if (wKeysUpDown > 128 && wKeysLeftRight > 128 && iExtra) {
-		iNewMove = 13; // UP-RIGHT/EX
-	}
-	else if (wKeysUpDown < 128 && wKeysLeftRight < 128 && iExtra) {
-		iNewMove = 14; // DOWN-LEFT/EX
-	}
-	else if (wKeysUpDown < 128 && wKeysLeftRight > 128 && iExtra) {
-		iNewMove = 15; // DOWN-RIGHT/EX
-	}
-	else { return; }
 
 	if (iNewMove == m_iLastDanceMove) return; // don't allow the same move twice
-
 	m_iLastDanceMove = iNewMove;
 
 	char* szAnimName = GetDanceAnimForMove(iNewMove);
-	if (!szAnimName && !strlen(szAnimName)) return;
+	if (!szAnimName || !szAnimName[0]) return;
 
-	ApplyAnimation(szAnimName, DanceStyleLibs[m_iDanceStyle], 4.0, 0, 0, 0, 0, -1);*/
+	ApplyAnimation(szAnimName, DanceStyleLibs[m_iDanceStyle], 4.0f, 0, 0, 0, 0, 0);
 }
 
 char* CPlayerPed::GetDanceAnimForMove(int iMove)
@@ -667,7 +614,111 @@ void CPlayerPed::HandsUp()
 		return;
 	}
 
-	ScriptCommand(&actor_task_handsup, m_gtaId, -1);
+	ScriptCommand(&actor_task_handsup, m_gtaId, -2);
+}
+
+void CPlayerPed::GiveStuff(int iType)
+{
+	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId) || !IsAdded() || IsInVehicle()) {
+		return;
+	}
+
+	if (m_dwStuffObject) {
+		DropStuff();
+	}
+
+	int iModel = 0;
+	double x = 0.0, y = 0.0, z = 0.0;
+	switch (iType) {
+		case STUFF_TYPE_BEER:
+			iModel = 1543;
+			x = 0.05; y = 0.03; z = -0.30;
+			break;
+		case STUFF_TYPE_DYN_BEER:
+			iModel = 1486;
+			x = 0.05; y = 0.03; z = -0.05;
+			break;
+		case STUFF_TYPE_PINT_GLASS:
+			iModel = 1546;
+			x = 0.04; y = 0.10; z = -0.02;
+			break;
+		case STUFF_TYPE_CIGGI:
+			iModel = 1485;
+			x = 0.0; y = 0.0; z = 0.0;
+			break;
+		default:
+			return;
+	}
+
+	if (pGame && !pGame->IsModelLoaded(iModel)) {
+		pGame->RequestModel(iModel);
+		pGame->LoadRequestedModels();
+	}
+
+	RwMatrix mat = m_ped->GetMatrix().ToRwMatrix();
+	uint32_t dwObj = 0;
+	ScriptCommand(&create_object, iModel, mat.pos.x, mat.pos.y, mat.pos.z, &dwObj);
+	if (!dwObj || !GamePool_Object_GetAt(dwObj)) {
+		m_dwStuffObject = 0;
+		return;
+	}
+
+	m_dwStuffObject = dwObj;
+	ScriptCommand(&task_pick_up_object, m_gtaId, m_dwStuffObject, x, y, z, 6, 16, "NULL", "NULL", -1);
+	m_iStuffType = iType;
+	SetArmedWeapon(0);
+}
+
+void CPlayerPed::DropStuff()
+{
+	if (m_dwStuffObject && m_ped && GamePool_Ped_GetAt(m_gtaId)) {
+		if (GamePool_Object_GetAt(m_dwStuffObject)) {
+			ScriptCommand(&task_pick_up_object, m_gtaId, m_dwStuffObject, 0.0, 0.0, 0.0, 6, 16, "NULL", "NULL", 0);
+		}
+		m_dwStuffObject = 0;
+	}
+	else {
+		m_dwStuffObject = 0;
+	}
+
+	if (m_ped && GamePool_Ped_GetAt(m_gtaId) && IsAdded() && !IsInVehicle()) {
+		RwMatrix mat = m_ped->GetMatrix().ToRwMatrix();
+		TeleportTo(mat.pos.x, mat.pos.y, mat.pos.z);
+	}
+	m_iStuffType = STUFF_TYPE_NONE;
+}
+
+bool CPlayerPed::ApplyStuff()
+{
+	if (m_iStuffType == STUFF_TYPE_NONE || !m_ped || !GamePool_Ped_GetAt(m_gtaId) || !IsAdded() || IsInVehicle()) {
+		return false;
+	}
+
+	SetArmedWeapon(0);
+	float fDummyBlend = 4.0f;
+	if (m_bytePlayerNumber != 0 || GetCurrentAnimationIndex(fDummyBlend) != 0) {
+		return false;
+	}
+
+	if (m_iStuffType == STUFF_TYPE_CIGGI) {
+		ApplyAnimation("smkcig_prtl", "GANGS", 700.0f, 0, 0, 0, 0, 2750);
+		return true;
+	}
+
+	if (m_iStuffType == STUFF_TYPE_BEER || m_iStuffType == STUFF_TYPE_DYN_BEER || m_iStuffType == STUFF_TYPE_PINT_GLASS) {
+		if (GetPedStat() == 5 || GetPedStat() == 22) {
+			ApplyAnimation("dnk_stndF_loop", "BAR", 4.0f, 0, 0, 0, 0, -1);
+		}
+		else {
+			ApplyAnimation("dnk_stndM_loop", "BAR", 4.0f, 0, 0, 0, 0, -1);
+		}
+		if (m_iStuffType != STUFF_TYPE_PINT_GLASS) {
+			SetDrunkLevel(GetDrunkLevel() + 1250);
+		}
+		return true;
+	}
+
+	return false;
 }
 
 int CPlayerPed::HasHandsUp()
@@ -792,13 +843,41 @@ bool CPlayerPed::IsSitTask()
 			GetTaskTypeFromTask(&m_ped->m_pIntelligence->m_TaskMgr.m_aPrimaryTasks[sa::TASK_PRIMARY_PRIMARY]) == sa::TASK_SIMPLE_SIT_IDLE;
 }
 
+bool CPlayerPed::CanDoPassengerDriveBy()
+{
+	if (!m_ped || !m_ped->IsInVehicle() || !m_ped->pVehicle) {
+		return false;
+	}
+	int iWeapon = GetCurrentWeapon();
+	switch (iWeapon) {
+		case WEAPON_COLT45:
+		case WEAPON_SILENCED:
+		case WEAPON_DEAGLE:
+		case WEAPON_TEC9:
+		case WEAPON_UZI:
+		case WEAPON_MP5:
+		case WEAPON_AK47:
+		case WEAPON_M4:
+		case WEAPON_SAWEDOFF:
+		case WEAPON_SHOTGSPA:
+		case WEAPON_MINIGUN:
+		case WEAPON_GRENADE:
+		case WEAPON_MOLOTOV:
+		case WEAPON_SATCHEL:
+			return true;
+		default:
+			return false;
+	}
+}
+
 bool CPlayerPed::IsInPassengerDriveByMode()
 {
-	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId) || !IsInVehicle() || !m_ped->m_pIntelligence || !m_ped->m_pIntelligence->m_TaskMgr.m_aSecondaryTasks[sa::TASK_PRIMARY_PRIMARY]) {
+	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId) || !IsInVehicle() || !m_ped->m_pIntelligence ||
+			!m_ped->m_pIntelligence->m_TaskMgr.m_aPrimaryTasks[sa::TASK_PRIMARY_PRIMARY]) {
 		return false;
 	}
 
-	return GetTaskTypeFromTask(&m_ped->m_pIntelligence->m_TaskMgr.m_aSecondaryTasks[sa::TASK_PRIMARY_PRIMARY]) == sa::TASK_SIMPLE_GANG_DRIVEBY;
+	return GetTaskTypeFromTask(&m_ped->m_pIntelligence->m_TaskMgr.m_aPrimaryTasks[sa::TASK_PRIMARY_PRIMARY]) == sa::TASK_SIMPLE_GANG_DRIVEBY;
 }
 
 bool CPlayerPed::StartPassengerDriveByMode()
@@ -815,11 +894,7 @@ bool CPlayerPed::StartPassengerDriveByMode()
 			return false;
 		}
 
-		// allowed weapons
-		if (iWeapon != WEAPON_COLT45 && iWeapon != WEAPON_SILENCED && iWeapon != WEAPON_DEAGLE && iWeapon != WEAPON_TEC9 &&
-				iWeapon != WEAPON_UZI && iWeapon != WEAPON_MP5 && iWeapon != WEAPON_AK47 && iWeapon != WEAPON_M4 &&
-				iWeapon != WEAPON_SAWEDOFF && iWeapon != WEAPON_SHOTGSPA && iWeapon != WEAPON_MINIGUN &&
-				iWeapon != WEAPON_GRENADE && iWeapon != WEAPON_MOLOTOV && iWeapon != WEAPON_SATCHEL) {
+		if (!CanDoPassengerDriveBy()) {
 			return false;
 		}
 
@@ -839,20 +914,23 @@ void CPlayerPed::StopPassengerDriveByMode()
 	}
 
 	if (IsInPassengerDriveByMode()) {
-		sa::CTask* dwJetPackTask = m_ped->m_pIntelligence->m_TaskMgr.m_aSecondaryTasks[sa::TASK_PRIMARY_PRIMARY];
-		eng::fn::CTaskSimpleGangDriveBy_Dtor_CTaskSimpleGangDriveBy( dwJetPackTask); // CTaskSimpleGangDriveBy::~CTaskSimpleGangDriveBy
-		m_ped->m_pIntelligence->m_TaskMgr.m_aSecondaryTasks[sa::TASK_PRIMARY_PRIMARY] = nullptr;
+		sa::CTask* pDriveByTask = m_ped->m_pIntelligence->m_TaskMgr.m_aPrimaryTasks[sa::TASK_PRIMARY_PRIMARY];
+		eng::fn::CTaskSimpleGangDriveBy_Dtor_CTaskSimpleGangDriveBy(pDriveByTask); // CTaskSimpleGangDriveBy::~CTaskSimpleGangDriveBy
+		m_ped->m_pIntelligence->m_TaskMgr.m_aPrimaryTasks[sa::TASK_PRIMARY_PRIMARY] = nullptr;
 	}
 }
 
 bool IsTaskRunNamedOrSlideToCoord(sa::CTask* pTask)
 {
-	uintptr_t vtable = *(uintptr_t*) pTask;
-	if (vtable == eng::vmtSlot(eng::Sym::vtable_CTaskSimpleSlideToCoord, 1) || vtable == eng::vmtSlot(eng::Sym::vtable_CTaskSimpleRunNamedAnim, 2)) // CTaskSimpleSlideToCoord CTaskSimpleRunNamedAnim
-	{
+	if (!pTask) return false;
+	const uintptr_t vtable = *reinterpret_cast<uintptr_t*>(pTask);
+	// eng::vmtSlot(sym, 1) == sym + 2*sizeof(void*), which is the Itanium ABI object vptr.
+	if (vtable == eng::vmtSlot(eng::Sym::vtable_CTaskSimpleSlideToCoord, 1) ||
+			vtable == eng::vmtSlot(eng::Sym::vtable_CTaskSimpleRunNamedAnim, 1)) {
 		return true;
 	}
-	return false;
+	const int taskType = GetTaskTypeFromTask(&pTask);
+	return taskType == 401 || taskType == 934;
 }
 
 sa::CTask* GetSubTaskFromTask(sa::CTask* pTask)
@@ -861,36 +939,56 @@ sa::CTask* GetSubTaskFromTask(sa::CTask* pTask)
 	return Memory::callFunction<sa::CTask*>(*reinterpret_cast<void**>(vtable + 3 * sizeof(void*)), pTask);
 }
 
+// Disassembly-verified CTaskSimpleRunNamedAnim field offsets from libGTASA.so
+// (_ZN23CTaskSimpleRunNamedAnimC2EPKcS1_ifibbbb). Itanium C++ ABI packs derived
+// fields directly into CTaskSimpleAnim's tail padding (+13 arm32 / +25 arm64).
+static constexpr size_t kRunAnimNameOff  = VER_x32 ? 0x0D : 0x19;
+static constexpr size_t kRunAnimGroupOff = VER_x32 ? 0x25 : 0x31;
+static constexpr size_t kRunAnimBlendOff = VER_x32 ? 0x38 : 0x44;
+static constexpr size_t kRunAnimTimeOff  = VER_x32 ? 0x40 : 0x50;
+static constexpr size_t kRunAnimFlagsOff = VER_x32 ? 0x5C : 0x6C;
+
 uint32_t CPlayerPed::GetCurrentAnimationIndexFlag()
 {
-	uint32_t dwAnim = 0;
+	if (m_ped && m_gtaId && GamePool_Ped_GetAt(m_gtaId) && m_ped->m_pRwObject && m_ped->m_pIntelligence) {
+		sa::CTask* pTask = m_ped->m_pIntelligence->m_TaskMgr.m_aPrimaryTasks[sa::TASK_PRIMARY_PRIMARY];
+		while (pTask && !IsTaskRunNamedOrSlideToCoord(pTask)) {
+			pTask = GetSubTaskFromTask(pTask);
+		}
+		if (pTask) {
+			const auto* raw = reinterpret_cast<const uint8_t*>(pTask);
+			const char* szName = reinterpret_cast<const char*>(raw + kRunAnimNameOff);
+			const char* szGroup = reinterpret_cast<const char*>(raw + kRunAnimGroupOff);
+			std::string szStr(szGroup);
+			szStr += ":";
+			szStr += szName;
 
-	float fBlendData = 4.0f;
+			const int idx = GetAnimIdxByName(szStr.c_str());
+			if (idx != -1) {
+				const uint16_t usAnimIdx = static_cast<uint16_t>(idx + 1);
+				const float fBlendDelta = *reinterpret_cast<const float*>(raw + kRunAnimBlendOff);
+				int iSpeed = static_cast<int>(fBlendDelta);
+				if (iSpeed < 0) iSpeed = 0;
+				if (iSpeed > 255) iSpeed = 255;
+				const uint32_t speed = static_cast<uint32_t>(iSpeed);
 
-	int iAnimIdx = GetCurrentAnimationIndex(fBlendData);
+				const uint32_t animFlags = *reinterpret_cast<const uint32_t*>(raw + kRunAnimFlagsOff);
+				const int32_t animTime = *reinterpret_cast<const int32_t*>(raw + kRunAnimTimeOff);
+				const uint32_t direction = (animTime > 0) ? 2u : (animTime < 0 ? 1u : 0u);
+				const uint32_t packedFlags =
+						(direction << 4) |
+						((animFlags & 0x08u) ? 0u : 8u) |
+						((animFlags & 0x80u) ? 4u : 0u) |
+						((animFlags & 0x40u) ? 2u : 0u) |
+						((animFlags & 0x02u) ? 1u : 0u);
 
-	uint32_t hardcodedBlend = 0b00000100; // 4
-	hardcodedBlend <<= 16;
-
-	uint32_t hardcodedFlags = 0;
-
-	if (iAnimIdx) {
-		hardcodedFlags = 0b00010001; // 17
+				return static_cast<uint32_t>(usAnimIdx) | (speed << 16) | (packedFlags << 24);
+			}
+		}
 	}
-	else {
-		hardcodedFlags = 0b10000000; // 128
-		iAnimIdx = 1189;
-	}
 
-	hardcodedFlags <<= 24;
-
-	auto usAnimidx = (uint16_t) iAnimIdx;
-
-	dwAnim = (uint32_t) usAnimidx;
-	dwAnim |= hardcodedBlend;
-	dwAnim |= hardcodedFlags;
-
-	return dwAnim;
+	// Default non-scripted movement fallback (bit 31 set, blend=4, idle index 1189)
+	return static_cast<uint32_t>(1189u) | (4u << 16) | (0x80u << 24);
 }
 
 int CPlayerPed::GetCurrentAnimationIndex(float& blendData)
@@ -921,8 +1019,10 @@ int CPlayerPed::GetCurrentAnimationIndex(float& blendData)
 				}
 			}
 
-			const char* szName = (const char*) (((sa::CTaskSimpleRunNamedAnim*) pTask)->m_animName);
-			const char* szGroupName = (const char*) (((sa::CTaskSimpleRunNamedAnim*) pTask)->m_animGroupName);
+			const auto* raw = reinterpret_cast<const uint8_t*>(pTask);
+			const char* szName = reinterpret_cast<const char*>(raw + kRunAnimNameOff);
+			const char* szGroupName = reinterpret_cast<const char*>(raw + kRunAnimGroupOff);
+			blendData = *reinterpret_cast<const float*>(raw + kRunAnimBlendOff);
 
 			std::string szStr = std::string(szGroupName);
 			szStr += ":";
@@ -1022,7 +1122,17 @@ void CPlayerPed::StartDancing(int danceId)
 
 void CPlayerPed::ExtinguishFire()
 {
+	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId)) {
+		return;
+	}
 
+	if (m_ped->m_pFire) {
+		eng::fn::CFire_Extinguish(m_ped->m_pFire);
+	}
+
+	if (m_ped->m_nPedFlags.bInVehicle && m_ped->pVehicle && m_ped->pVehicle->m_pFire) {
+		eng::fn::CFire_Extinguish(m_ped->pVehicle->m_pFire);
+	}
 }
 
 void CPlayerPed::SetImmunities(int bullet, int flame, int explode, int collision, int melee)
@@ -1034,11 +1144,20 @@ void CPlayerPed::SetImmunities(int bullet, int flame, int explode, int collision
 
 void CPlayerPed::SetSkillLevel(int iSkillID, int iLevel)
 {
-	// ~
+	if (iSkillID < 0 || iSkillID >= kWeaponSkillCount) return;
+	const uint16_t clamped = static_cast<uint16_t>(iLevel < 0 ? 0 : (iLevel > 1000 ? 1000 : iLevel));
+	if (m_bytePlayerNumber == 0) {
+		GameSetLocalPlayerSkill(iSkillID, clamped);
+	}
+	else {
+		GameSetRemotePlayerSkill(m_bytePlayerNumber, iSkillID, clamped);
+	}
 }
 void CPlayerPed::UpdateLocalPlayerSkill(int iSkillID, int iLevel)
 {
-
+	if (iSkillID < 0 || iSkillID >= kWeaponSkillCount) return;
+	const uint16_t clamped = static_cast<uint16_t>(iLevel < 0 ? 0 : (iLevel > 1000 ? 1000 : iLevel));
+	GameSetLocalPlayerSkill(iSkillID, clamped);
 }
 
 void CPlayerPed::SetFightingStyle(int iStyle)
@@ -1419,8 +1538,15 @@ void CPlayerPed::ApplyAnimation(const char* szAnimName, const char* szAnimLib, f
 		return;
 	}
 
-	if (!strcasecmp(szAnimLib, "SAMP") || !strcasecmp(szAnimLib, "SEX")) {
+	if (!strcasecmp(szAnimLib, "SEX")) {
 		return;
+	}
+	if (!strcasecmp(szAnimLib, "SAMP")) {
+		// Allow SAMP anim library if samp.ifp is installed in the data pack;
+		// otherwise return early without stalling 15ms waiting for a missing block.
+		if (!eng::fn::CAnimManager_GetAnimationBlock<void*>(szAnimLib)) {
+			return;
+		}
 	}
 
 	int iWaitAnimLoad = 0;
@@ -1772,6 +1898,49 @@ void CPlayerPed::PlayAnimByIdx(int idx, float BlendData)
 	snprintf(pszBlock, sizeof(pszBlock), "%s", szBlock.c_str());
 
 	ApplyAnimation(&pszAnim[0], &pszBlock[0], BlendData, 0, 1, 1, 0, 0);
+}
+
+void CPlayerPed::ApplyPackedAnimation(uint32_t dwPacked)
+{
+	if (!m_ped) return;
+	const uint16_t idx = static_cast<uint16_t>(dwPacked & 0xFFFF);
+	if (idx == 0) {
+		PlayAnimByIdx(0, 4.0f);
+		return;
+	}
+
+	const char* pCombined = GetAnimByIdx(idx - 1);
+	if (!pCombined) {
+		return;
+	}
+	const char* pColon = strchr(pCombined, ':');
+	if (!pColon || pColon == pCombined || !pColon[1]) {
+		return;
+	}
+
+	char pszBlock[40] = {0};
+	char pszAnim[40] = {0};
+	const size_t blockLen = static_cast<size_t>(pColon - pCombined);
+	snprintf(pszBlock, sizeof(pszBlock), "%.*s", static_cast<int>(blockLen), pCombined);
+	snprintf(pszAnim, sizeof(pszAnim), "%s", pColon + 1);
+
+	float fSpeed = static_cast<float>((dwPacked >> 16) & 0xFF);
+	if (fSpeed <= 0.0f) {
+		fSpeed = 4.0f;
+	}
+	const uint32_t flags = (dwPacked >> 24) & 0xFF;
+	const uint32_t direction = (flags >> 4) & 3u;
+	const int iTime = (direction == 2u) ? 1 : ((direction == 1u) ? -1 : 0);
+
+	ApplyAnimation(
+			pszAnim,
+			pszBlock,
+			fSpeed,
+			(flags & 1u) ? 1 : 0,
+			(flags & 2u) ? 1 : 0,
+			(flags & 4u) ? 1 : 0,
+			(flags & 8u) ? 1 : 0,
+			iTime);
 }
 
 bool CPlayerPed::IsPlayingAnim(int idx)
@@ -2561,7 +2730,12 @@ sa::CEntity* CPlayerPed::GetEntityUnderPlayer()
 
 void CPlayerPed::ResetDamageEntity()
 {
-	// TODO
+	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId)) {
+		return;
+	}
+	m_ped->m_pLastEntityDamage = nullptr;
+	m_ped->m_nLastDamagedWeaponType = 0xFF;
+	m_ped->m_pDamageEntity = nullptr;
 }
 
 int CPlayerPed::GetPedStat()

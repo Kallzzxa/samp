@@ -163,6 +163,15 @@ DECL_HOOK(void, AND_TouchEvent, int type, int num, int posX, int posY)
 		}
 		else
 		{
+			if (pNetGame && pNetGame->GetMenuPool())
+			{
+				if (!pNetGame->GetMenuPool()->enqueueTouchEvent(type, posX, posY))
+				{
+					releaseGtaPointer(num);
+					return;
+				}
+			}
+
 			if (pNetGame && pNetGame->GetTextDrawPool())
 			{
 				if (!pNetGame->GetTextDrawPool()->enqueueTouchEvent(type, posX, posY))
@@ -176,6 +185,15 @@ DECL_HOOK(void, AND_TouchEvent, int type, int num, int posX, int posY)
 			{
 				releaseGtaPointer(num);
 				return;
+			}
+
+			if (pNetGame && pNetGame->GetObjectPool())
+			{
+				if (!pNetGame->GetObjectPool()->enqueueTouchEvent(type, posX, posY))
+				{
+					releaseGtaPointer(num);
+					return;
+				}
 			}
 		}
 	}
@@ -1318,12 +1336,78 @@ DECL_HOOK(void, CRenderer_RenderEverythingBarRoads)
 		CObjectPool *pObjectPool = pNetGame->GetObjectPool();
 		if (pObjectPool)
 		{
+			RwMatrix matCam{};
+			bool hasCam = false;
+			if (pGame && pGame->GetCamera())
+			{
+				pGame->GetCamera()->GetMatrix(&matCam);
+				hasCam = true;
+			}
+			float lodScale = 1.0f;
+			if (auto *pLodScale = eng::as<float *>(eng::Sym::CRenderer_ms_lodDistScale))
+			{
+				if (std::isfinite(*pLodScale) && *pLodScale > 0.1f)
+				{
+					lodScale = *pLodScale;
+				}
+			}
+
 			for (OBJECTID i = 0; i < MAX_OBJECTS; i++)
 			{
 				CObject *pObject = pObjectPool->GetAt(i);
-				if (pObject && pObject->m_bForceRender)
+				if (!pObject)
+				{
+					continue;
+				}
+				if (pObject->m_bForceRender)
 				{
 					pObject->Render();
+					continue;
+				}
+				if (hasCam && pObject->m_fDrawDistance > 0.0f && pObject->m_entity
+					&& pObject->m_entity->m_pRwObject && !IsEntityPlaceable(pObject->m_entity))
+				{
+					const sa::CVector &pos = pObject->m_entity->GetPosition();
+					const float dx = pos.x - matCam.pos.x;
+					const float dy = pos.y - matCam.pos.y;
+					const float dz = pos.z - matCam.pos.z;
+					const float distSq = dx * dx + dy * dy + dz * dz;
+					const float maxDist = pObject->m_fDrawDistance;
+					if (distSq > maxDist * maxDist)
+					{
+						continue;
+					}
+
+					float nativeDist = 300.0f;
+					float boundRadius = 50.0f;
+					if (sa::CBaseModelInfo *mi = GetModelInfoByID(pObject->GetModelIndex()))
+					{
+						if (mi->m_lodDistance > 0.0f)
+						{
+							const float scaled = mi->m_lodDistance * lodScale;
+							if (scaled < nativeDist)
+							{
+								nativeDist = scaled;
+							}
+						}
+						if (mi->m_pColModel && mi->m_pColModel->m_boundSphere.m_fRadius > boundRadius)
+						{
+							boundRadius = mi->m_pColModel->m_boundSphere.m_fRadius;
+						}
+					}
+
+					// GTA's CRenderer::ScanWorld already renders normal objects within nativeDist (~300m cap);
+					// manually render objects beyond that range up to the server-specified m_fDrawDistance.
+					const float minFarDist = nativeDist * 0.9f;
+					if (distSq > minFarDist * minFarDist)
+					{
+						const float fwd = dx * matCam.up.x + dy * matCam.up.y + dz * matCam.up.z;
+						if (fwd > -boundRadius)
+						{
+							pObject->UpdateRwMatrixAndFrame();
+							pObject->Render();
+						}
+					}
 				}
 			}
 		}
@@ -1729,6 +1813,12 @@ DECL_HOOK(void, CGame_Process)
 			pObjectPool->ProcessMaterialText();
 		}
 
+		CVehiclePool *pVehiclePool = pNetGame->GetVehiclePool();
+		if (pVehiclePool)
+		{
+			pVehiclePool->ProcessLicensePlates();
+		}
+
 		// JNI edit callbacks queue ops from the Java UI thread — apply them
 		// here on the game thread where GTA/ScriptCommand access is safe
 		EditObject::processPending();
@@ -1738,6 +1828,19 @@ DECL_HOOK(void, CGame_Process)
 			pGame->GetCamera()->SetToOwner();
 		}
 	}
+}
+
+// T34: SetObjectNoCameraCollision — let GTA camera LOS & sphere checks ignore flagged SA-MP objects
+DECL_HOOK(bool, CWorld_CameraToIgnoreThisObject, sa::CEntity *pEntity)
+{
+	if (pEntity)
+	{
+		if (CObject *pObj = CObject::FindByGtaEntity(pEntity); pObj && pObj->m_bNoCameraCollision)
+		{
+			return true;
+		}
+	}
+	return CWorld_CameraToIgnoreThisObject(pEntity);
 }
 
 DECL_HOOK(int, CRadar_SetCoordBlip, uint32_t BlpType, sa::CVector vecPosition, uint32_t nColour, uint32_t DispFlag, char *pScriptName)
@@ -2095,6 +2198,7 @@ void Hooks::install()
 
 	// obj material
 	REG_HOOK(Boot, CObject_Render, CObject_Render, "Object custom material/text & UVAnim");
+	REG_HOOK(Boot, CWorld_CameraToIgnoreThisObject, CWorld_CameraToIgnoreThisObject, "SetObjectNoCameraCollision camera ignore");
 
 	// render objects 3000+- pos
 	REG_HOOK(Boot, CRenderer_RenderEverythingBarRoads, CRenderer_RenderEverythingBarRoads, "Force-render OOB objects");

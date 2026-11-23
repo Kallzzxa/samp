@@ -98,6 +98,7 @@ public:
 	void ChangeToOriginalObjectMaterial();
 
 	static CObject* FindByGtaEntity(sa::CEntity* pEntity);
+	int GetModelIndex() const { return m_iModel; }
 
 public:
 	bool m_bHasCustomObjectMaterial;
@@ -121,6 +122,7 @@ public:
 
 	bool m_bAttachedToPed;
 	bool m_bForceRender;
+	float m_fDrawDistance;
 	RwObject* m_pUVAnimRwObject;
 	bool m_bUVAnimEnabled;
 	bool m_bNoCameraCollision;

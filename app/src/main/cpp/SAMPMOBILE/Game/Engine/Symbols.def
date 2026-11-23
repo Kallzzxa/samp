@@ -46,8 +46,10 @@ SYM_DATA(CPools_ms_pTaskAllocatorPool, "_ZN6CPools21ms_pTaskAllocatorPoolE", voi
 SYM_DATA(CPools_ms_pTaskPool, "_ZN6CPools12ms_pTaskPoolE", void, Required) // CPools::ms_pTaskPool
 SYM_DATA(CPools_ms_pVehiclePool, "_ZN6CPools15ms_pVehiclePoolE", void, Required) // CPools::ms_pVehiclePool
 SYM_DATA(CRenderer_ms_lodDistScale, "_ZN9CRenderer15ms_lodDistScaleE", void, Required) // CRenderer::ms_lodDistScale
+SYM_DATA(CStats_StatTypesFloat, "_ZN6CStats14StatTypesFloatE", void, Required) // CStats::StatTypesFloat
 SYM_DATA(CStreaming_ms_files, "_ZN10CStreaming8ms_filesE", void, Required) // CStreaming::ms_files
 SYM_DATA(CStreaming_ms_memoryAvailable, "_ZN10CStreaming18ms_memoryAvailableE", void, Required) // CStreaming::ms_memoryAvailable
+SYM_DATA(CStreaming_ms_memoryUsed, "_ZN10CStreaming13ms_memoryUsedE", void, Required) // CStreaming::ms_memoryUsed
 SYM_DATA(CTheScripts_ScriptSpace, "_ZN11CTheScripts11ScriptSpaceE", void, Required) // CTheScripts::ScriptSpace
 SYM_DATA(CTheZones_ZonesRevealed, "_ZN9CTheZones13ZonesRevealedE", void, Required) // CTheZones::ZonesRevealed
 SYM_DATA(CTheZones_ZonesVisited, "_ZN9CTheZones12ZonesVisitedE", void, Required) // CTheZones::ZonesVisited
@@ -161,6 +163,7 @@ SYM_FN(CFont_SetBackgroundColor, "_ZN5CFont18SetBackgroundColorE5CRGBA", void, R
 SYM_FN(CFont_SetCentreSize, "_ZN5CFont13SetCentreSizeEf", void, Required) // CFont::SetCentreSize(float)
 SYM_FN(CFont_SetColor, "_ZN5CFont8SetColorE5CRGBA", void, Required) // CFont::SetColor(CRGBA)
 SYM_FN(CFont_SetDropColor, "_ZN5CFont12SetDropColorE5CRGBA", void, Required) // CFont::SetDropColor(CRGBA)
+SYM_FN(CFire_Extinguish, "_ZN5CFire10ExtinguishEv", void, Required) // CFire::Extinguish()
 SYM_FN(CFont_SetDropShadowPosition, "_ZN5CFont21SetDropShadowPositionEa", void, Required) // CFont::SetDropShadowPosition(signed char)
 SYM_FN(CFont_SetEdge, "_ZN5CFont7SetEdgeEa", void, Required) // CFont::SetEdge(signed char)
 SYM_FN(CFont_SetFontStyle, "_ZN5CFont12SetFontStyleEh", void, Required) // CFont::SetFontStyle(unsigned char)
@@ -255,6 +258,7 @@ SYM_FN(CPlayerPed_ClearWeaponTarget, "_ZN10CPlayerPed17ClearWeaponTargetEv", voi
 SYM_FN(CPlayerPed_FindNextWeaponLockOnTarget, "_ZN10CPlayerPed26FindNextWeaponLockOnTargetEP7CEntityb", uintptr_t, Required) // CPlayerPed::FindNextWeaponLockOnTarget(CEntity*, bool)
 SYM_FN(CPlayerPed_FindWeaponLockOnTarget, "_ZN10CPlayerPed22FindWeaponLockOnTargetEv", uintptr_t, Required) // CPlayerPed::FindWeaponLockOnTarget()
 SYM_FN(CPlayerPed_GetPlayerInfoForThisPlayerPed, "_ZN10CPlayerPed29GetPlayerInfoForThisPlayerPedEv", void, Required) // CPlayerPed::GetPlayerInfoForThisPlayerPed()
+SYM_FN(CPlayerPed_HandleTapToTarget, "_ZN10CPlayerPed17HandleTapToTargetEffb", uintptr_t, Required) // CPlayerPed::HandleTapToTarget(float, float, bool)
 SYM_FN(CPlayerPed_ProcessControl, "_ZN10CPlayerPed14ProcessControlEv", void, Required) // CPlayerPed::ProcessControl()
 SYM_FN(CPlayerPed_SetInitialState, "_ZN10CPlayerPed15SetInitialStateEb", void, Required) // CPlayerPed::SetInitialState(bool)
 SYM_FN(CPools_Initialise, "_ZN6CPools10InitialiseEv", void, Required) // CPools::Initialise()
@@ -472,6 +476,17 @@ SYM_FN(TextureDatabaseRuntime_GetTexture, "_ZN22TextureDatabaseRuntime10GetTextu
 SYM_FN(TextureDatabaseRuntime_Load, "_ZN22TextureDatabaseRuntime4LoadEPKcb21TextureDatabaseFormat", void, Required) // TextureDatabaseRuntime::Load(char const*, bool, TextureDatabaseFormat)
 SYM_FN(TextureDatabaseRuntime_Register, "_ZN22TextureDatabaseRuntime8RegisterEPS_", void, Required) // TextureDatabaseRuntime::Register(TextureDatabaseRuntime*)
 SYM_FN(TextureDatabaseRuntime_Unregister, "_ZN22TextureDatabaseRuntime10UnregisterEPS_", void, Required) // TextureDatabaseRuntime::Unregister(TextureDatabaseRuntime*)
+SYM_FN(CWorld_CameraToIgnoreThisObject, "_ZN6CWorld24CameraToIgnoreThisObjectEP7CEntity", bool, Required) // CWorld::CameraToIgnoreThisObject(CEntity*)
+SYM_FN(CVehicle_SetWindowOpenFlag, "_ZN8CVehicle17SetWindowOpenFlagEh", void, Required) // CVehicle::SetWindowOpenFlag(unsigned char)
+SYM_FN(CVehicle_ClearWindowOpenFlag, "_ZN8CVehicle19ClearWindowOpenFlagEh", void, Required) // CVehicle::ClearWindowOpenFlag(unsigned char)
+SYM_FN(CPlane_SetGearUp, "_ZN6CPlane9SetGearUpEv", void, Required) // CPlane::SetGearUp()
+SYM_FN(CPlane_SetGearDown, "_ZN6CPlane11SetGearDownEv", void, Required) // CPlane::SetGearDown()
+SYM_FN(CBike_CalculateLeanMatrix, "_ZN5CBike19CalculateLeanMatrixEv", void, Required) // CBike::CalculateLeanMatrix()
+SYM_FN(CShopping_LoadShop, "_ZN9CShopping8LoadShopEPKc", void, Required) // CShopping::LoadShop(char const*)
+SYM_FN(CShopping_RemoveLoadedShop, "_ZN9CShopping16RemoveLoadedShopEv", void, Required) // CShopping::RemoveLoadedShop()
+SYM_FN(CAEPoliceScannerAudioEntity_AddAudioEvent, "_ZN27CAEPoliceScannerAudioEntity13AddAudioEventEi10eCrimeTypeRK7CVector", void, Required) // CAEPoliceScannerAudioEntity::AddAudioEvent(int, eCrimeType, CVector const&)
+SYM_FN(CStuntJumpManager_SetActive, "_ZN17CStuntJumpManager9SetActiveEb", void, Required) // CStuntJumpManager::SetActive(bool)
+SYM_FN(CVehicle_InflictDamage, "_ZN8CVehicle13InflictDamageEP7CEntity11eWeaponTypef7CVector", void, Required) // CVehicle::InflictDamage(CEntity*, eWeaponType, float, CVector)
 
 // ============================================================================
 // ABI-specific mangled functions (2)

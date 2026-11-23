@@ -34,9 +34,8 @@ void RpcHandlers::OnInitGame(const proto::InitGame& p)
 	sess.settings.globalChatRadius = p.globalChatRadius;
 	sess.settings.nameTagDrawDistance = p.nameTagDrawDistance;
 	sess.settings.disableInteriorEnterExits = p.disableInteriorEnterExits;
-	sess.settings.nameTagLOS = p.nameTagLOS;
-	// 保留：T35 — nameTagLOS polarity check
-	//pNetGame->m_netSet->nameTagLOS = true;
+	// Protocol bit 9 is DisableNameTagLOS (1 = LOS disabled, 0 = LOS enabled).
+	sess.settings.nameTagLOS = !p.nameTagLOS;
 	sess.settings.manualVehicleEngineAndLight = p.manualVehicleEngineAndLight;
 	sess.settings.spawnsAvailable = p.spawnsAvailable;
 	sess.settings.showNameTags = p.showNameTags;
@@ -84,10 +83,6 @@ void RpcHandlers::OnInitGame(const proto::InitGame& p)
 		pGame->DisableEnterExits();
 	}
 
-	if (sess.settings.vehicleFriendlyFire) {
-		//InstallHook_VehicleFriendlyFire();
-	}
-
 	pGame->SetWorldWeather(sess.settings.weather);
 	pGame->ToggleCJWalk(sess.settings.useCJWalk);
 
@@ -114,6 +109,13 @@ void RpcHandlers::OnShowDialog(const proto::ShowDialog& p)
 	spdlog::debug("szButton1 {}", p.button1);
 	spdlog::debug("szButton2 {}", p.button2);
 	spdlog::debug("szMessage {}", p.body);
+
+	if (p.id < 0) {
+		if (g_java) {
+			g_java->hideDialog();
+		}
+		return;
+	}
 
 	if (g_java) {
 		std::string uTitle = Encoding::cp2utf(p.title.c_str());
@@ -217,6 +219,10 @@ void RpcHandlers::OnToggleClock(const proto::ToggleClock& p)
 	spdlog::debug("RPC: Toggle clock");
 	spdlog::debug("byteClock {}", p.toggle);
 
+	if (pGame) {
+		pGame->EnableClock(p.toggle != 0);
+	}
+
 	if (p.toggle) {
 		pNetGame->m_netSet->holdTime = false;
 	}
@@ -276,7 +282,6 @@ void RpcHandlers::OnConnectionRejected(const proto::ConnectionRejected& p)
 				pUI->chat()->addInfoMessage("Please use only a-z, A-Z, 0-9");
 				pUI->chat()->addInfoMessage("Use /quit to exit or press ESC and select Quit Game");
 			}
-			pNetGame->SetGameState(GAMESTATE_WAIT_CONNECT);
 			break;
 
 		case REJECT_REASON_BAD_MOD:
@@ -568,16 +573,36 @@ void RpcHandlers::OnDestroyWeaponPickup(const proto::DestroyWeaponPickup& p)
 	}
 }
 
-//anti-cheat probe (0.3.DL, RPC 103): we can't checksum PC-side memory
-//structures on Android, so we answer well-formed replies - result 0 for
-//checksum types, real RakNet time for the 0x48 keep-alive
+// Anti-cheat probe (RPC 103, enabled on both 0.3.7 and 0.3.DL):
+// - 0x02: returns local player/vehicle CPhysical::m_nPhysicalFlags (bit layout
+//   matches PC entity +0x40, though individual runtime flags may differ on
+//   Android) with result 1 (on foot / passenger) or 2 (driving).
+// - 0x48: returns RakNet::GetTime() with result 0.
+// - 0x05 / 0x45 / 0x46 / 0x47: PC memory/model/collision checksums cannot be
+//   computed against Android binaries; answer well-formed replies with result 0.
 void RpcHandlers::OnClientCheck(const proto::ClientCheckRequest& p)
 {
 	if (p.offset > 256 || p.length > 256 || p.length < 2) return;
 
 	uint32_t dwArgument = p.argument;
 	uint8_t byteResult = 0;
-	if (p.type == 0x48) {
+	if (p.type == 0x02) {
+		CPlayerPed* pPlayerPed = pGame ? pGame->FindPlayerPed() : nullptr;
+		if (pPlayerPed) {
+			if (pPlayerPed->IsInVehicle() && !pPlayerPed->IsAPassenger()) {
+				sa::CVehicle* pVeh = pPlayerPed->GetGtaVehicle();
+				if (pVeh) {
+					dwArgument = pVeh->m_nPhysicalFlags;
+					byteResult = 2;
+				}
+			}
+			else if (pPlayerPed->m_ped) {
+				dwArgument = pPlayerPed->m_ped->m_nPhysicalFlags;
+				byteResult = 1;
+			}
+		}
+	}
+	else if (p.type == 0x48) {
 		dwArgument = (uint32_t) RakNet::GetTime();
 	}
 
@@ -587,9 +612,43 @@ void RpcHandlers::OnClientCheck(const proto::ClientCheckRequest& p)
 	reply.type = p.type;
 	reply.argument = dwArgument;
 	reply.result = byteResult;
-	reply.serialize(writer, proto::ProtoVersion::V037);
+	reply.serialize(writer, pNetGame->session().protoVersion);
 	if (pNetGame->GetRakClient()) {
 		pNetGame->GetRakClient()->RPC(&RPC_ClientCheck, &bsReply, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
+	}
+}
+
+void RpcHandlers::OnSetPlayerSkillLevel(const proto::SetPlayerSkillLevel& p)
+{
+	spdlog::debug("RPC: SetPlayerSkillLevel player={} skill={} level={}", p.playerId, p.skillType, p.skillLevel);
+	if (p.skillType >= static_cast<uint32_t>(kWeaponSkillCount)) {
+		return;
+	}
+
+	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
+	if (!pPlayerPool) {
+		return;
+	}
+
+	CPlayerPed* pPed = nullptr;
+	if (p.playerId == pPlayerPool->GetLocalPlayerID()) {
+		if (CLocalPlayer* pLocal = pPlayerPool->GetLocalPlayer()) {
+			pPed = pLocal->GetPlayerPed();
+		}
+	}
+	else if (pPlayerPool->GetSlotState(p.playerId)) {
+		if (CRemotePlayer* pRemote = pPlayerPool->GetAt(p.playerId)) {
+			pPed = pRemote->GetPlayerPed();
+		}
+	}
+
+	if (pPed) {
+		pPed->SetSkillLevel(static_cast<int>(p.skillType), static_cast<int>(p.skillLevel));
+		// Refresh currently armed weapon so dual-wield model/anim updates immediately
+		const uint8_t curWeap = pPed->GetCurrentWeapon();
+		if (curWeap != 0) {
+			pPed->SetArmedWeapon(curWeap);
+		}
 	}
 }
 
@@ -885,35 +944,97 @@ void RpcHandlers::OnChatBubble(const proto::ChatBubble& p)
 void RpcHandlers::OnEditAttachedObject(const proto::EditAttachedObject& p)
 {
 	spdlog::debug("RPC: EditAttachedObject");
+	if (CObjectPool* pObjPool = pNetGame->GetObjectPool(); pObjPool && pObjPool->IsSelectState()) {
+		pObjPool->SetSelectState(false);
+	}
+	if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
+		pTdPool->SetSelectState(false, 0, false);
+	}
 	EditObject::startEditAttachedObject(p.index);
 }
 
 //edit object
 void RpcHandlers::OnEditObject(const proto::EditObject& p)
 {
-	spdlog::debug("RPC: EditObject");
+	spdlog::debug("RPC: EditObject (id={}, playerObject={})", p.objectId, p.playerObject);
 
-	EditObject::m_playerObj = p.playerObject;
-
-	// there is no player-object pool — editing a global object id here
-	// would mutate an unrelated object and send bogus results back
-	if (p.playerObject) {
-		spdlog::warn("RPC: EditObject - player objects unsupported, ignoring (id {})", p.objectId);
-		if (pUI && pUI->chat()) pUI->chat()->addDebugMessage("PlayerObject editing not supported");
-		return;
+	if (CObjectPool* pObjPool = pNetGame->GetObjectPool(); pObjPool && pObjPool->IsSelectState()) {
+		pObjPool->SetSelectState(false);
 	}
+	if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
+		pTdPool->SetSelectState(false, 0, false);
+	}
+
+	// SA-MP shares a single client CObjectPool for both global and player objects;
+	// playerObject is simply echoed back in RPC_EditObject responses.
+	EditObject::m_playerObj = p.playerObject;
 	EditObject::startEditObject(p.objectId);
 }
 
-//Go to edit object
+//Go to edit object (SelectObject, RPC 27)
 void RpcHandlers::OnEnterEditObject(const proto::EnterEditObject&)
 {
 	spdlog::debug("RPC: EnterEditObject");
+	if (EditObject::m_visible) {
+		EditObject::cancelEdit();
+	}
+	if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
+		pTdPool->SetSelectState(false, 0, false);
+	}
+	if (CObjectPool* pObjPool = pNetGame->GetObjectPool()) {
+		pObjPool->SetSelectState(true);
+	}
 }
 
-//cancel editor object
+//cancel editor object (CancelEdit, RPC 28)
 void RpcHandlers::OnCancelEditObject(const proto::CancelEditObject&)
 {
 	spdlog::debug("RPC: CancelEditObject");
 	EditObject::cancelEdit();
+	if (CObjectPool* pObjPool = pNetGame->GetObjectPool()) {
+		pObjPool->SetSelectState(false);
+	}
+}
+
+void RpcHandlers::OnEnableCameraTarget(const proto::EnableCameraTarget& p)
+{
+	spdlog::debug("RPC: EnableCameraTarget ({})", p.enable ? 1 : 0);
+	pNetGame->session().cameraTargetEnabled = p.enable;
+}
+
+void RpcHandlers::OnSvrStats(const proto::SvrStats& p)
+{
+	spdlog::debug("RPC: SvrStats (296 bytes)");
+	if (pUI && pUI->netstats()) {
+		pUI->netstats()->updateServerStats(p.raw);
+	}
+}
+
+void RpcHandlers::OnSetPlayerVirtualWorld(const proto::SetPlayerVirtualWorld& p)
+{
+	spdlog::debug("RPC: SetPlayerVirtualWorld ({})", p.virtualWorld);
+	pNetGame->NotifyDlVirtualWorld(p.virtualWorld);
+}
+
+void RpcHandlers::OnDlModelRequest(const proto::DlModelRequest& p)
+{
+	spdlog::debug("RPC: DlModelRequest (pool={} count={} type={} vw={} base={} new={})",
+			p.poolId, p.count, p.type, p.virtualWorld, p.baseId, p.newId);
+}
+
+void RpcHandlers::OnDlModelReset(const proto::DlModelReset&)
+{
+	spdlog::debug("RPC: DlModelReset");
+	pNetGame->ResetDlArtworkState();
+}
+
+void RpcHandlers::OnDlModelUrl(const proto::DlModelUrl& p)
+{
+	spdlog::debug("RPC: DlModelUrl (type={} crc={:#x} url={})",
+			p.fileType, p.fileChecksum, p.downloadLink);
+}
+
+void RpcHandlers::OnDlDownloadCompleted(const proto::DlDownloadCompleted&)
+{
+	spdlog::debug("RPC: DlDownloadCompleted");
 }

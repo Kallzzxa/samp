@@ -9,7 +9,7 @@ void SessionState::reset(ResetReason reason)
 		settings = ServerSettings{};
 		settings.deathDropMoney = 0;
 		settings.spawnsAvailable = 0;
-		settings.nameTagLOS = false; // 保留现状：Connect=false / Restart=true，差异归 T35
+		settings.nameTagLOS = true;
 		settings.holdTime = true;
 		settings.useCJWalk = false;
 		settings.disableInteriorEnterExits = false;
@@ -32,6 +32,7 @@ void SessionState::reset(ResetReason reason)
 		std::memset(hostName, 0, sizeof(hostName));
 		std::strcpy(hostName, "SA-MP");
 		lanMode = false;
+		cameraTargetEnabled = false;
 		return;
 	}
 
@@ -47,12 +48,13 @@ void SessionState::reset(ResetReason reason)
 	settings.worldTime_Minute = 0;
 	settings.weather = 1;
 	settings.holdTime = true;
-	settings.nameTagLOS = true; // 保留现状：Connect=false / Restart=true，差异归 T35
+	settings.nameTagLOS = true;
 	settings.useCJWalk = false;
 	settings.gravity = 0.008f;
 	settings.deathDropMoney = 0;
 	settings.disableVehicleCollisions = false;
 	settings.zoneNames = false;
+	cameraTargetEnabled = false;
 }
 
 void SessionState::dumpToLog() const

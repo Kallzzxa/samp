@@ -33,3 +33,7 @@ typedef struct {
 
 extern PAD_KEYS LocalPlayerKeys;
 extern PAD_KEYS RemotePlayerKeys[PLAYER_PED_SLOTS];
+
+void RequestLocalPlaneGearToggle();
+bool ConsumeStuffUseRequest();
+bool ConsumePassengerDriveByToggle();

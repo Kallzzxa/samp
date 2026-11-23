@@ -7,6 +7,7 @@ public:
 	/* font */
 	static float fontSize() { return m_fontSize; }
 	static float outlineSize() { return m_outlineSize; }
+	static void setFontSizeOffset(int offset);
 
 	/* ////////////////// sizes ////////////////// */
 

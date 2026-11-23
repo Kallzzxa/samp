@@ -7,6 +7,14 @@
 #define PARA_DECEL            3
 #define PARA_FLOAT            4
 
+enum eStuffType {
+	STUFF_TYPE_NONE = 0,
+	STUFF_TYPE_BEER = 1,
+	STUFF_TYPE_DYN_BEER = 2,
+	STUFF_TYPE_PINT_GLASS = 3,
+	STUFF_TYPE_CIGGI = 4
+};
+
 #pragma pack(push, 1)
 typedef struct _NEW_ATTACHED_OBJECT {
 	int iModel;
@@ -156,6 +164,11 @@ public:
 	void ToggleCellphone(bool on);
 	int IsCellphoneEnabled() { return m_bCellPhoneEnabled; }
 
+	int GetStuff() const { return m_iStuffType; }
+	void GiveStuff(int iType);
+	void DropStuff();
+	bool ApplyStuff();
+
 	void SetDrunkLevel(uint32_t dwLevel)
 	{
 		if (dwLevel > 50000) { dwLevel = 50000; }
@@ -169,6 +182,7 @@ public:
 	void ProcessParachuteSkydiving();
 	void ProcessParachuting();
 
+	bool CanDoPassengerDriveBy();
 	bool IsInPassengerDriveByMode();
 	bool StartPassengerDriveByMode();
 	void StopPassengerDriveByMode();
@@ -178,6 +192,7 @@ public:
 	bool IsPlayingAnim(int idx);
 	int GetCurrentAnimationIndex(float& blendData);
 	void PlayAnimByIdx(int idx, float BlendData);
+	void ApplyPackedAnimation(uint32_t dwPacked);
 
 	sa::CEntity* GetEntityUnderPlayer();
 
@@ -208,6 +223,9 @@ private:
 
 	int m_bPissingState = 0;
 	uint32_t m_dwPissParticlesHandle = 0;
+
+	int m_iStuffType = STUFF_TYPE_NONE;
+	uint32_t m_dwStuffObject = 0;
 
 	int m_iParachuteState = 0;
 	int m_iParachuteAnim = 0;

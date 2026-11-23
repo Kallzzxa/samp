@@ -26,7 +26,7 @@ CRemotePlayer::CRemotePlayer()
 	m_dwLastRecvTick = GetTickCount();
 
 	m_bWasAnimSettedFlag = false;
-	m_usPlayingAnimIndex = 0;
+	m_dwPlayingAnim = 0;
 
 	ResetAllSyncAttributes();
 }
@@ -70,16 +70,16 @@ void CRemotePlayer::Process()
 			// update weapons
 			WeaponSyncCheck(m_onFootSync.byteCurrentWeapon & 0x3F);
 
-			// sniper rifle inspection
-			if ((m_onFootSync.wKeys & 128) &&
-					(m_pPlayerPed->GetCurrentWeapon() == sa::WEAPONTYPE_COUNTRYRIFLE ||
-							m_pPlayerPed->GetCurrentWeapon() == sa::WEAPONTYPE_SNIPERRIFLE ||
-							m_pPlayerPed->GetCurrentWeapon() == sa::WEAPONTYPE_RLAUNCHER ||
-							m_pPlayerPed->GetCurrentWeapon() == sa::WEAPONTYPE_RLAUNCHER_HS)) {
-				// open scope
-				m_pPlayerPed->m_ped->m_nPedState = sa::PED_SNIPER_MODE;
+			// sniper / rocket launcher scope state (aligned with PC CRemotePlayer::Process)
+			if (m_onFootSync.wKeys & 128) {
+				const uint8_t curWeapon = m_pPlayerPed->GetCurrentWeapon();
+				if (curWeapon == sa::WEAPONTYPE_SNIPERRIFLE ||
+						curWeapon == sa::WEAPONTYPE_RLAUNCHER ||
+						curWeapon == sa::WEAPONTYPE_RLAUNCHER_HS) {
+					m_pPlayerPed->m_ped->m_nPedState = sa::PED_SNIPER_MODE;
+				}
 			}
-			else {
+			else if (m_pPlayerPed->m_ped->m_nPedState == sa::PED_SNIPER_MODE) {
 				m_pPlayerPed->m_ped->m_nPedState = sa::PED_IDLE;
 			}
 			m_pCurrentVehicle = nullptr;
@@ -111,15 +111,13 @@ void CRemotePlayer::Process()
 			}
 
 			if (m_pCurrentVehicle->GetVehicleSubtype() == VEHICLE_SUBTYPE_BIKE || m_pCurrentVehicle->GetVehicleSubtype() == VEHICLE_SUBTYPE_PUSHBIKE) {
-				// 保留：T20 — remote bike lean sync
-				// sub_100B7A40(_this->m_pCurrentVehicle, m_inCarSync.fTrainSpeed);
+				m_pCurrentVehicle->SetRemoteBikeLean(m_inCarSync.fTrainSpeed);
 			}
 
 			// set alarm
 			m_pCurrentVehicle->SetSirenOn(m_inCarSync.byteSirenOn);
 
-			// 保留：T20 — remote landing gear sync
-			// m_pCurrentVehicle->SetLandingGearState(m_inCarSync.byteLandingGearState);
+			m_pCurrentVehicle->SetRemoteLandingGearState(m_inCarSync.byteLandingGearState);
 
 			m_pCurrentVehicle->SetHealth(m_inCarSync.fCarHealth);
 
@@ -144,19 +142,31 @@ void CRemotePlayer::Process()
 			WeaponSyncCheck(m_passengerSync.byteCurrentWeapon & 0x3F);
 
 			if (m_passengerSync.byteSeatFlags & 0x40) {
-				if (!m_bPassengerDriveByMode) {
+				if (!m_pPlayerPed->IsInPassengerDriveByMode()) {
 					if (m_pPlayerPed->IsAdded()) {
 						if (m_pPlayerPed->StartPassengerDriveByMode()) {
 							m_bPassengerDriveByMode = true;
 						}
 					}
 				}
+				else {
+					m_bPassengerDriveByMode = true;
+				}
 			}
 			else {
-				if (m_bPassengerDriveByMode) {
+				if (m_pPlayerPed->IsInPassengerDriveByMode() || m_bPassengerDriveByMode) {
 					m_pPlayerPed->StopPassengerDriveByMode();
 					m_bPassengerDriveByMode = false;
 				}
+			}
+
+			if (m_passengerSync.byteSeatFlags & 0x80) {
+				if (!m_pPlayerPed->IsCuffed()) {
+					m_pPlayerPed->ToggleCuffed(true);
+				}
+			}
+			else if (m_pPlayerPed->IsCuffed()) {
+				m_pPlayerPed->ToggleCuffed(false);
 			}
 
 			m_byteUpdateFromNetwork = UPDATE_TYPE_NONE;
@@ -246,6 +256,32 @@ void CRemotePlayer::Process()
 				if ((GetTickCount() - m_dwLastRecvTick) > 3000) {
 					m_bIsAFK = true;
 				}
+			}
+		}
+		else if (GetState() == PLAYER_STATE_PASSENGER && m_pPlayerPed->IsInVehicle()) {
+			m_pPlayerPed->CheckVehicleParachute();
+			m_pPlayerPed->SetKeys(m_passengerSync.lrAnalog, m_passengerSync.udAnalog, m_passengerSync.wKeys);
+
+			if (m_pPlayerPed->IsCuffed()) {
+				m_pPlayerPed->ProcessCuff();
+			}
+
+			if (!m_bPassengerDriveByMode && m_pPlayerPed->IsAdded() && Settings::headMove()) {
+				if ((GetTickCount() - m_dwLastHeadUpdate) > 500) {
+					sa::CVector LookAt;
+					CAMERA_AIM* Aim = GameGetRemotePlayerAim(m_pPlayerPed->m_bytePlayerNumber);
+					if (Aim) {
+						LookAt.x = Aim->pos1x + (Aim->f1x * 20.0f);
+						LookAt.y = Aim->pos1y + (Aim->f1y * 20.0f);
+						LookAt.z = Aim->pos1z + (Aim->f1z * 20.0f);
+						m_pPlayerPed->ApplyCommandTask("FollowPedSA", nullptr, 2000, -1, &LookAt, 0, 0.1f, 500, 3, 0);
+					}
+					m_dwLastHeadUpdate = GetTickCount();
+				}
+			}
+
+			if ((GetTickCount() - m_dwLastRecvTick) > 3000) {
+				m_bIsAFK = true;
 			}
 		}
 		else {
@@ -462,6 +498,8 @@ void CRemotePlayer::HandleDeath()
 		m_pPlayerPed->SetDead();
 	}
 
+	m_dwPlayingAnim = 0;
+	m_bWasAnimSettedFlag = false;
 	SetState(PLAYER_STATE_WASTED);
 	ResetAllSyncAttributes();
 }
@@ -896,16 +934,18 @@ void CRemotePlayer::UpdateInCarTargetPosition()
 			else {
 				sa::CVector vecMoveSpeed = m_pCurrentVehicle->m_pVehicle->GetMoveSpeed();
 
-				if (vecMoveSpeed.x > 0.05f) {
+				if (m_vecPositionInaccuracy.x > 0.05f) {
 					vecMoveSpeed.x += (m_vecInCarTargetPos.x - matEnt.pos.x) * 0.06f;
 				}
-				if (vecMoveSpeed.y > 0.05f) {
+				if (m_vecPositionInaccuracy.y > 0.05f) {
 					vecMoveSpeed.y += (m_vecInCarTargetPos.y - matEnt.pos.y) * 0.06f;
 				}
-				if (vecMoveSpeed.z > 0.05f) {
+				if (m_vecPositionInaccuracy.z > 0.05f) {
 					vecMoveSpeed.z += (m_vecInCarTargetPos.z - matEnt.pos.z) * 0.06f;
 				}
-				if (vecMoveSpeed.x > 0.01f || vecMoveSpeed.y > 0.01f || vecMoveSpeed.z > 0.01f) {
+				if (FloatOffset(vecMoveSpeed.x, 0.0f) > 0.01f ||
+						FloatOffset(vecMoveSpeed.y, 0.0f) > 0.01f ||
+						FloatOffset(vecMoveSpeed.z, 0.0f) > 0.01f) {
 					m_pCurrentVehicle->m_pVehicle->SetVelocity(vecMoveSpeed);
 				}
 			}
@@ -1113,26 +1153,27 @@ void CRemotePlayer::ProcessAnimation()
 		return;
 	}
 
-	int flag = m_onFootSync.dwAnimation >> 31;
-	// pUI->chat()->addInfoMessage("remote FLAG %d", flag);
+	const uint32_t dwAnim = m_onFootSync.dwAnimation;
+	const bool bNonCustom = ((dwAnim >> 31) != 0) || ((dwAnim & 0xFFFF) == 0);
 
-	if (!flag) {
-		auto newAnim = (uint16_t) m_onFootSync.dwAnimation;
-		if (newAnim != m_usPlayingAnimIndex) {
-			// pUI->chat()->addInfoMessage("apply animation: %hu", newAnim);
-			m_usPlayingAnimIndex = newAnim;
-			m_pPlayerPed->PlayAnimByIdx(newAnim, 4.0f);
+	if (!bNonCustom) {
+		if (dwAnim != m_dwPlayingAnim) {
+			m_dwPlayingAnim = dwAnim;
+			m_pPlayerPed->ApplyPackedAnimation(dwAnim);
 		}
-		if (m_usPlayingAnimIndex) {
-			if (!m_pPlayerPed->IsPlayingAnim(m_usPlayingAnimIndex)) {
-				m_pPlayerPed->PlayAnimByIdx(newAnim, 4.0f);
+		else {
+			// Only re-apply if the animation is flagged loop (bit 0) or freeze (bit 3)
+			const uint32_t flags = (dwAnim >> 24) & 0xFF;
+			const uint16_t animIdx = static_cast<uint16_t>(dwAnim & 0xFFFF);
+			if ((flags & 0x09u) != 0 && !m_pPlayerPed->IsPlayingAnim(animIdx)) {
+				m_pPlayerPed->ApplyPackedAnimation(dwAnim);
 			}
 		}
 		m_bWasAnimSettedFlag = true;
 	}
-	if (flag && m_bWasAnimSettedFlag) {
-		m_usPlayingAnimIndex = 0;
-		// we have to reset anim
+	else if (m_bWasAnimSettedFlag) {
+		m_dwPlayingAnim = 0;
+		// reset animation
 		m_pPlayerPed->PlayAnimByIdx(0, 4.0f);
 		m_bWasAnimSettedFlag = false;
 	}

@@ -111,7 +111,20 @@ void UISettings::setChatStrings(int lines)
 	if (lines > 20) lines = 20;
 	Settings::setChatstrings(lines);
 	m_chatDispMesssages = lines + 1;
-	float baseItemY = Settings::chatsize().y / 10.0f;
 	m_chatSize.x = Settings::chatsize().x * m_scaleFactor.x;
-	m_chatSize.y = (baseItemY * m_chatDispMesssages) * m_scaleFactor.y;
+	m_chatSize.y = m_chatItemSize.y * m_chatDispMesssages;
+}
+
+void UISettings::setFontSizeOffset(int offset)
+{
+	if (offset < -3) offset = -3;
+	if (offset > 5) offset = 5;
+	Settings::setFontSizeOffset(offset);
+	float baseFont = Settings::fontsize() + static_cast<float>(offset) * 2.5f;
+	if (baseFont < 12.0f) baseFont = 12.0f;
+	m_fontSize = baseFont * m_scaleFactor.y;
+	float baseItemY = (Settings::chatsize().y / 10.0f) * (baseFont / Settings::fontsize());
+	m_chatItemSize = ImVec2(Settings::chatsize().x * m_scaleFactor.x, baseItemY * m_scaleFactor.y);
+	m_chatSize.x = Settings::chatsize().x * m_scaleFactor.x;
+	m_chatSize.y = m_chatItemSize.y * m_chatDispMesssages;
 }

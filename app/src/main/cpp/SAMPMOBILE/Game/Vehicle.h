@@ -19,7 +19,19 @@ public:
 	void SetDamageStatus(uint32_t dwPanelDamageStatus, uint32_t dwDoorDamageStatus, uint8_t byteLightDamageStatus);
 	void SetTireDamageStatus(uint8_t byteTireDamageStatus);
 	void GetDamageStatus(uint32_t* pdwPanels, uint32_t* pdwDoors, uint8_t* pbyteLights, uint8_t* pbyteTires);
-	void SetPlateText(const char* szPlateText) { strncpy(m_szPlateText, szPlateText, 31); m_szPlateText[31] = '\0'; }
+	void SetPlateText(const char* szPlateText)
+	{
+		if (szPlateText) {
+			strncpy(m_szPlateText, szPlateText, 31);
+			m_szPlateText[31] = '\0';
+		}
+		else {
+			m_szPlateText[0] = '\0';
+		}
+		m_bPlateDirty = true;
+		m_bPlateGenAttempts = 0;
+	}
+	void ProcessLicensePlate();
 	void SetZAngle(float fAngle);
 	void ProcessMarkers();
 	bool IsOccupied();
@@ -36,6 +48,11 @@ public:
 	float GetTrainSpeed();
 	uint32_t GetHydraThrusters();
 	float GetBikeLean();
+	void SetBikeLean(float fLean);
+	void SetRemoteBikeLean(float fLean);
+	uint8_t GetLandingGearState();
+	void SetLandingGearState(uint8_t state);
+	void SetRemoteLandingGearState(uint8_t state);
 	bool IsATrainPart();
 	bool VerifyInstance();
 	bool IsDriverLocalPlayer();
@@ -45,6 +62,7 @@ public:
 
 	void SetEngineState(bool state)
 	{
+		m_bEngineState = state;
 		if (m_pVehicle && VerifyInstance()) {
 			m_pVehicle->SetEngineStatus(state);
 		}
@@ -142,6 +160,7 @@ public:
 	bool m_bPreloaded;
 	bool m_bIsInvulnerable;
 	bool m_bIsLocked;
+	bool m_bEngineState;
 	bool m_bLightState;
 	bool m_bDoorsLocked;
 	uint8_t m_byteObjectiveVehicle;
@@ -153,5 +172,11 @@ public:
 	bool m_bLocalUnoccupiedSync;
 	bool m_bRemoteUnoccupiedSync;
 	char m_szPlateText[32];
+	bool m_bPlateDirty;
+	uint8_t m_bPlateGenAttempts;
+	int8_t m_iRemoteLandingGear;
+	int8_t m_iLocalLandingGear;
+	float m_fRemoteBikeLean;
+	bool m_bHasRemoteBikeLean;
 	uint32_t m_dwMarkerID;
 };

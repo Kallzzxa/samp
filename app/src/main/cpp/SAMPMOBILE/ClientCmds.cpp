@@ -123,9 +123,191 @@ void cmdSave(const std::string& params)
 
 void cmdDL(const std::string& params)
 {
+	if (pUI && pUI->debuglabels()) {
+		const bool next = !pUI->debuglabels()->vehicleLabelsVisible();
+		pUI->debuglabels()->setVehicleLabelsVisible(next);
+		pUI->chat()->addInfoMessage("-> DebugLabels %s", next ? "ON" : "OFF");
+	}
+}
+
+void cmdSaveRaw(const std::string& params)
+{
+	if (!pGame || !pGame->FindPlayerPed() || !Client::gameDir()) return;
+	CPlayerPed* pPlayer = pGame->FindPlayerPed();
+	float fZAngle = 0.0f;
+	char szPath[512];
+
+	if (pPlayer->IsInVehicle()) {
+		sa::CVehicle* pVehicle = pPlayer->GetGtaVehicle();
+		if (!pVehicle) return;
+		snprintf(szPath, sizeof(szPath), "%sSAMP/rawvehicles.txt", Client::gameDir());
+		FILE* fileOut = fopen(szPath, "a");
+		if (!fileOut) {
+			if (pUI) pUI->chat()->addDebugMessage("I can't open the rawvehicles.txt file for append.");
+			return;
+		}
+		uint32_t dwVehicleID = GamePool_Vehicle_GetIndex(pVehicle);
+		ScriptCommand(&get_car_z_angle, dwVehicleID, &fZAngle);
+		fprintf(fileOut, "%u,%.4f,%.4f,%.4f,%.4f,%u,%u ; %s\n",
+				pVehicle->m_nModelIndex,
+				pVehicle->GetPosition().x,
+				pVehicle->GetPosition().y,
+				pVehicle->GetPosition().z,
+				fZAngle,
+				pVehicle->m_nPrimaryColor,
+				pVehicle->m_nSecondaryColor,
+				params.c_str());
+		fclose(fileOut);
+		if (pUI) pUI->chat()->addDebugMessage("-> InCar pos saved");
+		return;
+	}
+
+	if (!pPlayer->m_ped) return;
+	snprintf(szPath, sizeof(szPath), "%sSAMP/rawpositions.txt", Client::gameDir());
+	FILE* fileOut = fopen(szPath, "a");
+	if (!fileOut) {
+		if (pUI) pUI->chat()->addDebugMessage("I can't open the rawpositions.txt file for append.");
+		return;
+	}
+	ScriptCommand(&get_actor_z_angle, pPlayer->m_gtaId, &fZAngle);
+	fprintf(fileOut, "%.4f,%.4f,%.4f,%.4f ; %s\n",
+			pPlayer->m_ped->GetPosition().x,
+			pPlayer->m_ped->GetPosition().y,
+			pPlayer->m_ped->GetPosition().z,
+			fZAngle,
+			params.c_str());
+	fclose(fileOut);
+	if (pUI) pUI->chat()->addDebugMessage("-> OnFoot pos saved");
+}
+
+void cmdFontSize(const std::string& params)
+{
+	if (!pUI) return;
+	if (params.empty()) {
+		pUI->chat()->addDebugMessage("Valid fontsize: -3 to 5 (Current: %d)", Settings::fontSizeOffset());
+		return;
+	}
+	char* endPtr = nullptr;
+	long size = std::strtol(params.c_str(), &endPtr, 10);
+	if (endPtr == params.c_str() || size < -3 || size > 5) {
+		pUI->chat()->addDebugMessage("Valid fontsize: -3 to 5");
+		return;
+	}
+	UISettings::setFontSizeOffset(static_cast<int>(size));
+	pUI->chat()->setItemSize(UISettings::chatItemSize());
+	pUI->chat()->setFixedSize(UISettings::chatSize());
+	pUI->chat()->performLayout();
+	pUI->chat()->addInfoMessage("-> Chat FontSize set to %ld", size);
+}
+
+void cmdFpsLimit(const std::string& params)
+{
+	if (!pUI) return;
+	if (params.empty()) {
+		pUI->chat()->addInfoMessage("-> Frame Limiter: %d (valid amounts are 20-120, 0 = unlimited)", Settings::fpslimit());
+		return;
+	}
+	char* endPtr = nullptr;
+	long value = std::strtol(params.c_str(), &endPtr, 10);
+	if (endPtr == params.c_str() || (value != 0 && (value < 20 || value > 120))) {
+		pUI->chat()->addInfoMessage("-> Frame Limiter: valid amounts are 20-120 (0 = unlimited)");
+		return;
+	}
+	Settings::setFpsLimit(static_cast<int>(value));
+	Settings::applyFpsLimitPatch();
+	if (value == 0) {
+		pUI->chat()->addInfoMessage("-> Frame Limiter: Unlimited");
+	}
+	else {
+		pUI->chat()->addInfoMessage("-> Frame Limiter: %ld", value);
+	}
+}
+
+void cmdInterior(const std::string& params)
+{
+	if (!pUI) return;
+	uint32_t interior = 0;
+	ScriptCommand(&get_active_interior, &interior);
+	pUI->chat()->addDebugMessage("Current Interior: %u", interior);
+}
+
+void cmdNameTagStatus(const std::string& params)
+{
+	const bool next = !Settings::showNameTagStatus();
+	Settings::setShowNameTagStatus(next);
 	if (pUI) {
-		pUI->chat()->addInfoMessage("-> DebugLabels %s", pUI->debuglabels()->visible() ? "OFF" : "ON");
-		pUI->debuglabels()->setVisible(!pUI->debuglabels()->visible());
+		pUI->chat()->addInfoMessage("-> NameTag Status: %s", next ? "ON" : "OFF");
+	}
+}
+
+void cmdAudioMsg(const std::string& params)
+{
+	const bool next = !Settings::audioMsg();
+	Settings::setAudioMsg(next);
+	if (pUI) {
+		pUI->chat()->addInfoMessage("Audio messages: %s", next ? "On" : "Off");
+	}
+}
+
+void cmdLogUrls(const std::string& params)
+{
+	const bool next = !Settings::logUrls();
+	Settings::setLogUrls(next);
+	if (pUI) {
+		pUI->chat()->addInfoMessage("URL messages: %s", next ? "On" : "Off");
+	}
+}
+
+void cmdMem(const std::string& params)
+{
+	if (!pUI) return;
+	const auto* pUsed = eng::as<uint32_t*>(eng::Sym::CStreaming_ms_memoryUsed);
+	const auto* pAvail = eng::as<uint32_t*>(eng::Sym::CStreaming_ms_memoryAvailable);
+	if (pUsed && pAvail) {
+		pUI->chat()->addDebugMessage("Memory: %u (%.2f MB / %.2f MB)",
+				*pUsed,
+				static_cast<double>(*pUsed) / (1024.0 * 1024.0),
+				static_cast<double>(*pAvail) / (1024.0 * 1024.0));
+	}
+	else {
+		pUI->chat()->addDebugMessage("Memory: unavailable");
+	}
+}
+
+void cmdCameraTargetDebug(const std::string& params)
+{
+	if (pUI && pUI->debuglabels()) {
+		const bool next = !pUI->debuglabels()->cameraTargetsVisible();
+		pUI->debuglabels()->setCameraTargetsVisible(next);
+		pUI->chat()->addInfoMessage("-> CameraTarget Debug: %s", next ? "ON" : "OFF");
+	}
+}
+
+void cmdTestDeathWindow(const std::string& params)
+{
+	if (!pUI || !pUI->deathwindow()) return;
+	pUI->deathwindow()->record("Pooper333", 0xFFFFFFFF, "Pooper", 0xFFFFFFFF, 1);
+	pUI->deathwindow()->record("Pooper", 0xFFFFFFFF, "Pooper", 0xFFFFFFFF, 5);
+	pUI->deathwindow()->record("Pooper", 0xFFFFFFFF, "Pooper", 0xFFFFFFFF, 15);
+	pUI->deathwindow()->record("Pooper", 0xFFFFFFFF, "Pooper", 0xFFFFFFFF, 24);
+	pUI->deathwindow()->record("Pooper", 0xFFFFFFFF, nullptr, 0xFFFFFFFF, 255);
+}
+
+void cmdNetStats(const std::string& params)
+{
+	if (pUI && pUI->netstats()) {
+		const bool next = !pUI->netstats()->clientStatsVisible();
+		pUI->netstats()->setClientStatsVisible(next);
+		pUI->chat()->addInfoMessage("-> Client NetStats: %s", next ? "ON" : "OFF");
+	}
+}
+
+void cmdSvrNetStats(const std::string& params)
+{
+	if (pUI && pUI->netstats()) {
+		const bool next = !pUI->netstats()->serverStatsVisible();
+		pUI->netstats()->setServerStatsVisible(next);
+		pUI->chat()->addInfoMessage("-> Server NetStats: %s", next ? "ON" : "OFF");
 	}
 }
 
@@ -220,11 +402,19 @@ void cmdCmds(const std::string& params)
 		pUI->chat()->addInfoMessage("/freecam -> Toggle Free Camera (No Auto-Center)");
 		pUI->chat()->addInfoMessage("/headmove -> Toggle Character Head Rotation");
 		pUI->chat()->addInfoMessage("/pagesize [5-20] -> Change Chat Line Count");
+		pUI->chat()->addInfoMessage("/fontsize [-3..5] -> Change Chat Font Size");
+		pUI->chat()->addInfoMessage("/fpslimit [20-120|0] -> Set Frame Rate Limit");
 		pUI->chat()->addInfoMessage("/timestamp -> Toggle Chat Timestamp");
+		pUI->chat()->addInfoMessage("/nametagstatus -> Toggle AFK Hourglass Icon");
+		pUI->chat()->addInfoMessage("/audiomsg -> Toggle Audio Stream Chat Messages");
+		pUI->chat()->addInfoMessage("/logurls -> Toggle Logging Audio Stream URLs");
+		pUI->chat()->addInfoMessage("/interior -> Show Current Interior ID");
+		pUI->chat()->addInfoMessage("/mem -> Show GTA Streaming Memory Usage");
 		pUI->chat()->addInfoMessage("/clearmychat -> Clear Local Chat Window");
-		pUI->chat()->addInfoMessage("/save [note] -> Save Position to SAMP/savedpositions.txt");
-		pUI->chat()->addInfoMessage("/dl -> Toggle 3D Entity Debug Labels");
-		pUI->chat()->addInfoMessage("/dw -> Toggle Death / Kill Window");
+		pUI->chat()->addInfoMessage("/save [note] / /rs [note] -> Save Position (Script / Raw)");
+		pUI->chat()->addInfoMessage("/dl / /ctd -> Toggle Vehicle / CameraTarget Debug Labels");
+		pUI->chat()->addInfoMessage("/netstats / /svrnetstats -> Toggle Network Stats (F5 / F10)");
+		pUI->chat()->addInfoMessage("/dw / /testdw -> Toggle / Test Death Window");
 		pUI->chat()->addInfoMessage("/netcap on|off -> Record network packets to netcap/ (debug)");
 		pUI->chat()->addInfoMessage("/rpcstats [all|reset] -> Show declarative RPC hit/fail counts");
 		pUI->chat()->addInfoMessage("/session -> Dump current session state to log");
@@ -348,6 +538,20 @@ void cmdSession(const std::string& params)
 		s.settings.useCJWalk ? 1 : 0, s.settings.nameTagLOS ? 1 : 0);
 }
 
+void cmdClassSelection(const std::string& params)
+{
+	if (!pNetGame || !pNetGame->GetPlayerPool() || !pNetGame->GetPlayerPool()->GetLocalPlayer()) {
+		return;
+	}
+	CLocalPlayer* pLocal = pNetGame->GetPlayerPool()->GetLocalPlayer();
+	if (!pLocal->WantsAnotherClass()) {
+		pLocal->ReturnToClassSelection();
+		if (pUI && pUI->chat()) {
+			pUI->chat()->addInfoMessage("Returning to class selection after next death");
+		}
+	}
+}
+
 void cmdLogLevel(const std::string& params)
 {
 	if (!pUI) return;
@@ -381,9 +585,17 @@ void ClientCmds::initialize()
 	pUI->chat()->addClientCommand("freecam", cmdFreeCam);
 	pUI->chat()->addClientCommand("headmove", cmdHeadMove);
 	pUI->chat()->addClientCommand("pagesize", cmdPageSize);
+	pUI->chat()->addClientCommand("fontsize", cmdFontSize);
+	pUI->chat()->addClientCommand("fpslimit", cmdFpsLimit);
+	pUI->chat()->addClientCommand("interior", cmdInterior);
+	pUI->chat()->addClientCommand("mem", cmdMem);
+	pUI->chat()->addClientCommand("nametagstatus", cmdNameTagStatus);
+	pUI->chat()->addClientCommand("audiomsg", cmdAudioMsg);
+	pUI->chat()->addClientCommand("logurls", cmdLogUrls);
 	pUI->chat()->addClientCommand("timestamp", cmdTimestamp);
 	pUI->chat()->addClientCommand("clearmychat", cmdClearMyChat);
 	pUI->chat()->addClientCommand("save", cmdSave);
+	pUI->chat()->addClientCommand("rs", cmdSaveRaw);
 	pUI->chat()->addClientCommand("clientcmds", cmdCmds);
 
 	if (Client::offlineMode()) {
@@ -396,9 +608,15 @@ void ClientCmds::initialize()
 		pUI->chat()->addClientCommand("quit", cmdQuit);
 		pUI->chat()->addClientCommand("rcon", cmdRcon);
 		pUI->chat()->addClientCommand("dl", cmdDL);
+		pUI->chat()->addClientCommand("ctd", cmdCameraTargetDebug);
 		pUI->chat()->addClientCommand("dw", cmdDW);
+		pUI->chat()->addClientCommand("testdw", cmdTestDeathWindow);
+		pUI->chat()->addClientCommand("netstats", cmdNetStats);
+		pUI->chat()->addClientCommand("svrnetstats", cmdSvrNetStats);
 		pUI->chat()->addClientCommand("netcap", cmdNetCap);
 		pUI->chat()->addClientCommand("rpcstats", cmdRpcStats);
 		pUI->chat()->addClientCommand("session", cmdSession);
+		pUI->chat()->addClientCommand("class", cmdClassSelection);
+		pUI->chat()->addClientCommand("f4", cmdClassSelection);
 	}
 }

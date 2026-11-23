@@ -70,6 +70,7 @@ CObject::CObject(int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDraw
 	m_fDistanceToTargetPoint = 0.0f;
 	m_dwMoveTick = 0;
 	m_bNoCameraCollision = false;
+	m_fDrawDistance = (std::isfinite(fDrawDistance) && fDrawDistance > 0.0f) ? fDrawDistance : 0.0f;
 
 	if (!IsValidModel(iModel)) {
 		spdlog::info("Object model {} is invalid, using default model.", iModel);
@@ -96,11 +97,12 @@ CObject::CObject(int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDraw
 		m_entity->SetMatrix((sa::CMatrix&) mat);
 		SetRotation(&vecRot);
 
-		// out-of-bounds entities never go through the world's
-		// frame-sync pipeline — without this they render at the
-		// atomic frame's stale transform (origin), not vecPos
+		// out-of-bounds and long-draw-distance entities may bypass the world's
+		// frame-sync pipeline — without this they render at the atomic frame's
+		// stale transform (origin), not vecPos
 		if (vecPos.x > 3000.0f || vecPos.x < -3000.0f ||
-				vecPos.y > 3000.0f || vecPos.y < -3000.0f) {
+				vecPos.y > 3000.0f || vecPos.y < -3000.0f ||
+				m_fDrawDistance > 250.0f) {
 			UpdateRwMatrixAndFrame();
 		}
 	}

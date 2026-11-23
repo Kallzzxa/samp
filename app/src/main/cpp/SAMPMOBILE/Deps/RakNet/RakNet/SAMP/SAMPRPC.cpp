@@ -61,6 +61,7 @@ int RPC_ShowActor = r::kShowActor;
 int RPC_HideActor = r::kHideActor;
 int RPC_ClientCheck = r::kClientCheck;
 int RPC_ChatBubble = r::kChatBubble;
+int RPC_SetPlayerSkillLevel = r::kSetPlayerSkillLevel;
 
 int RPC_ScrSetPlayerAttachedObject = r::kScrSetPlayerAttachedObject;
 int RPC_ScrSetSpawnInfo = r::kScrSetSpawnInfo;
@@ -159,5 +160,15 @@ int RPC_ScrSetPlayerDrunkVisuals = r::kScrSetPlayerDrunkVisuals;
 int RPC_ScrSetPlayerDrunkHandling = r::kScrSetPlayerDrunkHandling;
 
 int RPC_ScrDisableVehicleCollisions = r::kScrDisableVehicleCollisions;
+int RPC_UpdateCameraTarget = r::kUpdateCameraTarget;
 int RPC_ScrStopObjectCameraCollision = r::kScrStopObjectCameraCollision;
+int RPC_ScrEnableCameraTarget = r::kScrEnableCameraTarget;
 int RPC_ScrAttachCameraToObject = r::kScrAttachCameraToObject;
+int RPC_ScrSetPlayerShopName = r::kScrSetPlayerShopName;
+int RPC_ScrPlayCrimeReport = r::kScrPlayCrimeReport;
+int RPC_ScrSetPlayerVirtualWorld = r::kScrSetPlayerVirtualWorld;
+int RPC_DlModelRequest = r::kDlModelRequest;
+int RPC_DlModelReset = r::kDlModelReset;
+int RPC_DlModelUrl = r::kDlModelUrl;
+int RPC_DlFinishDownload = r::kDlFinishDownload;
+int RPC_DlDownloadCompleted = r::kDlDownloadCompleted;

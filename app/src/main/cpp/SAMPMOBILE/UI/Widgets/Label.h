@@ -10,6 +10,9 @@ public:
 	void setColor(const ImColor& color) { m_color = color; }
 	const ImColor& color() const { return m_color; }
 
+	void setFontSize(float font_size) { m_fontSize = font_size; performLayout(); }
+	float fontSize() const { return m_fontSize; }
+
 	virtual void performLayout() override;
 
 	virtual void draw(ImGuiRenderer* renderer) override;
@@ -34,6 +37,9 @@ public:
 
 	void setColor(const ImColor& color) { m_color = color; }
 	const ImColor& color() const { return m_color; }
+
+	void setFontSize(float font_size) { m_fontSize = font_size; performLayout(); }
+	float fontSize() const { return m_fontSize; }
 
 	virtual void performLayout() override;
 

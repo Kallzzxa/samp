@@ -20,7 +20,7 @@ typedef unsigned short OBJECTID;
 #define MAX_PLAYER_NAME               24
 #define MAX_PLAYERS                   1004
 #define MAX_VEHICLES                  2000
-#define MAX_OBJECTS                   1000
+#define MAX_OBJECTS                   2100
 #define MAX_ACTORS                    1000
 #define MAX_PICKUPS                   4096
 #define MAX_TEXT_LABELS               2048
@@ -121,7 +121,12 @@ private:
 	void ResetMapIcons();
 	void ResetMenuPool();
 
+	void ProcessDlArtworkHandshake();
+
 public:
+	void NotifyDlVirtualWorld(int32_t virtualWorld);
+	void ResetDlArtworkState();
+
 	using NET_SETTINGS = ServerSettings;
 
 	char m_host[256 + 1];
@@ -136,6 +141,9 @@ private:
 	int m_gameState;
 	int m_lastConnectAttempt;
 	uint32_t m_mapIcon[MAX_MAP_ICONS];
+	int32_t m_dlVirtualWorld = 0;
+	bool m_dlVirtualWorldKnown = false;
+	bool m_dlFinishDownloadPending = false;
 
 	struct NET_POOLS {
 		CPlayerPool* playerPool;

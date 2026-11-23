@@ -33,6 +33,11 @@ const SCRIPT_COMMAND set_current_time = {0x00C0, "ii"};        // Hours, Minutes
 const SCRIPT_COMMAND toggle_player_controllable = {0x01B4, "ii"};
 const SCRIPT_COMMAND lock_actor = {0x04d7, "ii"};
 const SCRIPT_COMMAND play_sound = {0x018c, "fffi"};
+const SCRIPT_COMMAND load_mission_audio = {0x03cf, "ii"};
+const SCRIPT_COMMAND has_mission_audio_loaded = {0x03d0, "i"};
+const SCRIPT_COMMAND play_mission_audio = {0x03d1, "i"};
+const SCRIPT_COMMAND clear_mission_audio = {0x040d, "i"};
+const SCRIPT_COMMAND set_mission_audio_position = {0x09f1, "ifff"};
 const SCRIPT_COMMAND enable_train_traffic = {0x06d7, "i"};
 const SCRIPT_COMMAND refresh_streaming_at = {0x04E4, "ff"};
 const SCRIPT_COMMAND restart_if_wasted_at = {0x016C, "ffffi"};
@@ -150,3 +155,5 @@ const SCRIPT_COMMAND open_car_door_a_bit = {0x08A6, "iif"};
 const SCRIPT_COMMAND force_car_lights = {0x067F, "ii"};
 
 const SCRIPT_COMMAND enter_passenger_driveby = {0x0713, "iiiffffiii"};
+const SCRIPT_COMMAND task_pick_up_object = {0x070A, "iifffiissi"};
+const SCRIPT_COMMAND create_pickup_with_ammo = {0x032B, "iiifffv"};

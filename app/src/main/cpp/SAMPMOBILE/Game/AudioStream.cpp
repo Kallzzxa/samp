@@ -1,5 +1,6 @@
 #include <memory>
 #include <atomic>
+#include <cmath>
 #include <mutex>
 #include <string>
 #include <strings.h>
@@ -22,6 +23,45 @@ float g_fAudioStreamZ = 0.0f;
 float g_fAudioStreamRadius = 0.0f;
 bool g_audioStreamUsePos = false;
 std::atomic<uint32_t> g_audioStreamGeneration{0};
+constexpr float kBaseStreamVolume = 0.5f;
+
+// Computes volume for the active stream (caller must hold g_audioStreamMutex).
+float computeStreamVolumeLocked(bool allowGameQuery)
+{
+	if (Game::IsGamePaused()) {
+		return 0.0f;
+	}
+	if (!g_audioStreamUsePos) {
+		return kBaseStreamVolume;
+	}
+	if (!allowGameQuery || !std::isfinite(g_fAudioStreamRadius) || g_fAudioStreamRadius <= 0.001f || !pGame) {
+		return 0.0f;
+	}
+
+	sa::CVector listenerPos{};
+	bool havePos = false;
+	if (CPlayerPed* pPed = pGame->FindPlayerPed(); pPed && pPed->m_ped) {
+		const RwMatrix mat = pPed->m_ped->GetMatrix().ToRwMatrix();
+		listenerPos = sa::CVector{mat.pos.x, mat.pos.y, mat.pos.z};
+		havePos = true;
+	}
+	else if (CAMERA_AIM* pCam = GameGetInternalAim()) {
+		listenerPos = sa::CVector{pCam->pos1x, pCam->pos1y, pCam->pos1z};
+		havePos = true;
+	}
+	if (!havePos) {
+		return 0.0f;
+	}
+
+	const float dx = listenerPos.x - g_fAudioStreamX;
+	const float dy = listenerPos.y - g_fAudioStreamY;
+	const float dz = listenerPos.z - g_fAudioStreamZ;
+	const float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+	if (!std::isfinite(dist) || dist >= g_fAudioStreamRadius) {
+		return 0.0f;
+	}
+	return kBaseStreamVolume * (1.0f - (dist / g_fAudioStreamRadius));
+}
 
 struct AudioStreamStartArgs {
 	uint32_t generation;
@@ -58,7 +98,9 @@ void* audioStreamThread(void* rawArg)
 			BASS_StreamFree(g_bassStream);
 		}
 		g_bassStream = stream;
-		BASS_ChannelSetAttribute(stream, BASS_ATTRIB_VOL, Game::IsGamePaused() ? 0.0f : 0.5f);
+		// Start muted for 3D positioned streams until GameMain Process() sets exact distance volume
+		const float initialVol = (Game::IsGamePaused() || g_audioStreamUsePos) ? 0.0f : kBaseStreamVolume;
+		BASS_ChannelSetAttribute(stream, BASS_ATTRIB_VOL, initialVol);
 		BASS_ChannelPlay(stream, 0);
 	}
 
@@ -111,7 +153,7 @@ void AudioStream::Process()
 	if (g_bassStream) {
 		// Control only our own AudioStream channel volume instead of global
 		// BASS_CONFIG_GVOL_STREAM so Voice streams are unaffected.
-		BASS_ChannelSetAttribute(g_bassStream, BASS_ATTRIB_VOL, Game::IsGamePaused() ? 0.0f : 0.5f);
+		BASS_ChannelSetAttribute(g_bassStream, BASS_ATTRIB_VOL, computeStreamVolumeLocked(true));
 	}
 }
 

@@ -90,4 +90,17 @@ struct SetSpawnInfo {
 	}
 };
 
+// RPC 74 (server -> client): ForceClassSelection
+struct ForceClassSelection {
+	static constexpr int kRpcId = rpc::kScrForceSpawnSelection;
+	static constexpr uint8_t kVersionMask = kVerAll;
+	static constexpr const char* kName = "ForceClassSelection";
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.ok();
+	}
+};
+
 } // namespace proto

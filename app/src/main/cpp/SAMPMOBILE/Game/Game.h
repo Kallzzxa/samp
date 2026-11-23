@@ -58,6 +58,7 @@ public:
 	void DrawGangZone(float fPos[], uint32_t dwColor, bool bFullMap);
 
 	uint32_t CreatePickup(int iModel, int iType, float fX, float fY, float fZ, int* pdwindex);
+	uint32_t CreateWeaponPickup(int iModel, int iAmmo, float fX, float fY, float fZ);
 	CObject* NewObject(int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDrawDistance);
 	CPlayerPed* NewPlayer(int iSkin, float fX, float fY, float fZ, float fRotation, bool unk, bool bIsNPC);
 	bool RemovePlayer(CPlayerPed* pPlayer);
@@ -99,6 +100,8 @@ public:
 	void DisableAutoAim();
 	void SetWantedLevel(uint8_t level);
 	void EnableStuntBonus(bool bEnable);
+	void LoadShoppingDataSubsection(const char* szSectionName);
+	void PlayCrimeReport(uint32_t crimeId, const sa::CVector& pos);
 	void DisplayGameText(const char* szStr, int iTime, int iSize);
 	void AddToLocalMoney(int iAmmount);
 	void ResetLocalMoney();
@@ -125,6 +128,10 @@ public:
 	// redirected here and drawn by ImGui during the UI pass.
 	void DrawImGuiGameText(ImGuiRenderer* renderer);
 
+	// T06: SA-MP PlayerPlaySound segmented handler & mission audio polling
+	void PlaySoundEx(int iSound, float fX, float fY, float fZ);
+	void ProcessAudio();
+
 private:
 	CCamera* m_gameCamera;
 	CPlayerPed* m_gamePlayer;
@@ -149,4 +156,6 @@ private:
 	std::string m_imguiGameText;
 	uint32_t m_imguiGameTextExpire;
 	int m_imguiGameTextSize;
+
+	int m_missionAudioState = 0; // 0 = none, 1 = loading slot 1, 2 = playing slot 1
 };

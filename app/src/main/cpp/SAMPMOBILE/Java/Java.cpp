@@ -144,6 +144,8 @@ Java::Java(JNIEnv* env, jobject sampObj, jobject uiObj)
 	clearJniException(env, "GetMethodID(showKeyboard)");
 	m_showDialog = env->GetMethodID(uiClass, "showDialog", "(IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
 	clearJniException(env, "GetMethodID(showDialog)");
+	m_hideDialog = env->GetMethodID(uiClass, "hideDialog", "()V");
+	clearJniException(env, "GetMethodID(hideDialog)");
 	m_showEditObject = env->GetMethodID(uiClass, "showEditObject", "(Z)V");
 	clearJniException(env, "GetMethodID(showEditObject)");
 
@@ -267,6 +269,16 @@ void Java::showDialog(int dialog_id, int dialog_style, char* title, char* messag
 	if (jmessage) env->DeleteLocalRef(jmessage);
 	if (jbutton1) env->DeleteLocalRef(jbutton1);
 	if (jbutton2) env->DeleteLocalRef(jbutton2);
+}
+
+void Java::hideDialog()
+{
+	JNIEnv* env = getEnv();
+	if (!env || !m_uiActivity || !m_hideDialog) {
+		return;
+	}
+	env->CallVoidMethod(m_uiActivity, m_hideDialog);
+	clearJniException(env, "hideDialog");
 }
 
 void Java::showEditObject(bool show)

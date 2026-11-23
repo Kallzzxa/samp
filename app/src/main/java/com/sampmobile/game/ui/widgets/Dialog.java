@@ -152,6 +152,12 @@ public class Dialog {
     }
 
     public void show(int dialog_id, int dialog_style, String title, String message, String button1, String button2) {
+        if (dialog_id < 0) {
+            if (isShow) {
+                Hide();
+            }
+            return;
+        }
         isShow = true;
         mCurrentDialogId = dialog_id;
         mDialogStyle = dialog_style;

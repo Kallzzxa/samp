@@ -9,8 +9,9 @@ uint32_t GetTickCount();
 bool StringHasNonAscii(const char* s);
 
 // Converts GTA "~x~" style color codes to ImGui "{RRGGBB}" inline color codes.
-// resetHex is used for ~s~ (reset to base color). Returns the converted string.
-std::string GxtToImGuiColors(const std::string& in, const std::string& resetHex);
+// resetHex is used for ~s~ (reset to base color).
+// If maxColorCodes >= 0, only the first maxColorCodes color tags (~r~/~g~/~h~/etc.) are applied; extra tags are stripped.
+std::string GxtToImGuiColors(const std::string& in, const std::string& resetHex, int maxColorCodes = -1);
 
 // Replaces "~k~~KEY~" sequences with readable key names.
 std::string ReplaceKey(const std::string& input);

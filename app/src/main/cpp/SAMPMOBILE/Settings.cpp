@@ -114,6 +114,10 @@ bool Settings::m_showscreenshotbtn = true;
 bool Settings::m_gtasubtitles = true;
 bool Settings::m_chatshadow = true;
 int Settings::m_screenshotmode = 0;  // 0 = With HUD & Chat, 1 = Game Only
+int Settings::m_fontsizeoffset = 0;  // -3..5 (/fontsize)
+bool Settings::m_audiomsg = true;    // /audiomsg
+bool Settings::m_logurls = false;    // /logurls
+bool Settings::m_shownametagstatus = true; // /nametagstatus
 
 void Settings::initialize()
 {

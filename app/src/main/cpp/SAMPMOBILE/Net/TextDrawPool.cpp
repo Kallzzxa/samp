@@ -78,18 +78,19 @@ void CTextDrawPool::DrawImGui(ImGuiRenderer* renderer)
 	}
 }
 
-void CTextDrawPool::SetSelectState(bool bState, uint32_t dwColor)
+void CTextDrawPool::SetSelectState(bool bState, uint32_t dwColor, bool bSendCancel)
 {
 	if (bState) {
 		m_bSelectState.store(true, std::memory_order_release);
-		// 保留：§10 悬停颜色字节序疑点
-		m_dwHoverColor = dwColor; //(((dwColor << 16) | dwColor & 0xFF00) << 8) | (((dwColor >> 16) | dwColor & 0xFF0000) >> 8);
+		// SelectTextDraw RPC transmits hover color in RGBA (0xRRGGBBAA), while
+		// CTextDraw::Draw / DrawImGui / DrawTextureUV consume ABGR (0xAABBGGRR).
+		m_dwHoverColor = __builtin_bswap32(dwColor);
 		m_wClickedTextDrawID = 0xFFFF;
 		//pGame->DisplayHUD(false);
 		//pGame->FindPlayerPed()->TogglePlayerControllable(false);
 	}
 	else {
-		m_bSelectState.store(false, std::memory_order_release);
+		const bool wasSelecting = m_bSelectState.exchange(false, std::memory_order_acq_rel);
 		m_dwHoverColor = 0;
 		m_wClickedTextDrawID = 0xFFFF;
 		{
@@ -99,7 +100,9 @@ void CTextDrawPool::SetSelectState(bool bState, uint32_t dwColor)
 		//pGame->DisplayHUD(true);
 		//pGame->FindPlayerPed()->TogglePlayerControllable(true);
 
-		SendClick();
+		if (wasSelecting && bSendCancel) {
+			SendClick();
+		}
 
 		for (int i = 0; i < MAX_TEXT_DRAWS; i++) {
 			if (m_bSlotState[i] && m_pTextDraw[i]) {

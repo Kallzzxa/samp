@@ -289,10 +289,10 @@ struct UpdateScoresPingsIPs {
 	}
 };
 
-// RPC 103 (server -> client, currently registered in 0.3.DL only; T05 enables 0.3.7): ClientCheck
+// RPC 103 (server -> client, both 0.3.7 and 0.3.DL): ClientCheck
 struct ClientCheckRequest {
 	static constexpr int kRpcId = rpc::kClientCheck;
-	static constexpr uint8_t kVersionMask = kVer03DL; // T05: widen to kVerAll
+	static constexpr uint8_t kVersionMask = kVerAll;
 	static constexpr const char* kName = "ClientCheck";
 
 	uint8_t type = 0;
@@ -446,8 +446,24 @@ struct SetPlayerName {
 	}
 };
 
-// RPC 153 (server -> client): SetPlayerSkin — spec-accurate 0.3.7 / 0.3.DL layout.
-// Tested against open.mp oracle now; wired into RpcTable in task T03.
+// RPC 34 (server -> client): SetPlayerSkillLevel
+struct SetPlayerSkillLevel {
+	static constexpr int kRpcId = rpc::kSetPlayerSkillLevel;
+	static constexpr uint8_t kVersionMask = kVerAll;
+	static constexpr const char* kName = "SetPlayerSkillLevel";
+
+	uint16_t playerId = 0xFFFF;
+	uint32_t skillType = 0;
+	uint16_t skillLevel = 0;
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.u16(playerId) && s.u32(skillType) && s.u16(skillLevel);
+	}
+};
+
+// RPC 153 (server -> client): SetPlayerSkin — 0.3.7 (u32+u32) / 0.3.DL (u16+u32+u32).
 struct SetPlayerSkin {
 	static constexpr int kRpcId = rpc::kScrSetPlayerSkin;
 	static constexpr uint8_t kVersionMask = kVerAll;
@@ -467,23 +483,6 @@ struct SetPlayerSkin {
 			return s.u32(skinId) && s.u32(customSkinId);
 		}
 		return s.u32(playerId) && s.u32(skinId);
-	}
-};
-
-// RPC 153 (server -> client): legacy pre-T03 layout currently active in client.
-// Always reads 32-bit playerId + 32-bit skinId (breaks on 0.3.DL; swap to SetPlayerSkin in T03).
-struct SetPlayerSkinLegacyT03 {
-	static constexpr int kRpcId = rpc::kScrSetPlayerSkin;
-	static constexpr uint8_t kVersionMask = kVerAll;
-	static constexpr const char* kName = "SetPlayerSkin";
-
-	int32_t playerId = 0;
-	int32_t skinId = 0;
-
-	template <typename S>
-	bool serialize(S& s, ProtoVersion)
-	{
-		return s.i32(playerId) && s.i32(skinId);
 	}
 };
 
@@ -1176,6 +1175,161 @@ struct ToggleWidescreen {
 	bool serialize(S& s, ProtoVersion)
 	{
 		return s.u8(toggle);
+	}
+};
+
+// RPC 170 (server -> client): EnablePlayerCameraTarget
+struct EnableCameraTarget {
+	static constexpr int kRpcId = rpc::kScrEnableCameraTarget;
+	static constexpr uint8_t kVersionMask = kVerAll;
+	static constexpr const char* kName = "EnableCameraTarget";
+
+	bool enable = false;
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.bit(enable);
+	}
+};
+
+// RPC 33 (server -> client): SetPlayerShopName
+struct SetPlayerShopName {
+	static constexpr int kRpcId = rpc::kScrSetPlayerShopName;
+	static constexpr uint8_t kVersionMask = kVerAll;
+	static constexpr const char* kName = "SetPlayerShopName";
+
+	std::string shopName;
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.fixedStr(shopName, 32);
+	}
+};
+
+// RPC 112 (server -> client): PlayCrimeReportForPlayer
+struct PlayCrimeReport {
+	static constexpr int kRpcId = rpc::kScrPlayCrimeReport;
+	static constexpr uint8_t kVersionMask = kVerAll;
+	static constexpr const char* kName = "PlayCrimeReport";
+
+	uint16_t suspectId = 0xFFFF;
+	uint32_t inVehicle = 0;
+	uint32_t vehicleModel = 0;
+	uint32_t vehicleColor = 0;
+	uint32_t crimeId = 0;
+	Vec3 position{};
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.u16(suspectId) && s.u32(inVehicle) && s.u32(vehicleModel) &&
+		       s.u32(vehicleColor) && s.u32(crimeId) && s.vec3(position);
+	}
+};
+
+// RPC 102 (server -> client): Server network statistics snapshot (0x128 bytes)
+struct SvrStats {
+	static constexpr int kRpcId = rpc::kSvrStats;
+	static constexpr uint8_t kVersionMask = kVerAll;
+	static constexpr const char* kName = "SvrStats";
+
+	std::array<uint8_t, 296> raw{};
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.bytes(raw.data(), raw.size());
+	}
+};
+
+// RPC 48 (server -> client, 0.3.DL): SetPlayerVirtualWorld
+struct SetPlayerVirtualWorld {
+	static constexpr int kRpcId = rpc::kScrSetPlayerVirtualWorld;
+	static constexpr uint8_t kVersionMask = kVer03DL;
+	static constexpr const char* kName = "SetPlayerVirtualWorld";
+
+	int32_t virtualWorld = 0;
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.i32(virtualWorld);
+	}
+};
+
+// RPC 179 (server -> client, 0.3.DL): Custom model manifest entry
+struct DlModelRequest {
+	static constexpr int kRpcId = rpc::kDlModelRequest;
+	static constexpr uint8_t kVersionMask = kVer03DL;
+	static constexpr const char* kName = "DlModelRequest";
+
+	uint32_t poolId = 0;
+	int32_t count = 0;
+	uint8_t type = 0;
+	int32_t virtualWorld = 0;
+	int32_t baseId = 0;
+	int32_t newId = 0;
+	uint32_t dffChecksum = 0;
+	uint32_t txdChecksum = 0;
+	uint32_t dffSize = 0;
+	uint32_t txdSize = 0;
+	uint8_t timeOn = 0;
+	uint8_t timeOff = 0;
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.u32(poolId) && s.i32(count) && s.u8(type) &&
+		       s.i32(virtualWorld) && s.i32(baseId) && s.i32(newId) &&
+		       s.u32(dffChecksum) && s.u32(txdChecksum) &&
+		       s.u32(dffSize) && s.u32(txdSize) &&
+		       s.u8(timeOn) && s.u8(timeOff);
+	}
+};
+
+// RPC 180 (server -> client, 0.3.DL): Reset custom models
+struct DlModelReset {
+	static constexpr int kRpcId = rpc::kDlModelReset;
+	static constexpr uint8_t kVersionMask = kVer03DL;
+	static constexpr const char* kName = "DlModelReset";
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.ok();
+	}
+};
+
+// RPC 183 (server -> client, 0.3.DL): Custom model download URL
+struct DlModelUrl {
+	static constexpr int kRpcId = rpc::kDlModelUrl;
+	static constexpr uint8_t kVersionMask = kVer03DL;
+	static constexpr const char* kName = "DlModelUrl";
+
+	uint8_t kind = 0;
+	uint8_t fileType = 0;
+	uint32_t fileChecksum = 0;
+	std::string downloadLink;
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.u8(kind) && s.u8(fileType) && s.u32(fileChecksum) && s.dynStr8(downloadLink);
+	}
+};
+
+// RPC 185 (server -> client, 0.3.DL): Server acknowledges FinishDownload
+struct DlDownloadCompleted {
+	static constexpr int kRpcId = rpc::kDlDownloadCompleted;
+	static constexpr uint8_t kVersionMask = kVer03DL;
+	static constexpr const char* kName = "DlDownloadCompleted";
+
+	template <typename S>
+	bool serialize(S& s, ProtoVersion)
+	{
+		return s.ok();
 	}
 };
 

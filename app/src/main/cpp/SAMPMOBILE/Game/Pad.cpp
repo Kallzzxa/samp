@@ -175,14 +175,28 @@ DECL_HOOK(void, CPed_ProcessControl, sa::CPed* _this)
 	byteCurPlayer = prevCurPlayer;
 }
 
+static inline uint16_t AdjustRemoteWalkAxis(int16_t val, int16_t other, const PAD_KEYS& keys)
+{
+	if (keys.bKeys[ePadKeys::KEY_WALK]) {
+		if (val == -128) return static_cast<uint16_t>(-64);
+		if (val == 128) return static_cast<uint16_t>(64);
+	}
+	// CTaskSimpleUseGun::SetMoveAnim requires (|lr| + |ud|) / 128.0f >= 0.1f (~13)
+	// to play GUNMOVE walk legs; gentle touch-stick tilts can fall just below that.
+	if (val != 0 && keys.bKeys[ePadKeys::KEY_HANDBRAKE]) {
+		const int absSum = std::abs(static_cast<int>(val)) + std::abs(static_cast<int>(other));
+		if (absSum < 16) {
+			return static_cast<uint16_t>(val < 0 ? -16 : 16);
+		}
+	}
+	return static_cast<uint16_t>(val);
+}
+
 DECL_HOOK(uint16_t, CPad_GetPedWalkLeftRight, uintptr_t _this)
 {
 	if (CurrentPlayerSlot()) {
-		uint16_t dwResult = RemotePlayerKeys[byteCurPlayer].wKeyLR;
-		if ((dwResult == 0xFF80 || dwResult == 0x80) && RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_WALK]) {
-			dwResult = 0x40;
-		}
-		return dwResult;
+		const PAD_KEYS& rk = RemotePlayerKeys[byteCurPlayer];
+		return AdjustRemoteWalkAxis(static_cast<int16_t>(rk.wKeyLR), static_cast<int16_t>(rk.wKeyUD), rk);
 	}
 	else {
 		LocalPlayerKeys.wKeyLR = CPad_GetPedWalkLeftRight(_this);
@@ -192,11 +206,8 @@ DECL_HOOK(uint16_t, CPad_GetPedWalkLeftRight, uintptr_t _this)
 DECL_HOOK(uint16_t, CPad_GetPedWalkUpDown, uintptr_t _this)
 {
 	if (CurrentPlayerSlot()) {
-		uint16_t dwResult = RemotePlayerKeys[byteCurPlayer].wKeyUD;
-		if ((dwResult == 0xFF80 || dwResult == 0x80) && RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_WALK]) {
-			dwResult = 0x40;
-		}
-		return dwResult;
+		const PAD_KEYS& rk = RemotePlayerKeys[byteCurPlayer];
+		return AdjustRemoteWalkAxis(static_cast<int16_t>(rk.wKeyUD), static_cast<int16_t>(rk.wKeyLR), rk);
 	}
 	else {
 		LocalPlayerKeys.wKeyUD = CPad_GetPedWalkUpDown(_this);
@@ -608,9 +619,110 @@ static void ProcessRemoteVehicleControl(OrigFn orig, sa::CVehicle* pVehicle)
 
 DECL_HOOK(void, CAutomobile_ProcessControl, sa::CVehicle* _this)   { ProcessRemoteVehicleControl<true>(CAutomobile_ProcessControl, _this); }
 DECL_HOOK(void, CBoat_ProcessControl, sa::CVehicle* _this)         { ProcessRemoteVehicleControl<true>(CBoat_ProcessControl, _this); }
-DECL_HOOK(void, CBike_ProcessControl, sa::CVehicle* _this)         { ProcessRemoteVehicleControl<true>(CBike_ProcessControl, _this); }
+DECL_HOOK(void, CBike_ProcessControl, sa::CVehicle* _this)
+{
+	CVehicle* pSampVeh = nullptr;
+	if (pNetGame && pNetGame->GetVehiclePool()) {
+		VEHICLEID vid = pNetGame->GetVehiclePool()->FindIDFromGtaPtr(_this);
+		if (vid != INVALID_VEHICLE_ID) {
+			pSampVeh = pNetGame->GetVehiclePool()->GetAt(vid);
+		}
+	}
+
+	ProcessRemoteVehicleControl<true>(CBike_ProcessControl, _this);
+
+	// T20: hold remote bike lean angle per-frame so CBike::ProcessControl does not
+	// decay RideAnimData.m_fLeanAngle back toward 0 between sync packets.
+	if (pSampVeh && pSampVeh->VerifyInstance()) {
+		if (pSampVeh->IsDriverLocalPlayer()) {
+			pSampVeh->m_bHasRemoteBikeLean = false;
+			pSampVeh->m_fRemoteBikeLean = 0.0f;
+		}
+		else if (pSampVeh->m_bHasRemoteBikeLean) {
+			if (!pSampVeh->HasADriver()) {
+				pSampVeh->m_bHasRemoteBikeLean = false;
+				pSampVeh->m_fRemoteBikeLean = 0.0f;
+			}
+			else {
+				pSampVeh->SetBikeLean(pSampVeh->m_fRemoteBikeLean);
+			}
+		}
+	}
+}
 DECL_HOOK(void, CHeli_ProcessControl, sa::CVehicle* _this)         { ProcessRemoteVehicleControl<false>(CHeli_ProcessControl, _this); }
-DECL_HOOK(void, CPlane_ProcessControl, sa::CVehicle* _this)        { ProcessRemoteVehicleControl<false>(CPlane_ProcessControl, _this); }
+static std::atomic<bool> g_bPlaneGearToggleRequested{false};
+static std::atomic<bool> g_bStuffUseRequested{false};
+static std::atomic<bool> g_bPassengerDriveByToggleRequested{false};
+
+void RequestLocalPlaneGearToggle()
+{
+	g_bPlaneGearToggleRequested.store(true, std::memory_order_release);
+}
+
+bool ConsumeStuffUseRequest()
+{
+	return g_bStuffUseRequested.exchange(false, std::memory_order_acq_rel);
+}
+
+bool ConsumePassengerDriveByToggle()
+{
+	return g_bPassengerDriveByToggleRequested.exchange(false, std::memory_order_acq_rel);
+}
+
+DECL_HOOK(void, CPlane_ProcessControl, sa::CVehicle* _this)
+{
+	CVehicle* pSampVeh = nullptr;
+	if (pNetGame && pNetGame->GetVehiclePool()) {
+		VEHICLEID vid = pNetGame->GetVehiclePool()->FindIDFromGtaPtr(_this);
+		if (vid != INVALID_VEHICLE_ID) {
+			pSampVeh = pNetGame->GetVehiclePool()->GetAt(vid);
+		}
+	}
+
+	// Sample logical gear state BEFORE CPlane::ProcessControlInputs runs, because
+	// GTA Mobile's 30m auto-gear mutates m_fLGearAngle mid-frame (e.g. 0.0 -> 0.02).
+	uint8_t prevLocalGear = 0;
+	if (pSampVeh && pSampVeh->VerifyInstance() && pSampVeh->IsDriverLocalPlayer()) {
+		prevLocalGear = (pSampVeh->m_iLocalLandingGear >= 0)
+				? static_cast<uint8_t>(pSampVeh->m_iLocalLandingGear)
+				: pSampVeh->GetLandingGearState();
+	}
+
+	ProcessRemoteVehicleControl<false>(CPlane_ProcessControl, _this);
+
+	if (pSampVeh && pSampVeh->VerifyInstance()) {
+		auto* pPlane = reinterpret_cast<sa::CPlane*>(_this);
+		if (pSampVeh->IsDriverLocalPlayer()) {
+			pSampVeh->m_iRemoteLandingGear = -1;
+			if (g_bPlaneGearToggleRequested.exchange(false, std::memory_order_acq_rel)) {
+				const uint8_t next = (prevLocalGear == 0) ? 1 : 0;
+				pSampVeh->m_iLocalLandingGear = static_cast<int8_t>(next);
+				pSampVeh->SetLandingGearState(next);
+			}
+			else if (pSampVeh->m_iLocalLandingGear >= 0) {
+				// Preserve manual gear choice against GTA Mobile's 30m auto-gear logic in CPlane::ProcessControlInputs.
+				const float target = (pSampVeh->m_iLocalLandingGear == 1) ? 1.0f : 0.0f;
+				if (pPlane->m_fLGearAngle != target) {
+					pSampVeh->SetLandingGearState(static_cast<uint8_t>(pSampVeh->m_iLocalLandingGear));
+				}
+			}
+		}
+		else {
+			pSampVeh->m_iLocalLandingGear = -1;
+			if (pSampVeh->m_iRemoteLandingGear >= 0) {
+				if (!pSampVeh->HasADriver()) {
+					pSampVeh->m_iRemoteLandingGear = -1;
+				}
+				else {
+					const float target = (pSampVeh->m_iRemoteLandingGear == 1) ? 1.0f : 0.0f;
+					if (pPlane->m_fLGearAngle != target) {
+						pSampVeh->SetLandingGearState(static_cast<uint8_t>(pSampVeh->m_iRemoteLandingGear));
+					}
+				}
+			}
+		}
+	}
+}
 DECL_HOOK(void, CBmx_ProcessControl, sa::CVehicle* _this)          { ProcessRemoteVehicleControl<false>(CBmx_ProcessControl, _this); }
 DECL_HOOK(void, CMonsterTruck_ProcessControl, sa::CVehicle* _this) { ProcessRemoteVehicleControl<false>(CMonsterTruck_ProcessControl, _this); }
 DECL_HOOK(void, CQuadBike_ProcessControl, sa::CVehicle* _this)     { ProcessRemoteVehicleControl<false>(CQuadBike_ProcessControl, _this); }
@@ -810,7 +922,19 @@ DECL_HOOK(uint32_t, CPad_GetWeapon, uintptr_t _this, sa::CPed* pPed, bool bShoul
 	}
 
 	CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr;
-	if (!pLocal || pLocal->IsInVehicle() || pLocal->IsInJetpack()) {
+	if (!pLocal || pLocal->IsInJetpack()) {
+		uint32_t dwResult = CPad_GetWeapon(_this, pPed, bShoulderPossible);
+		LocalPlayerKeys.bKeys[ePadKeys::KEY_FIRE] = dwResult;
+		return dwResult;
+	}
+
+	if (pLocal->IsInVehicle()) {
+		if (pLocal->IsAPassenger() && pLocal->IsInPassengerDriveByMode()) {
+			const uint32_t orig = CPad_GetWeapon(_this, pPed, bShoulderPossible);
+			const bool bFire = g_touchCombat.fireDown || LocalPlayerKeys.bKeys[ePadKeys::KEY_FIRE] || (orig != 0);
+			LocalPlayerKeys.bKeys[ePadKeys::KEY_FIRE] = bFire;
+			return bFire ? 0xFF : 0x00;
+		}
 		uint32_t dwResult = CPad_GetWeapon(_this, pPed, bShoulderPossible);
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_FIRE] = dwResult;
 		return dwResult;
@@ -877,11 +1001,18 @@ DECL_HOOK(uint32_t, CTaskSimplePlayerOnFoot_MakeAbortable, uintptr_t _this, sa::
 DECL_HOOK(uint32_t, CPad_WeaponJustDown, uintptr_t _this, sa::CPed* pPed, bool bCheckControl, bool bCheckVehicle)
 {
 	if (CurrentPlayerSlot()) {
-		return CPad_WeaponJustDown(_this, pPed, bCheckControl, bCheckVehicle);
+		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_FIRE] ? 1u : 0u;
 	}
 
 	CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr;
-	if (!pLocal || pLocal->IsInVehicle() || pLocal->IsInJetpack()) {
+	if (!pLocal || pLocal->IsInJetpack()) {
+		return CPad_WeaponJustDown(_this, pPed, bCheckControl, bCheckVehicle);
+	}
+	if (pLocal->IsInVehicle()) {
+		if (pLocal->IsAPassenger() && pLocal->IsInPassengerDriveByMode()) {
+			const uint32_t orig = CPad_WeaponJustDown(_this, pPed, bCheckControl, bCheckVehicle);
+			return (g_touchCombat.fireJustPressed || orig != 0) ? 1u : 0u;
+		}
 		return CPad_WeaponJustDown(_this, pPed, bCheckControl, bCheckVehicle);
 	}
 
@@ -1017,11 +1148,25 @@ void UpdateTouchCombatVisuals()
 
 	CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr;
 	bool bOnFoot = pLocal && !pLocal->IsDead() && !pLocal->IsInVehicle() && !pLocal->IsInJetpack();
+	bool bPassenger = pLocal && !pLocal->IsDead() && pLocal->IsInVehicle() && pLocal->IsAPassenger();
+	bool bPassengerDriveBy = bPassenger && pLocal->IsInPassengerDriveByMode();
 
-	if (bOnFoot && widgets[sa::WidgetIDs::WIDGET_ATTACK]) {
+	if ((bOnFoot || bPassengerDriveBy) && widgets[sa::WidgetIDs::WIDGET_ATTACK]) {
 		uintptr_t wAtk = widgets[sa::WidgetIDs::WIDGET_ATTACK];
 		*reinterpret_cast<uint8_t*>(wAtk + kWidgetEnabledOffset) = 1;
 		*reinterpret_cast<uint8_t*>(wAtk + kWidgetAlphaOffset) = 0xff;
+	}
+
+	// T17: keep left thumbstick & sprint visible while dancing so players can steer dance moves
+	if (bOnFoot && pLocal->IsDancing()) {
+		if (uintptr_t wMove = widgets[sa::WidgetIDs::WIDGET_PED_MOVE]) {
+			*reinterpret_cast<uint8_t*>(wMove + kWidgetEnabledOffset) = 1;
+			*reinterpret_cast<uint8_t*>(wMove + kWidgetAlphaOffset) = 0xff;
+		}
+		if (uintptr_t wSprint = widgets[sa::WidgetIDs::WIDGET_SPRINT]) {
+			*reinterpret_cast<uint8_t*>(wSprint + kWidgetEnabledOffset) = 1;
+			*reinterpret_cast<uint8_t*>(wSprint + kWidgetAlphaOffset) = 0xff;
+		}
 	}
 
 	// On-foot camera toggle (widget 0x12): GTA:SA Mobile only polls
@@ -1036,7 +1181,7 @@ void UpdateTouchCombatVisuals()
 	}
 
 	if (uintptr_t wAim = widgets[kAimToggleWidget]) {
-		bool bAimable = GetAimableLocalPed() != nullptr;
+		bool bAimable = (GetAimableLocalPed() != nullptr) || (bPassenger && pLocal->CanDoPassengerDriveBy());
 		*reinterpret_cast<uint8_t*>(wAim + kWidgetEnabledOffset) = bAimable ? 1 : 0;
 		*reinterpret_cast<uint8_t*>(wAim + kWidgetAlphaOffset) = bAimable ? 0xff : 0;
 		uintptr_t wSrc = widgets[sa::WidgetIDs::WIDGET_ENTER_TARGETING];
@@ -1070,15 +1215,84 @@ static void TickTouchCombatInput()
 
 	CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr;
 	bool bOnFoot = pLocal && !pLocal->IsDead() && !pLocal->IsInVehicle() && !pLocal->IsInJetpack();
+	bool bPassenger = pLocal && !pLocal->IsDead() && pLocal->IsInVehicle() && pLocal->IsAPassenger();
+	bool bPassengerDriveBy = bPassenger && pLocal->IsInPassengerDriveByMode();
 
-	// 1) Fire button edge + hold tracking
-	bool bFireNow = bOnFoot && PollTouchDown(sa::WidgetIDs::WIDGET_ATTACK);
-	g_touchCombat.fireJustPressed = bFireNow && !g_touchCombat.firePrevDown;
+	// 1) Fire button edge + hold tracking (on foot & passenger drive-by)
+	const bool bFirePrev = g_touchCombat.firePrevDown;
+	bool bFireNow = (bOnFoot || bPassengerDriveBy) && PollTouchDown(sa::WidgetIDs::WIDGET_ATTACK);
+	g_touchCombat.fireJustPressed = bFireNow && !bFirePrev;
 	if (g_touchCombat.fireJustPressed) {
 		g_touchCombat.fireDownTickMs = GetTickCount();
+		if (bOnFoot && pLocal && pLocal->GetStuff() != STUFF_TYPE_NONE) {
+			g_bStuffUseRequested.store(true, std::memory_order_release);
+		}
 	}
 	g_touchCombat.firePrevDown = bFireNow;
 	g_touchCombat.fireDown = bFireNow;
+
+	// Pin KEY_HANDBRAKE while aiming on foot so OnFootSync never drops the aim bit
+	// between GetKeys(clear=true) and CCamera::IsTargetingActive.
+	if (bOnFoot && pLocal && EngineIsAiming(pLocal)) {
+		LocalPlayerKeys.bKeys[ePadKeys::KEY_HANDBRAKE] = true;
+	}
+
+	// Temporary bounded trace on fire-release while aiming (to verify phone yaw stability)
+	{
+		static int s_aimRelFrames = 0;
+		static int s_aimRelTotal = 0;
+		if (bOnFoot && pLocal && EngineIsAiming(pLocal) && bFirePrev && !bFireNow && s_aimRelTotal < 30) {
+			s_aimRelFrames = 6;
+		}
+		if (s_aimRelFrames > 0 && pLocal && pLocal->m_ped) {
+			--s_aimRelFrames;
+			++s_aimRelTotal;
+			auto& cam = sa::getTheCamera();
+			const auto& active = cam.m_aCams[cam.m_nActiveCam & 1];
+			uintptr_t wLook = widgets[sa::WidgetIDs::WIDGET_LOOK];
+			const int32_t lookF = wLook ? *reinterpret_cast<int32_t*>(wLook + (VER_x32 ? 120 : 132)) : -9;
+			spdlog::info("AIM-REL rem={} mode={} rst={} yaw={:.4f} spd={:.4f} rot={:.4f} arot={:.4f} free={} inp={} lookF={}",
+				s_aimRelFrames, static_cast<int>(active.m_nMode), static_cast<int>(active.ResetStatics),
+				active.m_fHorizontalAngle, active.BetaSpeed,
+				pLocal->m_ped->m_fCurrentRotation, pLocal->m_ped->m_fAimingRotation,
+				pLocal->m_ped->m_pPlayerData ? static_cast<int>(pLocal->m_ped->m_pPlayerData->m_bFreeAiming) : -1,
+				eng::fn::CHID_GetInputType(), lookF);
+		}
+	}
+
+	// 1.2) T32: Aim button toggles passenger drive-by on touch screens
+	if (bPassenger && pLocal->CanDoPassengerDriveBy() && widgets[kAimToggleWidget] && PollTouchRelease(kAimToggleWidget) != 0) {
+		g_bPassengerDriveByToggleRequested.store(true, std::memory_order_release);
+	}
+
+	// 1.5) T17: Poll virtual thumbstick + sprint while dancing (CTaskSimpleRunNamedAnim does not poll CPad walk)
+	static bool s_bDanceStickActive = false;
+	if (bOnFoot && pLocal && pLocal->IsDancing()) {
+		if (widgets[sa::WidgetIDs::WIDGET_PED_MOVE]) {
+			sa::CVector2D stick{0.0f, 0.0f};
+			if (eng::fn::CTouchInterface_IsTouched(sa::WidgetIDs::WIDGET_PED_MOVE, &stick, 1) != 0) {
+				s_bDanceStickActive = true;
+				if (stick.x < -0.25f)      LocalPlayerKeys.wKeyLR = static_cast<uint16_t>(-128);
+				else if (stick.x > 0.25f)  LocalPlayerKeys.wKeyLR = static_cast<uint16_t>(128);
+				else                       LocalPlayerKeys.wKeyLR = 0;
+
+				if (stick.y < -0.25f)      LocalPlayerKeys.wKeyUD = static_cast<uint16_t>(-128);
+				else if (stick.y > 0.25f)  LocalPlayerKeys.wKeyUD = static_cast<uint16_t>(128);
+				else                       LocalPlayerKeys.wKeyUD = 0;
+			}
+			else if (s_bDanceStickActive) {
+				s_bDanceStickActive = false;
+				LocalPlayerKeys.wKeyLR = 0;
+				LocalPlayerKeys.wKeyUD = 0;
+			}
+		}
+		if (PollTouchDown(sa::WidgetIDs::WIDGET_SPRINT)) {
+			LocalPlayerKeys.bKeys[ePadKeys::KEY_SPRINT] = true;
+		}
+	}
+	else {
+		s_bDanceStickActive = false;
+	}
 
 	// 2) Block button (pure held state, independent of aim latch)
 	g_touchCombat.blockDown = (GetBlockableLocalPed() != nullptr) && PollTouchDown(kBlockWidget);
@@ -1509,6 +1723,55 @@ DECL_HOOK(void, CPedDamageResponseCalculator_ComputeDamageResponse, CPedDamageRe
 	return CPedDamageResponseCalculator_ComputeDamageResponse(_this, pVictim, damageResponse, bTriggerPainAudio);
 }
 
+// T21: EnableVehicleFriendlyFire — block damage to vehicles driven by teammates
+DECL_HOOK(void, CVehicle_InflictDamage, sa::CVehicle* _this, sa::CEntity* pDamager, int eWeaponType, float fIntensity, sa::CVector vecCoords)
+{
+	if (_this && pDamager && pNetGame && pNetGame->m_netSet && pNetGame->m_netSet->vehicleFriendlyFire) {
+		CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
+		CLocalPlayer* pLocalPlayer = pPlayerPool ? pPlayerPool->GetLocalPlayer() : nullptr;
+		if (pLocalPlayer && pLocalPlayer->m_byteTeam != NO_TEAM && pLocalPlayer->GetPlayerPed()) {
+			const uint8_t localTeam = pLocalPlayer->m_byteTeam;
+			sa::CPed* pLocalGtaPed = pLocalPlayer->GetPlayerPed()->m_ped;
+
+			// Case 1: local player is driving _this, attacker is a teammate (ped or vehicle driven by teammate)
+			if (_this->pDriver == pLocalGtaPed) {
+				PLAYERID attackerId = FindPlayerIDFromGtaPtr(reinterpret_cast<sa::CPed*>(pDamager));
+				if (attackerId == INVALID_PLAYER_ID && pNetGame->GetVehiclePool()) {
+					VEHICLEID attVehId = pNetGame->GetVehiclePool()->FindIDFromGtaPtr(reinterpret_cast<sa::CVehicle*>(pDamager));
+					if (attVehId != INVALID_VEHICLE_ID) {
+						auto* attVeh = reinterpret_cast<sa::CVehicle*>(pDamager);
+						if (attVeh->pDriver) {
+							attackerId = FindPlayerIDFromGtaPtr(attVeh->pDriver);
+						}
+					}
+				}
+				if (attackerId != INVALID_PLAYER_ID) {
+					CRemotePlayer* pAttacker = pPlayerPool->GetAt(attackerId);
+					if (pAttacker && pAttacker->m_byteTeam == localTeam) {
+						return;
+					}
+				}
+			}
+			// Case 2: teammate is driving _this, attacker is local player (or local player's vehicle)
+			else if (_this->pDriver) {
+				PLAYERID driverId = FindPlayerIDFromGtaPtr(_this->pDriver);
+				if (driverId != INVALID_PLAYER_ID) {
+					CRemotePlayer* pDriver = pPlayerPool->GetAt(driverId);
+					if (pDriver && pDriver->m_byteTeam == localTeam) {
+						sa::CVehicle* pLocalVeh = pLocalPlayer->GetPlayerPed()->GetGtaVehicle();
+						if (pDamager == reinterpret_cast<sa::CEntity*>(pLocalGtaPed) ||
+								(pLocalVeh && pDamager == reinterpret_cast<sa::CEntity*>(pLocalVeh))) {
+							return;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	CVehicle_InflictDamage(_this, pDamager, eWeaponType, fIntensity, vecCoords);
+}
+
 DECL_HOOK(uint32_t, CBulletInfo_AddBullet, sa::CEntity* creator, int weaponType, sa::CVector pos, sa::CVector velocity)
 {
 	velocity.x *= 50.0f;
@@ -1628,5 +1891,6 @@ void Hooks::installPadHooks()
 	REG_HOOK(Boot, CBulletInfo_Update, CBulletInfo_Update, "Projectile bullet update hook");
 	REG_HOOK(Boot, CPedDamageResponseCalculator_ComputeDamageResponse, CPedDamageResponseCalculator_ComputeDamageResponse,
 		"Give/take damage reporting");
+	REG_HOOK(Boot, CVehicle_InflictDamage, CVehicle_InflictDamage, "Vehicle friendly-fire damage filter");
 	REG_HOOK(Boot, CBulletInfo_AddBullet, CBulletInfo_AddBullet, "Bullet tracer sync");
 }

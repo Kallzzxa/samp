@@ -59,6 +59,7 @@ public:
 	bool Delete(VEHICLEID VehicleID);
 
 	void Process();
+	void ProcessLicensePlates();
 	void NotifyVehicleDeath(VEHICLEID VehicleID);
 
 	CVehicle* GetAt(VEHICLEID vehicleID)

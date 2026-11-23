@@ -60,6 +60,7 @@ extern int RPC_ClientCheck;
 extern int RPC_PlayerGiveTakeDamage;
 extern int RPC_GiveDamageActor;
 extern int RPC_ChatBubble;
+extern int RPC_SetPlayerSkillLevel;
 
 extern int RPC_ScrSetPlayerAttachedObject;
 extern int RPC_ScrSetSpawnInfo;
@@ -161,5 +162,15 @@ extern int RPC_ScrSetPlayerDrunkVisuals;
 extern int RPC_ScrSetPlayerDrunkHandling;
 
 extern int RPC_ScrDisableVehicleCollisions;
+extern int RPC_UpdateCameraTarget;
 extern int RPC_ScrStopObjectCameraCollision;
+extern int RPC_ScrEnableCameraTarget;
 extern int RPC_ScrAttachCameraToObject;
+extern int RPC_ScrSetPlayerShopName;
+extern int RPC_ScrPlayCrimeReport;
+extern int RPC_ScrSetPlayerVirtualWorld;
+extern int RPC_DlModelRequest;
+extern int RPC_DlModelReset;
+extern int RPC_DlModelUrl;
+extern int RPC_DlFinishDownload;
+extern int RPC_DlDownloadCompleted;

@@ -105,9 +105,8 @@ struct CreateObject {
 	}
 };
 
-// RPC 45 (server -> client): spec-accurate SetObjectPos (open.mp sends 14 bytes without trailing float,
+// RPC 45 (server -> client): SetObjectPos (open.mp sends 14 bytes without trailing float,
 // legacy SA-MP server sends 18 bytes with an unused trailing float).
-// Tested against open.mp oracle now; wired into RpcTable in task T36.
 struct SetObjectPos {
 	static constexpr int kRpcId = rpc::kScrSetObjectPos;
 	static constexpr uint8_t kVersionMask = kVerAll;
@@ -123,24 +122,6 @@ struct SetObjectPos {
 		if (!s.u16(objectId) || !s.vec3(position)) return false;
 		s.optionalTail([&](auto& tail) { return tail.f32(unused); });
 		return s.ok();
-	}
-};
-
-// RPC 45 (server -> client): legacy pre-T36 layout currently active in client.
-// Requires the trailing unused float (breaks on open.mp; swap to SetObjectPos in T36).
-struct SetObjectPosLegacyT36 {
-	static constexpr int kRpcId = rpc::kScrSetObjectPos;
-	static constexpr uint8_t kVersionMask = kVerAll;
-	static constexpr const char* kName = "SetObjectPos";
-
-	uint16_t objectId = 0xFFFF;
-	Vec3 position{};
-	float unused = 0.0f;
-
-	template <typename S>
-	bool serialize(S& s, ProtoVersion)
-	{
-		return s.u16(objectId) && s.vec3(position) && s.f32(unused);
 	}
 };
 

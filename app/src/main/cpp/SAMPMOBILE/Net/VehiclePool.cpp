@@ -93,7 +93,10 @@ void CVehiclePool::Process()
 						}
 
 						if (pNetGame && pNetGame->m_netSet->manualVehicleEngineAndLight) {
-							// server drives engine/lights: re-apply stored states
+							// T21: server drives engine/lights: re-apply stored states so GTA cannot auto-start on enter
+							if (static_cast<bool>(pVehicle->GetEngineState()) != pVehicle->m_bEngineState) {
+								pVehicle->SetEngineState(pVehicle->m_bEngineState);
+							}
 							pVehicle->SetLightState(pVehicle->GetLightState());
 						}
 						else {
@@ -122,6 +125,15 @@ void CVehiclePool::Process()
 					}
 				}
 			}
+		}
+	}
+}
+
+void CVehiclePool::ProcessLicensePlates()
+{
+	for (VEHICLEID id = 0; id < MAX_VEHICLES; ++id) {
+		if (m_bVehicleSlotState[id] && m_pVehicles[id]) {
+			m_pVehicles[id]->ProcessLicensePlate();
 		}
 	}
 }

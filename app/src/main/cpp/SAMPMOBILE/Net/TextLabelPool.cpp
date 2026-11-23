@@ -103,91 +103,82 @@ void CTextLabelPool::ClearLabel(uint16_t wLabelId)
  */
 void CTextLabelPool::Render(ImGuiRenderer* renderer)
 {
-	CPlayerPed* pPlayerPed = pGame->FindPlayerPed();
-	if (pPlayerPed && pNetGame) {
-		CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
-		CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
+	CPlayerPed* pLocalPed = pGame->FindPlayerPed();
+	if (!pLocalPed || !pLocalPed->m_ped || !pNetGame) {
+		return;
+	}
 
-		for (int i = 0; i < MAX_TEXT_LABELS; i++) {
-			if (m_bSlotUsed[i]) {
-				TEXT_LABEL* pTextLabel = &m_TextLabels[i];
+	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
+	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 
-				sa::CVector textPos{0.0f, 0.0f, 0.0f};
-				if (pTextLabel->playerId != INVALID_PLAYER_ID) {
-					if (!pPlayerPool || pTextLabel->playerId == pPlayerPool->GetLocalPlayerID()) {
-						continue;
-					}
+	for (int i = 0; i < MAX_TEXT_LABELS; i++) {
+		if (!m_bSlotUsed[i]) {
+			continue;
+		}
+		TEXT_LABEL* pTextLabel = &m_TextLabels[i];
 
-					if (pPlayerPool->GetSlotState(pTextLabel->playerId)) {
-						CRemotePlayer* pPlayer = pPlayerPool->GetAt(pTextLabel->playerId);
-						if (!pPlayer) continue;
+		sa::CVector textPos{0.0f, 0.0f, 0.0f};
+		if (pTextLabel->playerId != INVALID_PLAYER_ID) {
+			if (!pPlayerPool || pTextLabel->playerId == pPlayerPool->GetLocalPlayerID()) {
+				continue;
+			}
 
-						CPlayerPed* pPlayerPed = pPlayer->GetPlayerPed();
-						if (!pPlayerPed || !pPlayerPed->m_ped) continue;
+			if (pPlayerPool->GetSlotState(pTextLabel->playerId)) {
+				CRemotePlayer* pPlayer = pPlayerPool->GetAt(pTextLabel->playerId);
+				if (!pPlayer) continue;
 
-						sa::CVector matPlayer;
-						pPlayerPed->m_ped->GetBonePosition(&matPlayer, 8, false);
+				CPlayerPed* pRemotePed = pPlayer->GetPlayerPed();
+				if (!pRemotePed || !pRemotePed->m_ped || !pRemotePed->IsAdded()) continue;
 
-						textPos.x = matPlayer.x + pTextLabel->vecOffsetCoords.x;
-						textPos.y = matPlayer.y + pTextLabel->vecOffsetCoords.y;
-						textPos.z = matPlayer.z + 0.23 + pTextLabel->vecOffsetCoords.z;
-					}
-					else {
-						continue;
-					}
-				}
-				else if (pTextLabel->vehicleId != INVALID_VEHICLE_ID) {
-					if (pVehiclePool && pVehiclePool->GetSlotState(pTextLabel->vehicleId)) {
-						CVehicle* pVehicle = pVehiclePool->GetAt(pTextLabel->vehicleId);
-						if (!pVehicle || !pVehicle->m_pVehicle || !pVehicle->VerifyInstance()) continue;
+				sa::CVector bonePos{};
+				pRemotePed->m_ped->GetBonePosition(&bonePos, 8, false);
+				const float fCamDist = pRemotePed->GetDistanceFromCamera();
 
-						RwMatrix matVehicle = pVehicle->m_pVehicle->GetMatrix().ToRwMatrix();
+				textPos.x = bonePos.x + pTextLabel->vecOffsetCoords.x;
+				textPos.y = bonePos.y + pTextLabel->vecOffsetCoords.y;
+				textPos.z = bonePos.z + (fCamDist * 0.0475f) + pTextLabel->vecOffsetCoords.z;
+			}
+			else {
+				continue;
+			}
+		}
+		else if (pTextLabel->vehicleId != INVALID_VEHICLE_ID) {
+			if (pVehiclePool && pVehiclePool->GetSlotState(pTextLabel->vehicleId)) {
+				CVehicle* pVehicle = pVehiclePool->GetAt(pTextLabel->vehicleId);
+				if (!pVehicle || !pVehicle->m_pVehicle || !pVehicle->VerifyInstance()) continue;
 
-						textPos.x = matVehicle.pos.x + pTextLabel->vecOffsetCoords.x;
-						textPos.y = matVehicle.pos.y + pTextLabel->vecOffsetCoords.y;
-						textPos.z = matVehicle.pos.z + pTextLabel->vecOffsetCoords.z;
-					}
-					else {
-						continue;
-					}
-				}
-				else {
-					textPos.x = pTextLabel->vecPos.x;
-					textPos.y = pTextLabel->vecPos.y;
-					textPos.z = pTextLabel->vecPos.z;
-				}
+				RwMatrix matVehicle = pVehicle->m_pVehicle->GetMatrix().ToRwMatrix();
+				ProjectMatrix(&textPos, reinterpret_cast<sa::CMatrix*>(&matVehicle), &pTextLabel->vecOffsetCoords);
+			}
+			else {
+				continue;
+			}
+		}
+		else {
+			textPos = pTextLabel->vecPos;
+		}
 
-				int hitEntity = 0;
+		pTextLabel->vecPos = textPos;
 
-				CPlayerPed* pPlayerPed = pGame->FindPlayerPed();
-				if (!pPlayerPed || !pPlayerPed->m_ped) continue;
+		// Distance culling before the line-of-sight raycast
+		if (pLocalPed->GetDistanceFromPoint(textPos) > pTextLabel->fDistance) {
+			continue;
+		}
 
-				if (pTextLabel->bTestLOS) {
-					CAMERA_AIM* pCam = GameGetInternalAim();
-					RwMatrix mat;
-					sa::CVector playerPosition;
-
-					mat = pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
-
-					playerPosition.x = mat.pos.x;
-					playerPosition.y = mat.pos.y;
-					playerPosition.z = mat.pos.z;
-
-					if (pTextLabel->bTestLOS) {
-						hitEntity = ScriptCommand(&get_line_of_sight, playerPosition.x, playerPosition.y, playerPosition.z, pCam->pos1x, pCam->pos1y, pCam->pos1z, 1, 0, 0, 0, 0);
-					}
-				}
-
-				pTextLabel->vecPos.x = textPos.x;
-				pTextLabel->vecPos.y = textPos.y;
-				pTextLabel->vecPos.z = textPos.z;
-
-				if (!pTextLabel->bTestLOS || hitEntity) {
-					if (pPlayerPed->GetDistanceFromPoint(pTextLabel->vecPos) > pTextLabel->fDistance) continue;
-					Draw(renderer, textPos, pTextLabel->text, pTextLabel->dwColor);
+		if (pTextLabel->bTestLOS) {
+			CAMERA_AIM* pCam = GameGetInternalAim();
+			if (pCam) {
+				int hitEntity = ScriptCommand(&get_line_of_sight,
+						textPos.x, textPos.y, textPos.z,
+						pCam->pos1x, pCam->pos1y, pCam->pos1z,
+						1, 0, 0, 1, 0);
+				if (!hitEntity) {
+					continue;
 				}
 			}
 		}
+
+		Draw(renderer, textPos, pTextLabel->text, pTextLabel->dwColor);
 	}
 }
 

@@ -58,6 +58,7 @@ inline constexpr int kShowActor = 171;
 inline constexpr int kHideActor = 172;
 inline constexpr int kClientCheck = 103;
 inline constexpr int kChatBubble = 59;
+inline constexpr int kSetPlayerSkillLevel = 34;
 
 // Script RPCs
 inline constexpr int kScrSetPlayerAttachedObject = 113;
@@ -157,7 +158,19 @@ inline constexpr int kScrSetPlayerDrunkVisuals = 92;
 inline constexpr int kScrSetPlayerDrunkHandling = 150;
 
 inline constexpr int kScrDisableVehicleCollisions = 167;
+inline constexpr int kUpdateCameraTarget = 168;
 inline constexpr int kScrStopObjectCameraCollision = 169;
+inline constexpr int kScrEnableCameraTarget = 170;
 inline constexpr int kScrAttachCameraToObject = 81;
+inline constexpr int kScrSetPlayerShopName = 33;
+inline constexpr int kScrPlayCrimeReport = 112;
+inline constexpr int kScrSetPlayerVirtualWorld = 48;
+
+// 0.3.DL artwork / custom models handshake (T30)
+inline constexpr int kDlModelRequest = 179;
+inline constexpr int kDlModelReset = 180;
+inline constexpr int kDlModelUrl = 183;
+inline constexpr int kDlFinishDownload = 184;
+inline constexpr int kDlDownloadCompleted = 185;
 
 } // namespace proto::rpc

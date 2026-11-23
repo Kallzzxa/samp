@@ -3,7 +3,42 @@
 #include "../Settings.h"
 #include "VehicleColoursTable.h"
 
+#include <sys/stat.h>
+
 sa::CPlayerInfo* WORLD_PLAYERS = nullptr;
+
+bool Patches::hasFullAudioData()
+{
+	static int s_cached = -1;
+	if (s_cached != -1) {
+		return s_cached == 1;
+	}
+	const std::string dir = Client::gameDir();
+	if (dir.empty()) {
+		s_cached = 0;
+		return false;
+	}
+	// Check both lowercase (Android) and uppercase (PC-style) audio bank paths.
+	// Stripped 1.04GB data packs omit all .osw banks; leaving the audio engine
+	// enabled without them crashes in CAEMP3TrackLoader::GetDataStream on spawn.
+	const char* probes[] = {
+		"audio/sfx/GENRL.osw",
+		"audio/SFX/GENRL.osw",
+		"audio/sfx/genrl.osw",
+		"audio/sfx/FEET.osw",
+		"audio/SFX/FEET.osw",
+	};
+	struct stat st{};
+	for (const char* rel : probes) {
+		const std::string full = (dir.back() == '/') ? (dir + rel) : (dir + "/" + rel);
+		if (stat(full.c_str(), &st) == 0 && st.st_size > 0) {
+			s_cached = 1;
+			return true;
+		}
+	}
+	s_cached = 0;
+	return false;
+}
 
 void Patches::preApply()
 {
@@ -126,6 +161,7 @@ void Patches::apply()
 	patches::registerRet("DisableAutoAim.FindTarget", "Disable auto-aim lock-on search", patches::Scope::Session, eng::Sym::CPlayerPed_FindWeaponLockOnTarget, true);
 	patches::registerRet("DisableAutoAim.FindNextTarget", "Disable auto-aim next-target search", patches::Scope::Session, eng::Sym::CPlayerPed_FindNextWeaponLockOnTarget, true);
 	patches::registerRet("DisableAutoAim.SetTarget", "Disable auto-aim set target", patches::Scope::Session, eng::Sym::CPed_SetWeaponLockOnTarget, true);
+	patches::registerRet("DisableAutoAim.TapToTarget", "Disable tap-to-target auto-aim & aim reset", patches::Scope::Session, eng::Sym::CPlayerPed_HandleTapToTarget, true);
 	patches::registerRet("CClothes::RebuildPlayer", "Skip CJ clothes rebuild on model change", patches::Scope::Session, eng::Sym::CClothes_RebuildPlayer, true);
 
 	patches::apply(patches::Scope::Boot);
@@ -193,11 +229,14 @@ void Patches::apply()
 	patches::registerRet("CCarEnterExit::SetPedInCarDirect", "Avoid direct teleport into vehicles", patches::Scope::Online, eng::Sym::CCarEnterExit_SetPedInCarDirect);
 	patches::registerRet0("CPopulation::AddPed", "Disable ambient pedestrian spawns (return nullptr)", patches::Scope::Online, eng::Sym::CPopulation_AddPed);
 
-	// No vehicle audio processing & loading tune (no .osw audio shipped)
-	patches::registerNop("CAEVehicleAudio.CAutomobile", "Disable automobile audio service", patches::Scope::Online, addr::CAEVehicleAudioEntity_Service_patch1, 2);
-	patches::registerNop("CAEVehicleAudio.CBike", "Disable bike audio service", patches::Scope::Online, addr::CAEVehicleAudioEntity_Service_patch2, 2);
-	patches::registerNop("CAEVehicleAudio.CBoat", "Disable boat audio service", patches::Scope::Online, addr::CAEVehicleAudioEntity_Service_patch3, 2);
-	patches::registerNop("CAEVehicleAudio.CTrain", "Disable train audio service", patches::Scope::Online, addr::CAEVehicleAudioEntity_Service_patch4, 2);
+	// Vehicle audio processing: only disable when .osw audio data is absent (T06)
+	const bool hasAudio = hasFullAudioData();
+	if (!hasAudio) {
+		patches::registerNop("CAEVehicleAudio.CAutomobile", "Disable automobile audio service (no .osw)", patches::Scope::Online, addr::CAEVehicleAudioEntity_Service_patch1, 2);
+		patches::registerNop("CAEVehicleAudio.CBike", "Disable bike audio service (no .osw)", patches::Scope::Online, addr::CAEVehicleAudioEntity_Service_patch2, 2);
+		patches::registerNop("CAEVehicleAudio.CBoat", "Disable boat audio service (no .osw)", patches::Scope::Online, addr::CAEVehicleAudioEntity_Service_patch3, 2);
+		patches::registerNop("CAEVehicleAudio.CTrain", "Disable train audio service (no .osw)", patches::Scope::Online, addr::CAEVehicleAudioEntity_Service_patch4, 2);
+	}
 	patches::registerNop("CAudioEngine.StartLoadingTune", "Disable loading tune audio", patches::Scope::Online, addr::CAudioEngine_StartLoadingTune_patch, 2);
 
 #if !VER_x32
@@ -231,13 +270,19 @@ void Patches::apply()
 	patches::registerRet("CCarCtrl::GenerateRandomCars", "Disable ambient traffic cars", patches::Scope::Online, eng::Sym::CCarCtrl_GenerateRandomCars);
 	patches::registerRet("CTheCarGenerators::Process", "Disable parked car generators", patches::Scope::Online, eng::Sym::CTheCarGenerators_Process);
 
-	// Disable in-game radio & built-in GTA:SA audio servicing (no .osw audio shipped;
-	// SA-MP AudioStream/Voice use BASS independently).
-	patches::registerRet("CAERadioTrackManager::Service", "Disable GTA radio service (no .osw)", patches::Scope::Online, eng::Sym::CAERadioTrackManager_Service);
-	patches::registerRet("CAudioEngine::Service", "Disable GTA audio engine service (no .osw)", patches::Scope::Online, eng::Sym::CAudioEngine_Service);
-	patches::registerRet("CAEStreamThread::Service", "Disable GTA audio stream thread (no .osw)", patches::Scope::Online, eng::Sym::CAEStreamThread_Service);
-	patches::registerRet("CAEFrontendAudioEntity::AddAudioEvent", "Disable GTA frontend audio events (no .osw)", patches::Scope::Online, eng::Sym::CAEFrontendAudioEntity_AddAudioEvent);
-	patches::registerRet("CAudioEngine::ReportFrontendAudioEvent", "Disable GTA frontend audio report (no .osw)", patches::Scope::Online, eng::Sym::CAudioEngine_ReportFrontendAudioEvent);
+	// Disable built-in GTA:SA audio servicing only when .osw audio files are absent (T06);
+	// when full audio banks exist, let the engine play SFX, vehicle sounds, and PlayerPlaySound.
+	if (!hasAudio) {
+		spdlog::info("Patches: no .osw audio banks detected -> keeping GTA audio engine patched");
+		patches::registerRet("CAERadioTrackManager::Service", "Disable GTA radio service (no .osw)", patches::Scope::Online, eng::Sym::CAERadioTrackManager_Service);
+		patches::registerRet("CAudioEngine::Service", "Disable GTA audio engine service (no .osw)", patches::Scope::Online, eng::Sym::CAudioEngine_Service);
+		patches::registerRet("CAEStreamThread::Service", "Disable GTA audio stream thread (no .osw)", patches::Scope::Online, eng::Sym::CAEStreamThread_Service);
+		patches::registerRet("CAEFrontendAudioEntity::AddAudioEvent", "Disable GTA frontend audio events (no .osw)", patches::Scope::Online, eng::Sym::CAEFrontendAudioEntity_AddAudioEvent);
+		patches::registerRet("CAudioEngine::ReportFrontendAudioEvent", "Disable GTA frontend audio report (no .osw)", patches::Scope::Online, eng::Sym::CAudioEngine_ReportFrontendAudioEvent);
+	}
+	else {
+		spdlog::info("Patches: full .osw audio banks detected -> GTA audio engine enabled");
+	}
 
 	patches::apply(patches::Scope::Online);
 

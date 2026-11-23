@@ -31,6 +31,7 @@
 #include "SAMPWidgets/Scoreboard.h"
 #include "SAMPWidgets/DebugLabels.h"
 #include "SAMPWidgets/DeathWindow.h"
+#include "SAMPWidgets/NetStats.h"
 
 class UI : public Widget, public ImGuiWrapper {
 public:
@@ -49,6 +50,7 @@ public:
 	VoiceButton* voicebutton() const { return m_voiceButton; }
 	DebugLabels* debuglabels() const { return m_debugLabels; }
 	DeathWindow* deathwindow() const { return m_deathWindow; }
+	NetStats* netstats() const { return m_netStats; }
 
 	static const ImColor fixcolor(uint32_t color)
 	{
@@ -102,6 +104,7 @@ private:
 	VoiceButton* m_voiceButton = nullptr;
 	DebugLabels* m_debugLabels = nullptr;
 	DeathWindow* m_deathWindow = nullptr;
+	NetStats* m_netStats = nullptr;
 
 	mutable std::mutex m_touchMutex;
 	std::deque<PendingTouch> m_pendingTouches;

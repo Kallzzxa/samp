@@ -40,9 +40,13 @@ void CPickupPool::Process()
 						pNetGame->GetRakClient()->RPC(&RPC_PickedUpPickup, &bsPickup, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 					}
 					else {
-						// Dead branch until T23 (dropped weapon pickups) replaces this with RPC 97
-						bsPickup.Write(m_droppedWeapon[i].PlayerID);
-						pNetGame->GetRakClient()->RPC(&RPC_PickedUpPickup, &bsPickup, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
+						// T23: notify server via RPC 97 (dropped weapon pickup collected)
+						proto::Writer writer(bsPickup);
+						proto::PickedUpWeaponPickupReq req{};
+						req.owner = m_droppedWeapon[i].PlayerID;
+						req.serialize(writer, proto::ProtoVersion::V037);
+						pNetGame->GetRakClient()->RPC(&RPC_DestroyWeaponPickup, &bsPickup, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
+						Destroy(i);
 					}
 				}
 			}
@@ -74,6 +78,37 @@ void CPickupPool::New(PICKUP* pPickup, int iPickup)
 	m_dwGTAId[iPickup] = dwGTAId;
 }
 
+void CPickupPool::CreateWeapon(int iModel, float fX, float fY, float fZ, int iAmmo, PLAYERID owner)
+{
+	if (!pGame || iModel <= 0) return;
+
+	// Replace any previous dropped weapon from the same owner
+	DestroyWeaponByOwner(owner);
+
+	int slot = -1;
+	for (int i = 0; i < MAX_PICKUPS; ++i) {
+		if (m_dwHnd[i] == 0) {
+			slot = i;
+			break;
+		}
+	}
+	if (slot < 0) return;
+
+	uint32_t hnd = pGame->CreateWeaponPickup(iModel, iAmmo, fX, fY, fZ);
+	if (hnd == 0) return;
+
+	m_Pickups[slot].iModel = iModel;
+	m_Pickups[slot].iType = 4;
+	m_Pickups[slot].fX = fX;
+	m_Pickups[slot].fY = fY;
+	m_Pickups[slot].fZ = fZ;
+	m_dwHnd[slot] = hnd;
+	m_dwGTAId[slot] = 0xFFFFFFFF;
+	m_iTimer[slot] = 0;
+	m_droppedWeapon[slot].bDroppedWeapon = true;
+	m_droppedWeapon[slot].PlayerID = owner;
+}
+
 /**
  * @param iPickup
  */
@@ -86,16 +121,18 @@ void CPickupPool::Destroy(int iPickup)
 		m_dwHnd[iPickup] = 0;
 		m_iTimer[iPickup] = 0;
 		m_dwGTAId[iPickup] = 0xFFFFFFFF;
+		m_droppedWeapon[iPickup].bDroppedWeapon = false;
+		m_droppedWeapon[iPickup].PlayerID = INVALID_PLAYER_ID;
 	}
 }
 
 /**
- * @param byteOwner owner player id sent by ScrDestroyWeaponPickup
+ * @param owner owner player id sent by ScrDestroyWeaponPickup
  */
-void CPickupPool::DestroyWeaponByOwner(uint8_t byteOwner)
+void CPickupPool::DestroyWeaponByOwner(PLAYERID owner)
 {
 	for (int i = 0; i < MAX_PICKUPS; i++) {
-		if (m_dwHnd[i] && m_droppedWeapon[i].bDroppedWeapon && m_droppedWeapon[i].PlayerID == byteOwner) {
+		if (m_dwHnd[i] && m_droppedWeapon[i].bDroppedWeapon && m_droppedWeapon[i].PlayerID == owner) {
 			Destroy(i);
 		}
 	}

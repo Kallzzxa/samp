@@ -185,11 +185,17 @@ public:
 	void SpectateVehicle(VEHICLEID VehicleID);
 
 	void CheckWeapons();
+	void FindAimedTargets(PLAYERID& outPlayerId, PLAYERID& outActorId);
 	void UpdateRemoteInterior(uint8_t byteInterior);
 	void UpdateCameraTarget();
+	const uint16_t* GetCameraTargets() const { return m_wCameraTargets; }
+	PLAYERID GetAimedPlayerId() const { return m_lastTargetPlayerId; }
+	PLAYERID GetAimedActorId() const { return m_lastTargetActorId; }
 	void UpdateVehicleDamage(VEHICLEID vehicleID);
 	bool IsClearedToSpawn() { return m_bClearedToSpawn; }
 	void HandleClassSelection();
+	void ReturnToClassSelection() { m_bWantsAnotherClass = true; }
+	bool WantsAnotherClass() const { return m_bWantsAnotherClass; }
 
 	bool EnterVehicleAsPassenger();
 	bool HandlePassengerEntry();
@@ -264,12 +270,15 @@ private:
 	CPlayerPed* m_pPlayerPed;
 	bool m_bIsWasted;
 	bool m_bClearedToSpawn;
+	bool m_bWantsAnotherClass;
 	bool m_bInRCMode;
 	bool m_bHasSpawnInfo;
 	bool m_bSpawnDialogShowed;
 	uint8_t m_byteCurrentWeapon;
 	uint8_t m_byteLastWeapon[13];
 	uint32_t m_dwLastAmmo[13];
+	PLAYERID m_lastTargetPlayerId;
+	PLAYERID m_lastTargetActorId;
 
 	PLAYER_SPAWN_INFO m_SpawnInfo;
 	ONFOOT_SYNC_DATA m_ofSync;
@@ -301,6 +310,8 @@ private:
 	uint32_t m_dwLastSendSpecTick;
 	uint32_t m_dwLastWeaponsUpdateTick;
 	uint32_t m_dwLastHeadUpdate;
+	uint32_t m_dwLastCameraTargetTick = 0;
+	uint16_t m_wCameraTargets[4] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
 
 	uint8_t m_byteCurInterior;
 	VEHICLEID m_CurrentVehicle;

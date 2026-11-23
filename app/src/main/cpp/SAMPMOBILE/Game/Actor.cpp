@@ -89,8 +89,13 @@ void CActor::ApplyAnimation(const char* szAnimName, const char* szAnimLib, float
 		return;
 	}
 
-	if (!strcasecmp(szAnimLib, "SAMP") || !strcasecmp(szAnimLib, "SEX")) {
+	if (!strcasecmp(szAnimLib, "SEX")) {
 		return;
+	}
+	if (!strcasecmp(szAnimLib, "SAMP")) {
+		if (!eng::fn::CAnimManager_GetAnimationBlock<void*>(szAnimLib)) {
+			return;
+		}
 	}
 
 	int iWaitAnimLoad = 0;

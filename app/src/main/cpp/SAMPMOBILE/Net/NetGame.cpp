@@ -3,6 +3,7 @@
 #include "NetGame.h"
 #include "NetCap.h"
 #include "RpcTable.h"
+#include "Proto/Gpci.h"
 #include "Proto/RpcOutbound.h"
 #include "Proto/Sync.h"
 #include <RakNet/SAMP/NetCapHook.h>
@@ -12,12 +13,87 @@
 #include "../Voice/SpeakerList.h"
 #include "../Voice/Network.h"
 #include <atomic>
+#include <chrono>
+#include <cstdio>
+#include <fstream>
 #include <mutex>
+#include <random>
 
-#define AUTH_BS OBFUSCATE("39FB2DEEDB49ACFB8D4EECE6953D2507988CCCF4410")
-// 39FB2DEEDB49ACFB8D4EECE6953D2507988CCCF4410 arz
-// 1031CA8429843C9B8C178B65F3C73602578440D17F8 unarak
-// 15121F6F18550C00AC4B4F8A167D0379BB0ACA99043 build 69
+namespace {
+
+std::string loadOrCreateDeviceGpci()
+{
+	static std::string cachedGpci;
+	if (!cachedGpci.empty()) {
+		return cachedGpci;
+	}
+
+	std::string seed;
+	const std::string dir = Client::gameDir();
+	const std::string seedPath = dir.empty() ? std::string() : (dir + "/gpci_seed.dat");
+
+	if (!seedPath.empty()) {
+		std::ifstream in(seedPath, std::ios::binary);
+		if (in.is_open()) {
+			std::getline(in, seed);
+			while (!seed.empty() && (seed.back() == '\r' || seed.back() == '\n' || seed.back() == ' ')) {
+				seed.pop_back();
+			}
+		}
+	}
+
+	if (seed.size() < 16) {
+		uint8_t rnd[32]{};
+		bool gotRandom = false;
+		if (FILE* f = std::fopen("/dev/urandom", "rb")) {
+			gotRandom = (std::fread(rnd, 1, sizeof(rnd), f) == sizeof(rnd));
+			std::fclose(f);
+		}
+		if (!gotRandom) {
+			std::random_device rd;
+			const uint64_t t = static_cast<uint64_t>(
+				std::chrono::high_resolution_clock::now().time_since_epoch().count());
+			for (size_t i = 0; i < sizeof(rnd); i += 4) {
+				const uint32_t v = rd() ^ static_cast<uint32_t>(t >> ((i % 8) * 4));
+				rnd[i + 0] = static_cast<uint8_t>(v & 0xFFu);
+				rnd[i + 1] = static_cast<uint8_t>((v >> 8) & 0xFFu);
+				rnd[i + 2] = static_cast<uint8_t>((v >> 16) & 0xFFu);
+				rnd[i + 3] = static_cast<uint8_t>((v >> 24) & 0xFFu);
+			}
+		}
+
+		static const char kHex[] = "0123456789ABCDEF";
+		seed.clear();
+		seed.reserve(sizeof(rnd) * 2);
+		for (uint8_t b : rnd) {
+			seed.push_back(kHex[b >> 4]);
+			seed.push_back(kHex[b & 0x0Fu]);
+		}
+
+		if (!seedPath.empty()) {
+			const std::string tmpPath = seedPath + ".tmp";
+			std::ofstream out(tmpPath, std::ios::binary | std::ios::trunc);
+			if (out.is_open()) {
+				out.write(seed.data(), static_cast<std::streamsize>(seed.size()));
+				out.flush();
+				const bool ok = out.good();
+				out.close();
+				if (ok) {
+					std::rename(tmpPath.c_str(), seedPath.c_str());
+				}
+				else {
+					std::remove(tmpPath.c_str());
+				}
+			}
+		}
+	}
+
+	cachedGpci = proto::generateGpci(seed);
+	spdlog::info("NetGame: device GPCI initialized (len={})", cachedGpci.size());
+	return cachedGpci;
+}
+
+} // namespace
 
 extern UI* pUI;
 extern Game* pGame;
@@ -212,6 +288,7 @@ void NetGame::UninitializePools()
 void NetGame::Process()
 {
 	UpdateNetwork();
+	ProcessDlArtworkHandshake();
 	if (m_netSet->holdTime) {
 		pGame->SetWorldTime(m_netSet->worldTime_Hour, m_netSet->worldTime_Minute);
 	}
@@ -220,6 +297,9 @@ void NetGame::Process()
 
 	if (GetGameState() == GAMESTATE_CONNECTED) {
 		ProcessPools();
+		if (pGame) {
+			pGame->ProcessAudio();
+		}
 	}
 	else {
 		ProcessLoadingScreen();
@@ -254,7 +334,6 @@ void NetGame::UpdateNetwork()
 				break;
 
 			case ID_DISCONNECTION_NOTIFICATION: Packet_DisconnectionNotification(pkt);
-				SetGameState(GAMESTATE_WAIT_CONNECT);
 				break;
 
 			case ID_CONNECTION_LOST: Packet_ConnectionLost(pkt);
@@ -267,7 +346,6 @@ void NetGame::UpdateNetwork()
 				break;
 
 			case ID_CONNECTION_BANNED: Packet_ConnectionBanned(pkt);
-				SetGameState(GAMESTATE_WAIT_CONNECT);
 				break;
 
 			case ID_INVALID_PASSWORD: Packet_InvalidPassword(pkt);
@@ -339,6 +417,10 @@ void NetGame::ShutdownForGameModeRestart(SessionState::ResetReason reason)
 	ResetPickupPool();
 	ResetObjectPool();
 	ResetMenuPool();
+	ResetDlArtworkState();
+	if (pUI && pUI->netstats()) {
+		pUI->netstats()->resetServerStats();
+	}
 
 	m_session.reset(reason);
 
@@ -415,7 +497,7 @@ void NetGame::ProcessLoadingScreen()
 
 void NetGame::ProcessConnecting()
 {
-	if ((GetTickCount() - m_lastConnectAttempt) > 1000) {
+	if ((GetTickCount() - m_lastConnectAttempt) > 3000) {
 		if (pUI) {
 			pUI->chat()->addDebugMessage("Connecting to %s:%d...", m_host, m_port);
 		}
@@ -552,7 +634,7 @@ void NetGame::Packet_ConnectionSucceeded(Packet* pkt)
 	join.mod = byteMod;
 	join.nickname = GetPlayerPool()->GetLocalPlayerName();
 	join.challengeResponse = uiChallenge;
-	join.authKey = AUTH_BS;
+	join.authKey = loadOrCreateDeviceGpci();
 	join.clientVersion = Client::sampVersion();
 	join.serialize(writer, ver);
 
@@ -1044,4 +1126,38 @@ void NetGame::SendNextClass()
 	if (pPlayerPool) {
 		pPlayerPool->GetLocalPlayer()->SendNextClass();
 	}
+}
+
+void NetGame::NotifyDlVirtualWorld(int32_t virtualWorld)
+{
+	if (!m_dlVirtualWorldKnown || virtualWorld != m_dlVirtualWorld) {
+		m_dlVirtualWorld = virtualWorld;
+		m_dlVirtualWorldKnown = true;
+		m_dlFinishDownloadPending = true;
+	}
+}
+
+void NetGame::ResetDlArtworkState()
+{
+	m_dlVirtualWorld = 0;
+	m_dlVirtualWorldKnown = false;
+	m_dlFinishDownloadPending = false;
+}
+
+void NetGame::ProcessDlArtworkHandshake()
+{
+	if (!m_dlFinishDownloadPending) {
+		return;
+	}
+	if (!m_rakClient || !m_rakClient->IsConnected() || m_session.protoVersion != proto::ProtoVersion::V03DL) {
+		return;
+	}
+	m_dlFinishDownloadPending = false;
+
+	RakNet::BitStream bsOut;
+	proto::Writer writer(bsOut);
+	proto::DlFinishDownloadReq req{};
+	req.serialize(writer, proto::ProtoVersion::V03DL);
+	m_rakClient->RPC(&RPC_DlFinishDownload, &bsOut, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
+	spdlog::debug("NetGame: sent 0.3.DL FinishDownload (RPC 184) for vw={}", m_dlVirtualWorld);
 }

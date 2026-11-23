@@ -42,6 +42,12 @@ bool UI::initialize()
 	m_debugLabels->setPosition(ImVec2(0, 0));
 	m_debugLabels->setVisible(false);
 
+	m_netStats = new NetStats();
+	this->addChild(m_netStats);
+	m_netStats->setSize(ImVec2(0, 0));
+	m_netStats->setPosition(ImVec2(0, 0));
+	m_netStats->setVisible(false);
+
 	m_chat = new Chat();
 	this->addChild(m_chat);
 	m_chat->setFixedSize(UISettings::chatSize());
@@ -177,6 +183,8 @@ void UI::drawList()
 	if (pNetGame && pNetGame->GetTextLabelPool()) pNetGame->GetTextLabelPool()->Render(renderer());
 	if (pNetGame && pNetGame->GetPlayerBubblePool()) pNetGame->GetPlayerBubblePool()->Render(renderer());
 	if (pNetGame && pNetGame->GetTextDrawPool()) pNetGame->GetTextDrawPool()->DrawImGui(renderer());
+	if (pNetGame && pNetGame->GetObjectPool()) pNetGame->GetObjectPool()->DrawSelectOverlay(renderer());
+	if (pNetGame && pNetGame->GetMenuPool()) pNetGame->GetMenuPool()->Render(renderer());
 	if (pGame) pGame->DrawImGuiGameText(renderer());
 
 	// Custom crosshair styles (1=精简十字, 2=中心圆点, 3=十字加圆点)

@@ -30,7 +30,7 @@ public:
 		return m_bSelectState.load(std::memory_order_acquire);
 	}
 
-	void SetSelectState(bool bState, uint32_t dwColor = 0);
+	void SetSelectState(bool bState, uint32_t dwColor = 0, bool bSendCancel = true);
 	bool onTouchEvent(int type, int x, int y);
 	// Thread-safe touch entry point called from NVEvent thread; queues events
 	// for GameMain processing instead of mutating pool / sending RPC cross-thread.

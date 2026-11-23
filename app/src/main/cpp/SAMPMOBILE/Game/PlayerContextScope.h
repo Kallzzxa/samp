@@ -19,11 +19,11 @@ public:
 		kZoomAspect = 1u << 1,
 		kAim        = 1u << 2,
 		kFocus      = 1u << 3,
-		kSkills     = 1u << 4, // Reserved for T08 (weapon skill levels)
+		kSkills     = 1u << 4, // T08 weapon skill levels
 
 		// Presets matching the four existing switching forms
-		kFull          = kCamMode | kZoomAspect | kAim | kFocus, // CPed_ProcessControl, CTaskSimpleUseGun_SetPedPosition
-		kFireInstant   = kCamMode | kZoomAspect | kAim,          // CPlayerPed::FireInstant (no PlayerInFocus switch)
+		kFull          = kCamMode | kZoomAspect | kAim | kFocus | kSkills, // CPed_ProcessControl, CTaskSimpleUseGun_SetPedPosition
+		kFireInstant   = kCamMode | kZoomAspect | kAim | kSkills,          // CPlayerPed::FireInstant (no PlayerInFocus switch)
 		kVehicle       = kCamMode | kAim | kFocus,               // Combined vehicle context
 		kVehicleCamAim = kCamMode | kAim,                        // Vehicle outer scope (focus switches after AudioService)
 		kFocusOnly     = kFocus,                                 // PlayerPed focus-only sites & vehicle inner scope
@@ -67,8 +67,13 @@ public:
 			}
 		}
 
-		// 保留：T08 — weapon skill switching (store previous skills on instance)
-		// if (flags_ & kSkills) { ... }
+		if (flags_ & kSkills) {
+			if (float* stats = GameGetWeaponSkillStatsPtr()) {
+				std::memcpy(savedSkills_, stats, sizeof(savedSkills_));
+				savedSkillsValid_ = true;
+				GameApplyRemotePlayerSkills(playerNum);
+			}
+		}
 
 		if (flags_ & kFocus) {
 			if (pbyteCurrentPlayer) {
@@ -89,8 +94,11 @@ public:
 			*pbyteCurrentPlayer = savedCurrentPlayer_;
 		}
 
-		// 保留：T08 — weapon skill restoration
-		// if (flags_ & kSkills) { ... }
+		if (savedSkillsValid_) {
+			if (float* stats = GameGetWeaponSkillStatsPtr()) {
+				std::memcpy(stats, savedSkills_, sizeof(savedSkills_));
+			}
+		}
 
 		if (savedCamMode1_ && pbyteCameraMode) {
 			*pbyteCameraMode = savedCameraMode_;
@@ -124,9 +132,11 @@ private:
 	float savedExtZoom_ = 0.0f;
 	float savedAspectRatio_ = 0.0f;
 	CAMERA_AIM savedAim_{};
+	float savedSkills_[kWeaponSkillCount]{};
 	bool savedCamMode1_ = false;
 	bool savedCamMode2_ = false;
 	bool savedZoomAspect_ = false;
 	bool savedAimValid_ = false;
+	bool savedSkillsValid_ = false;
 	bool switchedFocus_ = false;
 };

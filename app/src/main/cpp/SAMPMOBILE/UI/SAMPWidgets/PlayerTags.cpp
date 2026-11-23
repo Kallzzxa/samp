@@ -191,7 +191,7 @@ void PlayerTags::drawTag(ImGuiRenderer* renderer, RwV3d* vec, const char* szNick
 	}
 
 	// AFK icon
-	if (bAfk && m_afkTexture) {
+	if (bAfk && m_afkTexture && Settings::showNameTagStatus()) {
 		ImVec2 a = ImVec2(HealthBarBDR1.x - (tagFontSize * 1.4f), HealthBarBDR1.y);
 		ImVec2 b = ImVec2(a.x + (tagFontSize * 1.3f), a.y + (tagFontSize * 1.3f));
 		renderer->drawImage(a, b, m_afkTexture->raster);

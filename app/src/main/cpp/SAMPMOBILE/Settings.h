@@ -36,9 +36,12 @@ public:
 	static bool voice() { return m_voice; }
 	static bool displayfps() { return m_displayfps; }
 	static int fpslimit() { return m_fpslimit; }
+	static void setFpsLimit(int v) { m_fpslimit = v; }
 	static int chatstrings() { return m_chatstrings; }
 	static void setChatstrings(int v) { m_chatstrings = v; }
 	static float fontsize() { return m_fontsize; }
+	static int fontSizeOffset() { return m_fontsizeoffset; }
+	static void setFontSizeOffset(int v) { m_fontsizeoffset = v; }
 	static ImVec2 chatpos() { return m_chatpos; }
 	static ImVec2 chatsize() { return m_chatsize; }
 	static char* charset() { return m_charset; }
@@ -127,6 +130,12 @@ public:
 	static bool chatShadow() { return m_chatshadow; }
 	static int screenshotMode() { return m_screenshotmode; }
 	static void setScreenshotMode(int mode) { m_screenshotmode = mode; }
+	static bool audioMsg() { return m_audiomsg; }
+	static void setAudioMsg(bool v) { m_audiomsg = v; }
+	static bool logUrls() { return m_logurls; }
+	static void setLogUrls(bool v) { m_logurls = v; }
+	static bool showNameTagStatus() { return m_shownametagstatus; }
+	static void setShowNameTagStatus(bool v) { m_shownametagstatus = v; }
 
 private:
 	static bool m_initialized;
@@ -224,4 +233,8 @@ private:
 	static bool m_gtasubtitles;
 	static bool m_chatshadow;
 	static int m_screenshotmode;
+	static int m_fontsizeoffset;
+	static bool m_audiomsg;
+	static bool m_logurls;
+	static bool m_shownametagstatus;
 };

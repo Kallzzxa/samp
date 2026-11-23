@@ -186,41 +186,6 @@ uint32_t Game::CreateRadarMarkerIcon(uint8_t byteType, float fPosX, float fPosY,
 	}
 
 	return dwMarkerID;
-
-	// 保留：T26 — map icon style switch (crashes investigation)
-	// crashes sometimes wtf?
-	/*uint32_t dwMapIcon = 0;
-
-	switch (byteStyle) {
-		case 0:    // MAPICON_LOCAL
-			ScriptCommand(&create_radar_marker_without_sphere, fPosX, fPosY, fPosZ, byteType, &dwMapIcon);
-			break;
-
-		case 1:    // MAPICON_GLOBAL
-			ScriptCommand(&create_marker_icon, fPosX, fPosY, fPosZ, byteType, &dwMapIcon);
-			break;
-
-		case 2:    // MAPICON_LOCAL_CHECKPOINT
-			ScriptCommand(&create_radar_marker_icon, fPosX, fPosY, fPosZ, byteType, &dwMapIcon);
-			break;
-
-		case 3:    // MAPICON_GLOBAL_CHECKPOINT
-			ScriptCommand(&create_icon_marker_sphere, fPosX, fPosY, fPosZ, byteType, &dwMapIcon);
-			break;
-	}
-
-	if (byteType == 0) {
-		if (dwColor < 1004) {
-			ScriptCommand(&set_marker_color, dwMapIcon, dwColor);
-			ScriptCommand(&show_on_radar, dwMapIcon, 2);
-		}
-		else {
-			ScriptCommand(&set_marker_color, dwMapIcon, dwColor);
-			ScriptCommand(&show_on_radar, dwMapIcon, 3);
-		}
-	}
-
-	return dwMapIcon;*/
 }
 
 void Game::UpdateCheckpoints()
@@ -569,6 +534,7 @@ void Game::DisableAutoAim()
 	patches::set("DisableAutoAim.FindTarget", true);
 	patches::set("DisableAutoAim.FindNextTarget", true);
 	patches::set("DisableAutoAim.SetTarget", true);
+	patches::set("DisableAutoAim.TapToTarget", true);
 }
 
 void Game::SetWantedLevel(uint8_t level)
@@ -582,8 +548,38 @@ void Game::SetWantedLevel(uint8_t level)
 
 void Game::EnableStuntBonus(bool bEnable)
 {
-	//spdlog::info("Game::EnableStuntBonus: {}", bEnable);
-	// todo
+	spdlog::debug("Game::EnableStuntBonus: {}", bEnable);
+	eng::fn::CStuntJumpManager_SetActive(bEnable);
+}
+
+void Game::LoadShoppingDataSubsection(const char* szSectionName)
+{
+	if (!szSectionName || !szSectionName[0]) {
+		eng::fn::CShopping_RemoveLoadedShop();
+		return;
+	}
+	if (strlen(szSectionName) <= 8) {
+		eng::fn::CShopping_LoadShop(szSectionName);
+	}
+}
+
+void Game::PlayCrimeReport(uint32_t crimeId, const sa::CVector& pos)
+{
+	if (!Patches::hasFullAudioData()) {
+		return;
+	}
+	if (crimeId < 2 || crimeId > 22) {
+		return;
+	}
+	CPlayerPed* pLocalPed = FindPlayerPed();
+	if (!pLocalPed || !pLocalPed->m_ped || !pLocalPed->m_ped->m_pPlayerData || !pLocalPed->m_ped->m_pPlayerData->m_pWanted) {
+		return;
+	}
+	// CWanted::m_PoliceScannerAudioEntity offset verified via libGTASA.so CWanted::ReportCrimeNow:
+	// arm64-v8a: +0x308 (#776), armeabi-v7a: +0x21C (#540)
+	constexpr size_t kPoliceScannerOffset = VER_x32 ? 0x21C : 0x308;
+	void* pScanner = reinterpret_cast<uint8_t*>(pLocalPed->m_ped->m_pPlayerData->m_pWanted) + kPoliceScannerOffset;
+	eng::fn::CAEPoliceScannerAudioEntity_AddAudioEvent(pScanner, 0xA4, static_cast<int>(crimeId), &pos);
 }
 
 void Game::SetGravity(float fGravity)
@@ -660,6 +656,40 @@ void Game::PlaySound(int iSound, float fX, float fY, float fZ)
 	ScriptCommand(&play_sound, fX, fY, fZ, iSound);
 }
 
+void Game::PlaySoundEx(int iSound, float fX, float fY, float fZ)
+{
+	if (iSound == 0) {
+		if (m_missionAudioState != 0) {
+			ScriptCommand(&clear_mission_audio, 1);
+			m_missionAudioState = 0;
+		}
+		return;
+	}
+	if (iSound == 1) {
+		return;
+	}
+	if (iSound >= 1000 && iSound < 2000) {
+		PlaySound(iSound, fX, fY, fZ);
+		return;
+	}
+	if (iSound >= 2000 && Patches::hasFullAudioData()) {
+		ScriptCommand(&clear_mission_audio, 1);
+		ScriptCommand(&load_mission_audio, 1, iSound);
+		ScriptCommand(&set_mission_audio_position, 1, fX, fY, fZ);
+		m_missionAudioState = 1;
+	}
+}
+
+void Game::ProcessAudio()
+{
+	if (m_missionAudioState == 1 && Patches::hasFullAudioData()) {
+		if (ScriptCommand(&has_mission_audio_loaded, 1)) {
+			ScriptCommand(&play_mission_audio, 1);
+			m_missionAudioState = 2;
+		}
+	}
+}
+
 /**
  * @return
  */
@@ -723,6 +753,31 @@ uint32_t Game::CreatePickup(int iModel, int iType, float x, float y, float z, in
 		*pdwIndex = offset;
 	}
 
+	return hnd;
+}
+
+uint32_t Game::CreateWeaponPickup(int iModel, int iAmmo, float x, float y, float z)
+{
+	if (!IsValidModel(iModel)) {
+		return 0;
+	}
+
+	if (!IsModelLoaded(iModel)) {
+		RequestModel(iModel);
+		LoadRequestedModels();
+
+		int iWaitLoad = 0;
+		while (!IsModelLoaded(iModel)) {
+			usleep(5000);
+			if (++iWaitLoad > 400) {
+				spdlog::error("Game::CreateWeaponPickup: model {} wouldn't load in time", iModel);
+				return 0;
+			}
+		}
+	}
+
+	uint32_t hnd = 0;
+	ScriptCommand(&create_pickup_with_ammo, iModel, 4, iAmmo, x, y, z, &hnd);
 	return hnd;
 }
 

@@ -116,8 +116,8 @@ const RpcEntry kInbound[] = {
 	RPC_ENTRY(RPC_ScrSetPlayerColor, proto::SetPlayerColor, RpcHandlers::OnSetPlayerColor),
 	RPC_ENTRY(RPC_ScrSetPlayerTeam, proto::SetPlayerTeam, RpcHandlers::OnSetPlayerTeam),
 	RPC_ENTRY(RPC_ScrSetPlayerName, proto::SetPlayerName, RpcHandlers::OnSetPlayerName),
-	// Legacy T03: swap to proto::SetPlayerSkin in task T03
-	RPC_ENTRY(RPC_ScrSetPlayerSkin, proto::SetPlayerSkinLegacyT03, RpcHandlers::OnSetPlayerSkinLegacyT03),
+	RPC_ENTRY(RPC_SetPlayerSkillLevel, proto::SetPlayerSkillLevel, RpcHandlers::OnSetPlayerSkillLevel),
+	RPC_ENTRY(RPC_ScrSetPlayerSkin, proto::SetPlayerSkin, RpcHandlers::OnSetPlayerSkin),
 	RPC_ENTRY(RPC_ScrSetInterior, proto::SetPlayerInterior, RpcHandlers::OnSetPlayerInterior),
 	RPC_ENTRY(RPC_ScrTogglePlayerControllable, proto::TogglePlayerControllable, RpcHandlers::OnTogglePlayerControllable),
 	RPC_ENTRY(RPC_ScrSetWorldBounds, proto::SetWorldBounds, RpcHandlers::OnSetWorldBounds),
@@ -142,6 +142,8 @@ const RpcEntry kInbound[] = {
 	RPC_ENTRY(RPC_ScrCreateExplosion, proto::CreateExplosion, RpcHandlers::OnCreateExplosion),
 	RPC_ENTRY(RPC_ScrPlaySound, proto::PlayerPlaySound, RpcHandlers::OnPlayerPlaySound),
 	RPC_ENTRY(RPC_ScrEnableStuntBonus, proto::EnableStuntBonus, RpcHandlers::OnEnableStuntBonus),
+	RPC_ENTRY(RPC_ScrSetPlayerShopName, proto::SetPlayerShopName, RpcHandlers::OnSetPlayerShopName),
+	RPC_ENTRY(RPC_ScrPlayCrimeReport, proto::PlayCrimeReport, RpcHandlers::OnPlayCrimeReport),
 	RPC_ENTRY(RPC_ScrPlayAudioStream, proto::PlayAudioStream, RpcHandlers::OnPlayAudioStream),
 	RPC_ENTRY(RPC_ScrStopAudioStream, proto::StopAudioStream, RpcHandlers::OnStopAudioStream),
 	RPC_ENTRY(RPC_ScrRemoveBuilding, proto::RemoveBuilding, RpcHandlers::OnRemoveBuilding),
@@ -162,9 +164,11 @@ const RpcEntry kInbound[] = {
 	RPC_ENTRY(RPC_ScrPlayerSpectatePlayer, proto::SpectatePlayer, RpcHandlers::OnSpectatePlayer),
 	RPC_ENTRY(RPC_ScrPlayerSpectateVehicle, proto::SpectateVehicle, RpcHandlers::OnSpectateVehicle),
 	RPC_ENTRY(RPC_ScrToggleWidescreen, proto::ToggleWidescreen, RpcHandlers::OnToggleWidescreen),
+	RPC_ENTRY(RPC_ScrEnableCameraTarget, proto::EnableCameraTarget, RpcHandlers::OnEnableCameraTarget),
 	RPC_ENTRY(RPC_RequestClass, proto::RequestClassReply, RpcHandlers::OnRequestClass),
 	RPC_ENTRY(RPC_RequestSpawn, proto::RequestSpawnReply, RpcHandlers::OnRequestSpawn),
 	RPC_ENTRY(RPC_ScrSetSpawnInfo, proto::SetSpawnInfo, RpcHandlers::OnSetSpawnInfo),
+	RPC_ENTRY(RPC_ScrForceSpawnSelection, proto::ForceClassSelection, RpcHandlers::OnForceClassSelection),
 
 	// Batch 4: Vehicle
 	RPC_ENTRY(RPC_WorldVehicleAdd, proto::WorldVehicleAdd, RpcHandlers::OnWorldVehicleAdd),
@@ -190,8 +194,7 @@ const RpcEntry kInbound[] = {
 
 	// Batch 5: Object, Actor, TextDraw
 	RPC_ENTRY(RPC_ScrCreateObject, proto::CreateObject, RpcHandlers::OnCreateObject),
-	// Legacy T36: swap to proto::SetObjectPos in task T36
-	RPC_ENTRY(RPC_ScrSetObjectPos, proto::SetObjectPosLegacyT36, RpcHandlers::OnSetObjectPosLegacyT36),
+	RPC_ENTRY(RPC_ScrSetObjectPos, proto::SetObjectPos, RpcHandlers::OnSetObjectPos),
 	RPC_ENTRY(RPC_ScrSetObjectRotation, proto::SetObjectRotation, RpcHandlers::OnSetObjectRotation),
 	RPC_ENTRY(RPC_ScrDestroyObject, proto::DestroyObject, RpcHandlers::OnDestroyObject),
 	RPC_ENTRY(RPC_ScrMoveObject, proto::MoveObject, RpcHandlers::OnMoveObject),
@@ -215,6 +218,21 @@ const RpcEntry kInbound[] = {
 	RPC_ENTRY(RPC_ScrHideTextDraw, proto::HideTextDraw, RpcHandlers::OnHideTextDraw),
 	RPC_ENTRY(RPC_ScrTextDrawSetString, proto::TextDrawSetString, RpcHandlers::OnTextDrawSetString),
 	RPC_ENTRY(RPC_ClickTextDraw, proto::SelectTextDraw, RpcHandlers::OnSelectTextDraw),
+
+	// Menu (T11)
+	RPC_ENTRY(RPC_ScrInitMenu, proto::InitMenu, RpcHandlers::OnInitMenu),
+	RPC_ENTRY(RPC_ScrShowMenu, proto::ShowMenu, RpcHandlers::OnShowMenu),
+	RPC_ENTRY(RPC_ScrHideMenu, proto::HideMenu, RpcHandlers::OnHideMenu),
+
+	// Network Stats (T28)
+	RPC_ENTRY(RPC_SvrStats, proto::SvrStats, RpcHandlers::OnSvrStats),
+
+	// 0.3.DL Artwork Handshake Placeholder (T30)
+	RPC_ENTRY(RPC_ScrSetPlayerVirtualWorld, proto::SetPlayerVirtualWorld, RpcHandlers::OnSetPlayerVirtualWorld),
+	RPC_ENTRY(RPC_DlModelRequest, proto::DlModelRequest, RpcHandlers::OnDlModelRequest),
+	RPC_ENTRY(RPC_DlModelReset, proto::DlModelReset, RpcHandlers::OnDlModelReset),
+	RPC_ENTRY(RPC_DlModelUrl, proto::DlModelUrl, RpcHandlers::OnDlModelUrl),
+	RPC_ENTRY(RPC_DlDownloadCompleted, proto::DlDownloadCompleted, RpcHandlers::OnDlDownloadCompleted),
 };
 
 #undef RPC_ENTRY

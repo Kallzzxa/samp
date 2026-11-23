@@ -206,6 +206,15 @@ public class UI implements ButtonPanel.Listener, Voice.Listener, Dialog.Listener
         samp.runOnUiThread(() -> dialog.show(dialog_id, dialog_style, title, message, button1, button2));
     }
 
+    private void hideDialog() {
+        Log.i(TAG, "**** hideDialog");
+        samp.runOnUiThread(() -> {
+            if (dialog != null && dialog.isShow) {
+                dialog.Hide();
+            }
+        });
+    }
+
     private void showScoreboard(boolean z) {
         Log.i(TAG, "**** showScoreboard " + z);
         samp.runOnUiThread(() -> scoreboard.show(z));

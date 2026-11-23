@@ -82,6 +82,15 @@ void RpcHandlers::OnSetSpawnInfo(const proto::SetSpawnInfo& p)
 	pNetGame->GetPlayerPool()->GetLocalPlayer()->SetSpawnInfo(&spawnInfo);
 }
 
+void RpcHandlers::OnForceClassSelection(const proto::ForceClassSelection&)
+{
+	spdlog::debug("ScriptRPC: ScrForceClassSelection");
+	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
+	if (pPlayerPool && pPlayerPool->GetLocalPlayer()) {
+		pPlayerPool->GetLocalPlayer()->ReturnToClassSelection();
+	}
+}
+
 void RpcHandlers::OnShowGangZone(const proto::ShowGangZone& p)
 {
 	spdlog::debug("ScriptRPC: ScrAddGangZone");
@@ -278,7 +287,7 @@ void RpcHandlers::OnAttachCameraToObject(const proto::AttachCameraToObject& p)
 	}
 }
 
-void RpcHandlers::OnSetPlayerSkinLegacyT03(const proto::SetPlayerSkinLegacyT03& p)
+void RpcHandlers::OnSetPlayerSkin(const proto::SetPlayerSkin& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetPlayerSkin");
 
@@ -287,13 +296,17 @@ void RpcHandlers::OnSetPlayerSkinLegacyT03(const proto::SetPlayerSkinLegacyT03& 
 		return;
 	}
 
-	if (IsValidPedModel(p.skinId)) {
+	const int skinId = static_cast<int>(p.skinId);
+	if (IsValidPedModel(skinId)) {
 		if (pPlayerPool->GetLocalPlayerID() == p.playerId) {
-			pPlayerPool->GetLocalPlayer()->GetPlayerPed()->SetModelIndex(p.skinId);
+			if (pPlayerPool->GetLocalPlayer() && pPlayerPool->GetLocalPlayer()->GetPlayerPed()) {
+				pPlayerPool->GetLocalPlayer()->GetPlayerPed()->SetModelIndex(static_cast<uint>(skinId));
+			}
 		}
-		else {
-			if (pPlayerPool->GetSlotState(p.playerId)) {
-				CRemotePlayer* pPlayer = pPlayerPool->GetAt(p.playerId);
+		else if (p.playerId < MAX_PLAYERS) {
+			const PLAYERID pid = static_cast<PLAYERID>(p.playerId);
+			if (pPlayerPool->GetSlotState(pid)) {
+				CRemotePlayer* pPlayer = pPlayerPool->GetAt(pid);
 				if (!pPlayer || pPlayer->GetState() == PLAYER_STATE_NONE) {
 					return;
 				}
@@ -301,12 +314,12 @@ void RpcHandlers::OnSetPlayerSkinLegacyT03(const proto::SetPlayerSkinLegacyT03& 
 				if (!pPlayerPed) {
 					return;
 				}
-				pPlayerPed->SetModelIndex(p.skinId);
+				pPlayerPed->SetModelIndex(static_cast<uint>(skinId));
 			}
 		}
 	}
 	else {
-		if (pUI) pUI->chat()->addDebugMessage("Warning: SetPlayerSkin %d isn't a valid ped model.", p.skinId);
+		if (pUI) pUI->chat()->addDebugMessage("Warning: SetPlayerSkin %u isn't a valid ped model.", p.skinId);
 	}
 }
 
@@ -314,13 +327,12 @@ void RpcHandlers::OnSetPlayerMapIcon(const proto::SetPlayerMapIcon& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetPlayerMapIcon");
 
-	uint8_t byteType = p.type;
-	// fix crash (invalid GTASA map icon sprite types)
-	if (byteType == 1 || byteType == 2 || byteType == 4 || byteType == 56) {
-		byteType = 52;
+	// CRadar::RadarBlipSprites holds 64 entries (0..63); guard out-of-range IDs.
+	if (p.type >= 64) {
+		return;
 	}
 
-	pNetGame->SetMapIcon(p.iconId, p.position.x, p.position.y, p.position.z, byteType, p.color, p.style);
+	pNetGame->SetMapIcon(p.iconId, p.position.x, p.position.y, p.position.z, p.type, p.color, p.style);
 }
 
 void RpcHandlers::OnRemovePlayerMapIcon(const proto::RemovePlayerMapIcon& p)
@@ -496,7 +508,18 @@ void RpcHandlers::OnSelectTextDraw(const proto::SelectTextDraw& p)
 	spdlog::debug("ScriptRPC: ScrSelectTextDraw");
 	spdlog::debug("SELECTTEXTDRAW: bEnable: {}, dwColor: {}", p.enable, p.hoverColor);
 
-	pNetGame->GetTextDrawPool()->SetSelectState(p.enable, p.hoverColor);
+	if (p.enable) {
+		if (EditObject::m_visible) {
+			EditObject::cancelEdit();
+		}
+		if (CObjectPool* pObjPool = pNetGame->GetObjectPool(); pObjPool && pObjPool->IsSelectState()) {
+			pObjPool->SetSelectState(false);
+		}
+	}
+
+	if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool()) {
+		pTdPool->SetSelectState(p.enable, p.hoverColor, false);
+	}
 }
 
 void RpcHandlers::OnSetPlayerAmmo(const proto::SetPlayerAmmo& p)
@@ -554,7 +577,7 @@ void RpcHandlers::OnDetachTrailerFromVehicle(const proto::DetachTrailerFromVehic
 	}
 }
 
-void RpcHandlers::OnSetObjectPosLegacyT36(const proto::SetObjectPosLegacyT36& p)
+void RpcHandlers::OnSetObjectPos(const proto::SetObjectPos& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetObjectPos");
 
@@ -1074,10 +1097,15 @@ void RpcHandlers::OnTogglePlayerControllable(const proto::TogglePlayerControllab
 	pGame->FindPlayerPed()->TogglePlayerControllable(p.controllable);
 }
 
-void RpcHandlers::OnPlayerPlaySound(const proto::PlayerPlaySound&)
+void RpcHandlers::OnPlayerPlaySound(const proto::PlayerPlaySound& p)
 {
-	spdlog::debug("ScriptRPC: ScrPlayerPlaySound");
-	// TODO: Implement (T06)
+	spdlog::debug("ScriptRPC: ScrPlayerPlaySound id={}", p.soundId);
+	if (!proto::isFinite(p.position)) {
+		return;
+	}
+	if (pGame) {
+		pGame->PlaySoundEx(p.soundId, p.position.x, p.position.y, p.position.z);
+	}
 }
 
 void RpcHandlers::OnSetWorldBounds(const proto::SetWorldBounds& p)
@@ -1266,8 +1294,17 @@ void RpcHandlers::OnPlayAudioStream(const proto::PlayAudioStream& p)
 {
 	spdlog::debug("ScriptRPC: ScrPlayAudioStream");
 
-	if (pUI && pUI->chat()) {
+	if (Settings::audioMsg() && pUI && pUI->chat()) {
 		pUI->chat()->addInfoMessage("[Audio Stream]: %s", p.url.c_str());
+	}
+
+	if (Settings::logUrls() && Client::gameDir()) {
+		char szPath[512];
+		snprintf(szPath, sizeof(szPath), "%sSAMP/urls.txt", Client::gameDir());
+		if (FILE* f = fopen(szPath, "a")) {
+			fprintf(f, "%s\n", p.url.c_str());
+			fclose(f);
+		}
 	}
 
 	if (pAudioStream) {
@@ -1389,4 +1426,46 @@ void RpcHandlers::OnDisableVehicleCollisions(const proto::DisableVehicleCollisio
 {
 	spdlog::debug("ScriptRPC: ScrDisableVehicleCollisions");
 	pNetGame->m_netSet->disableVehicleCollisions = p.disable;
+}
+
+void RpcHandlers::OnInitMenu(const proto::InitMenu& p)
+{
+	spdlog::debug("ScriptRPC: ScrInitMenu id={} cols={}", p.menuId, p.hasTwoColumns ? 2 : 1);
+	if (CMenuPool* pMenuPool = pNetGame->GetMenuPool()) {
+		pMenuPool->InitMenu(p);
+	}
+}
+
+void RpcHandlers::OnShowMenu(const proto::ShowMenu& p)
+{
+	spdlog::debug("ScriptRPC: ScrShowMenu id={}", p.menuId);
+	if (CMenuPool* pMenuPool = pNetGame->GetMenuPool()) {
+		pMenuPool->ShowMenu(p.menuId);
+	}
+}
+
+void RpcHandlers::OnHideMenu(const proto::HideMenu& p)
+{
+	spdlog::debug("ScriptRPC: ScrHideMenu id={}", p.menuId);
+	if (CMenuPool* pMenuPool = pNetGame->GetMenuPool()) {
+		pMenuPool->HideMenu(p.menuId);
+	}
+}
+
+void RpcHandlers::OnSetPlayerShopName(const proto::SetPlayerShopName& p)
+{
+	spdlog::debug("ScriptRPC: ScrSetPlayerShopName '{}'", p.shopName);
+	if (pGame) {
+		pGame->LoadShoppingDataSubsection(p.shopName.c_str());
+	}
+}
+
+void RpcHandlers::OnPlayCrimeReport(const proto::PlayCrimeReport& p)
+{
+	spdlog::debug("ScriptRPC: ScrPlayCrimeReport suspect={} crime={} inVeh={} model={}",
+			p.suspectId, p.crimeId, p.inVehicle, p.vehicleModel);
+	if (pGame) {
+		sa::CVector pos{p.position.x, p.position.y, p.position.z};
+		pGame->PlayCrimeReport(p.crimeId, pos);
+	}
 }

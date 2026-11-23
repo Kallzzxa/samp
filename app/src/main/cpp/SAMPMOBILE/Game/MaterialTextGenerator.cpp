@@ -2,6 +2,9 @@
 #include "../UI/UI.h"
 #include "../Client.h"
 
+#include <encoding.h>
+#include <algorithm>
+
 extern UI* pUI;
 
 MaterialTextGenerator::MaterialTextGenerator()
@@ -93,6 +96,30 @@ RwTexture* MaterialTextGenerator::Create(int iSizeX, int iSizeY, const char* szF
 	// otherwise RwTextureDestroy in ~CObject only drops 2 -> 1 and leaks every
 	// generated raster and GL texture permanently.
 	return bufferTexture;
+}
+
+RwTexture* MaterialTextGenerator::CreateCustomCarPlate(const char* szPlate)
+{
+	if (!szPlate || !*szPlate) {
+		szPlate = DEFAULT_PLATE_TEXT;
+	}
+
+	const std::string utf8 = Encoding::cp2utf(szPlate);
+	const std::string formatted = GxtToImGuiColors(utf8, "{444470}");
+
+	constexpr int kPlateW = 256;
+	constexpr int kPlateH = 64;
+	uint8_t fontSize = 40;
+	if (pUI && pUI->renderer()) {
+		const ImVec2 sz = pUI->renderer()->calculateTextSize(formatted, static_cast<float>(fontSize));
+		if (sz.x > static_cast<float>(kPlateW - 16) && sz.x > 1.0f) {
+			const float scale = static_cast<float>(kPlateW - 16) / sz.x;
+			fontSize = static_cast<uint8_t>(std::clamp(static_cast<int>(fontSize * scale), 14, 40));
+		}
+	}
+
+	return Create(kPlateW, kPlateH, nullptr, fontSize, 0,
+		DEFAULT_PLATE_TEXT_COLOR, DEFAULT_PLATE_BG_COLOR, DEFAULT_PLATE_ALIGN, formatted.c_str());
 }
 
 void MaterialTextGenerator::Render(int iSizeX, int iSizeY, const char* szFontName, uint8_t byteFontSize, uint8_t byteFontBold, uint32_t dwFontColor, uint8_t byteAlign, const char* szText)

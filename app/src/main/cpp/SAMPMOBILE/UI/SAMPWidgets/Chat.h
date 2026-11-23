@@ -1,11 +1,14 @@
 #pragma once
 
+#include <cstdio>
+#include <ctime>
 #include <list>
 #include <map>
 
 class Chat : public ListBox {
 public:
 	Chat();
+	~Chat();
 
 	void addChatMessage(const std::string& message, const std::string& nick, const ImColor& nick_color);
 	void addInfoMessage(const char* format, ...) __attribute__((format(printf, 2, 3)));
@@ -24,52 +27,45 @@ public:
 	virtual void keyboardEvent(const std::string& input) override;
 
 private:
-	void addMessage(const std::string& messsage, const ImColor& color = ImColor(1.0f, 1.0f, 1.0f));
+	void addMessage(const std::string& message, const ImColor& color = ImColor(1.0f, 1.0f, 1.0f));
+	void writeChatLog(const std::string& timePrefix, const std::string& message);
 
 	class MessageItem : public ListBoxItem {
 	public:
-		MessageItem(const std::string& message, const ImColor& color)
+		MessageItem(const std::string& message, const ImColor& color, const std::string& timePrefix)
+			: m_rawText(message)
+			, m_timePrefix(timePrefix)
 		{
-			m_text = new Label(message, color, Settings::chatShadow(), UISettings::fontSize() / 2);
+			const std::string initial = m_timestamp ? (m_timePrefix + m_rawText) : m_rawText;
+			m_text = new Label(initial, color, Settings::chatShadow(), UISettings::fontSize() / 2);
 			this->addChild(m_text);
 		}
 
 		void performLayout() override
 		{
-			if (m_timestamp) {
-				time_t rawtime;
-				tm* timeinfo;
-				char buffer[80];
-				time(&rawtime);
-				timeinfo = localtime(&rawtime);
-				strftime(buffer, sizeof(buffer), "%H:%M:%S", timeinfo);
-
-				// check if the message already has a timestamp
-				if (m_text->text().size() < 10 || !(isdigit(m_text->text()[1]) && isdigit(m_text->text()[2]) && m_text->text()[3] == ':' &&
-						isdigit(m_text->text()[4]) && isdigit(m_text->text()[5]) && m_text->text()[6] == ':' &&
-						isdigit(m_text->text()[7]) && isdigit(m_text->text()[8]) && m_text->text()[9] == ']')) {
-					m_text->setText("[" + std::string(buffer) + "] " + m_text->text());
-				}
+			const float desiredFont = UISettings::fontSize() / 2;
+			if (m_text->fontSize() != desiredFont) {
+				m_text->setFontSize(desiredFont);
+			}
+			const std::string desired = m_timestamp ? (m_timePrefix + m_rawText) : m_rawText;
+			if (m_text->text() != desired) {
+				m_text->setText(desired);
 			}
 			else {
-				// check and remove only a valid timestamp (format: [hh:mm:ss] )
-				if (m_text->text().size() >= 11 && m_text->text()[0] == '[' &&
-						isdigit(m_text->text()[1]) && isdigit(m_text->text()[2]) && m_text->text()[3] == ':' &&
-						isdigit(m_text->text()[4]) && isdigit(m_text->text()[5]) && m_text->text()[6] == ':' &&
-						isdigit(m_text->text()[7]) && isdigit(m_text->text()[8]) && m_text->text()[9] == ']') {
-					m_text->setText(m_text->text().substr(11)); // remove "[hh:mm:ss] " (10 characters + 1 space)
-				}
+				m_text->performLayout();
 			}
-
-			m_text->performLayout();
 			m_text->setPosition(ImVec2(0.0f, (height() - m_text->height()) / 2));
 		}
 
 	private:
+		std::string m_rawText;
+		std::string m_timePrefix;
 		Label* m_text;
 	};
 
 private:
 	std::map<std::string, std::function<void(const std::string&)>> m_commands;
+	FILE* m_chatLogFile = nullptr;
+	bool m_chatLogOpened = false;
 	static bool m_timestamp;
 };

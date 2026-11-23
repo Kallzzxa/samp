@@ -4,6 +4,7 @@
 #include "../../Net/NetGame.h"
 #include "../../Settings.h"
 #include "../../Java/Java.h"
+#include "../../Java/EditObject.h"
 
 #include <cstring>
 
@@ -95,8 +96,17 @@ ButtonPanel::ButtonPanel()
 		}
 
 		if (pNetGame) {
-			if (pNetGame->GetTextDrawPool()) {
-				pNetGame->GetTextDrawPool()->SetSelectState(false);
+			if (CMenuPool* pMenuPool = pNetGame->GetMenuPool(); pMenuPool && pMenuPool->IsVisible()) {
+				pMenuPool->ExitMenu();
+			}
+			if (CObjectPool* pObjPool = pNetGame->GetObjectPool(); pObjPool && pObjPool->IsSelectState()) {
+				pObjPool->SetSelectState(false);
+			}
+			if (EditObject::m_visible) {
+				EditObject::cancelEdit();
+			}
+			if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
+				pTdPool->SetSelectState(false, 0, true);
 			}
 		}
 	});
@@ -174,6 +184,15 @@ ButtonPanel::ButtonPanel()
 
 	m_2->setCallback([]() {
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_SUBMISSION] = true;
+		if (pGame) {
+			CPlayerPed* pPed = pGame->FindPlayerPed();
+			if (pPed && pPed->IsInVehicle() && !pPed->IsAPassenger()) {
+				sa::CVehicle* pVeh = pPed->GetGtaVehicle();
+				if (pVeh && GetVehicleSubtype(pVeh) == VEHICLE_SUBTYPE_PLANE) {
+					RequestLocalPlaneGearToggle();
+				}
+			}
+		}
 	});
 
 	m_y->setCallback([]() {
@@ -398,6 +417,28 @@ void ButtonPanel::handleHardwareKey(int androidKeyCode, bool isDown)
 		return;
 	}
 
+	// If a SA-MP Menu is open, allow keyboard navigation (Up/Down/Enter/Space/F/ESC)
+	if (pNetGame && pNetGame->GetMenuPool() && pNetGame->GetMenuPool()->IsVisible()) {
+		if (isDown) {
+			if (androidKeyCode == 19 || androidKeyCode == 51) { // DPAD_UP / W
+				pNetGame->GetMenuPool()->MoveSelection(-1);
+				return;
+			}
+			if (androidKeyCode == 20 || androidKeyCode == 47) { // DPAD_DOWN / S
+				pNetGame->GetMenuPool()->MoveSelection(1);
+				return;
+			}
+			if (androidKeyCode == 66 || androidKeyCode == 62) { // ENTER / SPACE
+				pNetGame->GetMenuPool()->SelectCurrentRow();
+				return;
+			}
+			if (androidKeyCode == 34 || androidKeyCode == 111) { // F / ESC
+				pNetGame->GetMenuPool()->ExitMenu();
+				return;
+			}
+		}
+	}
+
 	CPlayerPed* pPed = pGame->FindPlayerPed();
 	bool inVeh = (pPed && pPed->IsInVehicle());
 
@@ -425,6 +466,12 @@ void ButtonPanel::handleHardwareKey(int androidKeyCode, bool isDown)
 			}
 			break;
 
+		case 135: // KEYCODE_F5
+			if (isDown && pUI->netstats()) {
+				pUI->netstats()->setClientStatsVisible(!pUI->netstats()->clientStatsVisible());
+			}
+			break;
+
 		case 137: // KEYCODE_F7
 			if (isDown && pUI->chat()) {
 				pUI->chat()->setVisible(!pUI->chat()->visible());
@@ -437,13 +484,30 @@ void ButtonPanel::handleHardwareKey(int androidKeyCode, bool isDown)
 			}
 			break;
 
+		case 140: // KEYCODE_F10
+			if (isDown && pUI->netstats()) {
+				pUI->netstats()->setServerStatsVisible(!pUI->netstats()->serverStatsVisible());
+			}
+			break;
+
 		case 111: // KEYCODE_ESCAPE
 			if (isDown) {
 				if (pUI->scoreboard() && pUI->scoreboard()->visible()) {
 					pUI->scoreboard()->setVisible(false);
 				}
-				if (pNetGame && pNetGame->GetTextDrawPool()) {
-					pNetGame->GetTextDrawPool()->SetSelectState(false);
+				if (pNetGame) {
+					if (CMenuPool* pMenuPool = pNetGame->GetMenuPool(); pMenuPool && pMenuPool->IsVisible()) {
+						pMenuPool->ExitMenu();
+					}
+					if (CObjectPool* pObjPool = pNetGame->GetObjectPool(); pObjPool && pObjPool->IsSelectState()) {
+						pObjPool->SetSelectState(false);
+					}
+					if (EditObject::m_visible) {
+						EditObject::cancelEdit();
+					}
+					if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
+						pTdPool->SetSelectState(false, 0, true);
+					}
 				}
 			}
 			break;
@@ -493,6 +557,12 @@ void ButtonPanel::handleHardwareKey(int androidKeyCode, bool isDown)
 		case 9: // KEYCODE_2
 			if (isDown) {
 				LocalPlayerKeys.bKeys[ePadKeys::KEY_SUBMISSION] = true;
+				if (inVeh && pPed && !pPed->IsAPassenger()) {
+					sa::CVehicle* pVeh = pPed->GetGtaVehicle();
+					if (pVeh && GetVehicleSubtype(pVeh) == VEHICLE_SUBTYPE_PLANE) {
+						RequestLocalPlaneGearToggle();
+					}
+				}
 			}
 			break;
 

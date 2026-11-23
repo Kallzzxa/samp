@@ -6,6 +6,7 @@
 #include "RpcCore.h"
 #include "RpcDialog.h"
 #include "RpcGangZone.h"
+#include "RpcMenu.h"
 #include "RpcObject.h"
 #include "RpcOutbound.h"
 #include "RpcPickup.h"
@@ -121,7 +122,8 @@ inline DecodeResult decodeInboundRpc(int rpcId, const uint8_t* data, uint32_t bi
 		case SetPlayerColor::kRpcId: return detail::decodeOne<SetPlayerColor>(data, bitLength, v);
 		case SetPlayerTeam::kRpcId: return detail::decodeOne<SetPlayerTeam>(data, bitLength, v);
 		case SetPlayerName::kRpcId: return detail::decodeOne<SetPlayerName>(data, bitLength, v);
-		case SetPlayerSkinLegacyT03::kRpcId: return detail::decodeOne<SetPlayerSkinLegacyT03>(data, bitLength, v);
+		case SetPlayerSkillLevel::kRpcId: return detail::decodeOne<SetPlayerSkillLevel>(data, bitLength, v);
+		case SetPlayerSkin::kRpcId: return detail::decodeOne<SetPlayerSkin>(data, bitLength, v);
 		case SetPlayerInterior::kRpcId: return detail::decodeOne<SetPlayerInterior>(data, bitLength, v);
 		case TogglePlayerControllable::kRpcId: return detail::decodeOne<TogglePlayerControllable>(data, bitLength, v);
 		case SetWorldBounds::kRpcId: return detail::decodeOne<SetWorldBounds>(data, bitLength, v);
@@ -166,9 +168,11 @@ inline DecodeResult decodeInboundRpc(int rpcId, const uint8_t* data, uint32_t bi
 		case SpectatePlayer::kRpcId: return detail::decodeOne<SpectatePlayer>(data, bitLength, v);
 		case SpectateVehicle::kRpcId: return detail::decodeOne<SpectateVehicle>(data, bitLength, v);
 		case ToggleWidescreen::kRpcId: return detail::decodeOne<ToggleWidescreen>(data, bitLength, v);
+		case EnableCameraTarget::kRpcId: return detail::decodeOne<EnableCameraTarget>(data, bitLength, v);
 		case RequestClassReply::kRpcId: return detail::decodeOne<RequestClassReply>(data, bitLength, v);
 		case RequestSpawnReply::kRpcId: return detail::decodeOne<RequestSpawnReply>(data, bitLength, v);
 		case SetSpawnInfo::kRpcId: return detail::decodeOne<SetSpawnInfo>(data, bitLength, v);
+		case ForceClassSelection::kRpcId: return detail::decodeOne<ForceClassSelection>(data, bitLength, v);
 
 		// Batch 4: Vehicle
 		case WorldVehicleAdd::kRpcId: return detail::decodeOne<WorldVehicleAdd>(data, bitLength, v);
@@ -194,7 +198,7 @@ inline DecodeResult decodeInboundRpc(int rpcId, const uint8_t* data, uint32_t bi
 
 		// Batch 5: Object, Actor, TextDraw
 		case CreateObject::kRpcId: return detail::decodeOne<CreateObject>(data, bitLength, v);
-		case SetObjectPosLegacyT36::kRpcId: return detail::decodeOne<SetObjectPosLegacyT36>(data, bitLength, v);
+		case SetObjectPos::kRpcId: return detail::decodeOne<SetObjectPos>(data, bitLength, v);
 		case SetObjectRotation::kRpcId: return detail::decodeOne<SetObjectRotation>(data, bitLength, v);
 		case DestroyObject::kRpcId: return detail::decodeOne<DestroyObject>(data, bitLength, v);
 		case MoveObject::kRpcId: return detail::decodeOne<MoveObject>(data, bitLength, v);
@@ -218,6 +222,25 @@ inline DecodeResult decodeInboundRpc(int rpcId, const uint8_t* data, uint32_t bi
 		case HideTextDraw::kRpcId: return detail::decodeOne<HideTextDraw>(data, bitLength, v);
 		case TextDrawSetString::kRpcId: return detail::decodeOne<TextDrawSetString>(data, bitLength, v);
 		case SelectTextDraw::kRpcId: return detail::decodeOne<SelectTextDraw>(data, bitLength, v);
+
+		// Menu (T11)
+		case InitMenu::kRpcId: return detail::decodeOne<InitMenu>(data, bitLength, v);
+		case ShowMenu::kRpcId: return detail::decodeOne<ShowMenu>(data, bitLength, v);
+		case HideMenu::kRpcId: return detail::decodeOne<HideMenu>(data, bitLength, v);
+
+		// Shop & Crime Report (T25)
+		case SetPlayerShopName::kRpcId: return detail::decodeOne<SetPlayerShopName>(data, bitLength, v);
+		case PlayCrimeReport::kRpcId: return detail::decodeOne<PlayCrimeReport>(data, bitLength, v);
+
+		// Network Stats (T28)
+		case SvrStats::kRpcId: return detail::decodeOne<SvrStats>(data, bitLength, v);
+
+		// 0.3.DL Artwork Handshake (T30)
+		case SetPlayerVirtualWorld::kRpcId: return detail::decodeOne<SetPlayerVirtualWorld>(data, bitLength, v);
+		case DlModelRequest::kRpcId: return detail::decodeOne<DlModelRequest>(data, bitLength, v);
+		case DlModelReset::kRpcId: return detail::decodeOne<DlModelReset>(data, bitLength, v);
+		case DlModelUrl::kRpcId: return detail::decodeOne<DlModelUrl>(data, bitLength, v);
+		case DlDownloadCompleted::kRpcId: return detail::decodeOne<DlDownloadCompleted>(data, bitLength, v);
 
 		default: return DecodeResult{};
 	}
@@ -275,6 +298,12 @@ inline DecodeResult decodeOutboundRpc(int rpcId, const uint8_t* data, uint32_t b
 		case GiveDamageActorReq::kRpcId: return detail::decodeOne<GiveDamageActorReq>(data, bitLength, v);
 		case EditObjectReply::kRpcId: return detail::decodeOne<EditObjectReply>(data, bitLength, v);
 		case EditAttachedObjectReply::kRpcId: return detail::decodeOne<EditAttachedObjectReply>(data, bitLength, v);
+		case SelectObjectReply::kRpcId: return detail::decodeOne<SelectObjectReply>(data, bitLength, v);
+		case MenuSelectReq::kRpcId: return detail::decodeOne<MenuSelectReq>(data, bitLength, v);
+		case MenuQuitReq::kRpcId: return detail::decodeOne<MenuQuitReq>(data, bitLength, v);
+		case CameraTargetReply::kRpcId: return detail::decodeOne<CameraTargetReply>(data, bitLength, v);
+		case PickedUpWeaponPickupReq::kRpcId: return detail::decodeOne<PickedUpWeaponPickupReq>(data, bitLength, v);
+		case DlFinishDownloadReq::kRpcId: return detail::decodeOne<DlFinishDownloadReq>(data, bitLength, v);
 		default: return DecodeResult{};
 	}
 }

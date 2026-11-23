@@ -420,6 +420,14 @@ void Client::process()
 	if (pNetGame) {
 		pNetGame->Process();
 
+		if (CMenuPool* pMenuPool = pNetGame->GetMenuPool()) {
+			pMenuPool->processPendingTouches();
+		}
+
+		if (CObjectPool* pObjectPool = pNetGame->GetObjectPool()) {
+			pObjectPool->processPendingTouches();
+		}
+
 		CTextDrawPool* pTextDrawPool = pNetGame->GetTextDrawPool();
 		if (pTextDrawPool) {
 			pTextDrawPool->processPendingTouches();
