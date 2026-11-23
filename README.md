@@ -22,7 +22,7 @@
 
 | 资源 | 说明 | 是否必需 | 放置 / 使用方式 |
 |---|---|---|---|
-| **GTA:SA Android v2.10 安装包** | 提取 `libGTASA.so`、`libImmEmulatorJ.so` 及轻量 APK 资产（支持标准 ~26 MB APK、Split APK 及 2 GB+ 整合 APK，脚本会自动跳过大资源） | 编译 APK 必需 | 安装到手机后执行 `prepare_gtasa.py --from-adb`（推荐），或放进 `dist/` 用 `--apk` 提取 |
+| **GTA:SA Android v2.10 安装包** | 提取 `libGTASA.so`、`libImmEmulatorJ.so` 及轻量 APK 资产（支持标准 ~26 MB APK、Split APK 及 2 GB+ 整合 APK，脚本会自动跳过大资源） | 编译 APK 必需 | 安装到手机后执行 `prepare_gtasa.py --from-adb`，或把 APK 放进 `dist/` 并让文件名以 `gtasa` 开头（如 `gtasa_2.10_arm64.apk`），执行一次 `prepare_gtasa.py`（命名规则见下文「提取 GTA:SA v2.10 运行时文件」） |
 | **GTA:SA Android v2.10 游戏数据** | 提供 ~2.4 GB 单机基础地图、模型、动画与贴图（普通 ~26 MB APK 不含此数据，需配 `.obb`；`.xapk`/`.apks` 先解压） | 构建数据包必需 | 将 `main`/`patch` `.obb`（或 2 GB+ 完整 `.apk`）直接放入根目录 `dist/`，脚本按 `main` → `patch` 自动识别 |
 | **PC 版 GTA:SA + SA-MP 0.3.7** | 提供 `SAMP.img`、`SAMP.ide`、`SAMPCOL.img` 与 PC TextDraw 贴图（无需第三方手机整合包） | 构建数据包必需 | 执行 `build_gamedata.py` 时通过 `--pc-samp` 指定本机安装目录 |
 | **开源中文字体**（如 Noto Sans SC） | 生成 `SAMP/fonts/chinese.ttf` 以支持中文显示 | 可选（中文服推荐） | 放入 `dist/` 并命名为含 `font` 的字体文件（支持 `.ttf` / `.ttc` / `.otf`），省略则回退为自带 Roboto |
@@ -30,6 +30,8 @@
 > **关于 GTA:SA Android v2.10 的说明：**
 > - Google Play 现已更新至 v2.11+，底层内存布局与本客户端不兼容，请务必使用 **v2.10**。
 > - `tools/prepare_gtasa.py` 会自动识别并剥离常见 v2.10 补丁包中的 Fastman92 注入（`libFastman92pluginLoader.so`），还原原版 `JNI_OnLoad`/`JNI_OnUnload`。
+> - 这类补丁包还把 `libGTASA.so` 内部的「程序头表」挪到了文件末尾。真机能正常加载，但 x86 模拟器（雷电等）加载这种库会立刻崩溃，表现为进游戏瞬间闪退。脚本提取时会自动把它挪回标准位置，不需要额外操作。官方原版的 `libGTASA.so` 没有这个问题，脚本不会改动它。
+> - **如果 `libGTASA.so` 是 2026-11-23 之前提取的**（那时脚本还没有上面这一步），在模拟器上会闪退。重新执行一次提取、再重新编译即可。
 > - 若安装包仅含 64 位 `arm64-v8a`（缺少 32 位 `armeabi-v7a`），现代 64 位手机仍可直接编译运行，构建校验仅作提示不会拦截。
 
 ---
@@ -69,18 +71,90 @@ sdk.dir=C\:\\Users\\<YourUser>\\AppData\\Local\\Android\\Sdk
 
 ### 2. 提取 GTA:SA v2.10 运行时文件
 
-先在手机上安装好 GTA:SA v2.10 APK（无需导入单机数据包，`data`/`obb` 为空即可），再运行脚本提取（目标路径已加入 `.gitignore`，每次提取自动清理旧资产并自动净化 Fastman92 注入）：
+这一步把 GTA:SA v2.10 安装包里的原生库和轻量资产提取到工程里（目标路径已加入 `.gitignore`）。
+
+#### 最简单的做法
+
+1. 把 GTA:SA v2.10 的 APK 放进仓库根目录的 `dist/` 文件夹。
+2. 把文件名改成以 `gtasa` 开头（规则见下）。
+3. 在仓库根目录执行一次：
 
 ```bash
-# 方式 A（推荐）：连接 ADB 直接从手机提取
+python tools/prepare_gtasa.py
+```
+
+不管 `dist/` 里有一个还是多个 APK，**都只执行这一次**，不要每个 APK 各执行一遍。
+
+#### APK 命名规则
+
+脚本不带参数运行时，按下面的规则自动找 APK：
+
+| 规则 | 说明 |
+|---|---|
+| 位置 | 必须直接放在 `dist/` 下，子文件夹里的不会被找到 |
+| 扩展名 | 必须是 `.apk`（`.xapk`、`.apks` 要先解压出里面的 `.apk`） |
+| 文件名 | 必须以 `gtasa` 开头，大小写都可以；后面写什么随意 |
+| 数量 | 不限，所有符合条件的 APK 会在同一次运行里一起处理 |
+
+例子：
+
+| 文件名 | 能否被找到 |
+|---|---|
+| `dist/gtasa_2.10.apk` | 能 |
+| `dist/gtasa_2.10_arm64.apk`、`dist/gtasa_2.10_arm32.apk` | 能，两个一起处理 |
+| `dist/GTASA-v2.10.apk` | 能（不区分大小写） |
+| `dist/GTA SA v2.10 64-bit.apk` | 不能（开头是 `GTA SA`，中间有空格，不是 `gtasa`） |
+| `dist/apk/gtasa_2.10.apk` | 不能（在子文件夹里） |
+
+`dist/` 里的其他文件（`.obb`、`gamedata.zip`、字体等）不受影响，脚本不会碰。
+
+文件名里的 `arm64`、`arm32` 只是给人看的，脚本不靠文件名判断位数，而是打开 APK 看里面有哪个位数的库。
+
+#### 有两个 APK（32 位和 64 位分开）时
+
+有些安装包把 32 位和 64 位分成两个 APK。两个都放进 `dist/` 并按规则命名，然后执行一次脚本即可，两个位数的库都会被提取。
+
+- 多个 APK 按文件名的字母顺序依次处理。
+- 同一个库在多个 APK 里都有时，用最先遇到的那个，后面的跳过。
+- 资产（`assets`）是合并的：同名文件以排在后面的 APK 为准。
+- 只有 64 位的 APK 也可以，现代 64 位手机够用；这时脚本会提示缺少 32 位的库，可以忽略。
+
+#### 其他提取方式
+
+```bash
+# 手动指定 APK 或 Split-APK 目录（文件名不受上面规则限制；多个 APK 写在同一条命令里）
+python tools/prepare_gtasa.py --apk dist/gtasa_2.10_arm32.apk dist/gtasa_2.10_arm64.apk
+
+# 手机上已装好 GTA:SA v2.10（无需导入单机数据包），连接 ADB 直接从手机提取
 python tools/prepare_gtasa.py --from-adb
 
-# 方式 B：从本地 APK 或 Split-APK 目录提取
-python tools/prepare_gtasa.py --apk dist/gtasa_2.10.apk
-
-# 清理本地提取的专有文件
+# 清理本地提取的专有文件（含下面提到的备份）
 python tools/prepare_gtasa.py --clean
 ```
+
+#### 脚本提取时做了什么
+
+1. 把 `libGTASA.so`（以及 32 位的 `libImmEmulatorJ.so`）放到 `app/src/main/jniLibs/<ABI>/`。
+2. 如果 `libGTASA.so` 来自带 Fastman92 补丁的安装包：去掉它的加载器注入，并把程序头表挪回标准位置（后者是为了能在 x86 模拟器上运行，原因见上面「关于 GTA:SA Android v2.10 的说明」）。
+3. 把 APK 里的轻量资产放到 `app/src/main/assets/`。这一步会**先清空**该目录里原有的提取内容再重新写入。
+
+可选参数 `--libs-only`：只做前两件事，不动 `app/src/main/assets/`。适用于资产已经提取过、只想更新原生库的情况。它可以和上面任何一种方式一起用：
+
+```bash
+python tools/prepare_gtasa.py --libs-only
+```
+
+其他行为：
+
+- 提取出的库与 `jniLibs` 里现有的完全相同时不会重写；不同时先把旧文件备份到 `build/gtasa-backup/<ABI>/` 再替换。
+- 提取完要重新编译 APK（下一步）才会生效。
+
+#### 常见问题
+
+- **提示 `No APK given and no dist/gtasa*.apk found`**：`dist/` 里没有符合命名规则的 APK，对照上面的表检查位置、扩展名和文件名开头。
+- **提示 `No lib/arm64-v8a/libGTASA.so or lib/armeabi-v7a/libGTASA.so found`**：这个 APK 里没有游戏库，通常是拿错了文件（例如只是一个安装器外壳，或 Split APK 里的非 ABI 分包）。
+- **提示 `WARNING: SHA-256 differs from verified v2.10`**：这个库和已核对过的官方 v2.10 不完全一样。带补丁的安装包会出现这条提示，一般不影响使用；如果进游戏后异常，换一个来源的 v2.10 安装包。
+- **模拟器上进游戏瞬间闪退**：`libGTASA.so` 是用旧版脚本提取的。重新执行一次提取，再重新编译。
 
 ### 3. 编译 APK
 

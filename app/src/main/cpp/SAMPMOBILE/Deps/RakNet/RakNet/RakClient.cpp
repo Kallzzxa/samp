@@ -17,6 +17,7 @@
 #include "RakClient.h"
 #include "PacketEnumerations.h"
 #include "GetTime.h"
+#include "SAMP/NetCapHook.h"
 
 //#include "main.h"
 
@@ -101,6 +102,8 @@ bool RakClient::Send( const char *data, const int length, PacketPriority priorit
 	if ( remoteSystemList == 0 )
 		return false;
 		
+	if (g_rakNetCapHook && data && length > 0)
+		g_rakNetCapHook(1, 1, (unsigned char)data[0], (const unsigned char*)data, (unsigned int)length * 8);
 	return RakPeer::Send( data, length, priority, reliability, orderingChannel, remoteSystemList[ 0 ].playerId, false );
 }
 
@@ -109,6 +112,8 @@ bool RakClient::Send( RakNet::BitStream * bitStream, PacketPriority priority, Pa
 	if ( remoteSystemList == 0 )
 		return false;
 		
+	if (g_rakNetCapHook && bitStream && bitStream->GetNumberOfBitsUsed() >= 8)
+		g_rakNetCapHook(1, 1, bitStream->GetData()[0], bitStream->GetData(), (unsigned int)bitStream->GetNumberOfBitsUsed());
 	return RakPeer::Send( bitStream, priority, reliability, orderingChannel, remoteSystemList[ 0 ].playerId, false );
 }
 
@@ -370,6 +375,8 @@ bool RakClient::RPC( int* uniqueID, const char *data, unsigned int bitLength, Pa
 	if ( remoteSystemList == 0 )
 		return false;
 		
+	if (g_rakNetCapHook && uniqueID)
+		g_rakNetCapHook(1, 0, *uniqueID, (const unsigned char*)data, bitLength);
 	return RakPeer::RPC( uniqueID, data, bitLength, priority, reliability, orderingChannel, remoteSystemList[ 0 ].playerId, false, shiftTimestamp, networkID, replyFromTarget );
 }
 
@@ -378,6 +385,8 @@ bool RakClient::RPC( int* uniqueID, RakNet::BitStream *parameters, PacketPriorit
 	if ( remoteSystemList == 0 )
 		return false;
 		
+	if (g_rakNetCapHook && uniqueID)
+		g_rakNetCapHook(1, 0, *uniqueID, parameters ? parameters->GetData() : 0, parameters ? (unsigned int)parameters->GetNumberOfBitsUsed() : 0);
 	return RakPeer::RPC( uniqueID, parameters, priority, reliability, orderingChannel, remoteSystemList[ 0 ].playerId, false, shiftTimestamp, networkID, replyFromTarget );
 }
 

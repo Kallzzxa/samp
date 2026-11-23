@@ -47,6 +47,7 @@
 #include "RakSleep.h"
 #include "RouterInterface.h"
 #include "RakAssert.h"
+#include "SAMP/NetCapHook.h"
 
 #if !defined ( __APPLE__ ) && !defined ( __APPLE_CC__ )
 #include <malloc.h>
@@ -2929,6 +2930,8 @@ bool RakPeer::HandleRPCPacket(const char* data, int length, PlayerID playerId)
 	// Call the function
 	if (rpcParms.numberOfBitsOfData == 0)
 	{
+		if (g_rakNetCapHook)
+			g_rakNetCapHook(0, 0, (int)((uintptr_t)uniqueIdentifier & 0xFF), rpcParms.input, rpcParms.numberOfBitsOfData);
 		node->staticFunctionPointer(&rpcParms);
 	}
 	else
@@ -2971,6 +2974,8 @@ bool RakPeer::HandleRPCPacket(const char* data, int length, PlayerID playerId)
 
 		// Call the function callback
 		rpcParms.input = userData;
+		if (g_rakNetCapHook)
+			g_rakNetCapHook(0, 0, (int)((uintptr_t)uniqueIdentifier & 0xFF), rpcParms.input, rpcParms.numberOfBitsOfData);
 		node->staticFunctionPointer(&rpcParms);
 
 		if (usedAlloca == false)

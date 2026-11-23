@@ -6,6 +6,7 @@
 #include "Game/Game.h"
 #include "Game/Hooks.h"
 #include "Net/NetGame.h"
+#include "Net/NetCap.h"
 #include "Game/AudioStream.h"
 #include "Game/CleoEngine.h"
 
@@ -223,6 +224,7 @@ void cmdCmds(const std::string& params)
 		pUI->chat()->addInfoMessage("/save [note] -> Save Position to SAMP/savedpositions.txt");
 		pUI->chat()->addInfoMessage("/dl -> Toggle 3D Entity Debug Labels");
 		pUI->chat()->addInfoMessage("/dw -> Toggle Death / Kill Window");
+		pUI->chat()->addInfoMessage("/netcap on|off -> Record network packets to netcap/ (debug)");
 		pUI->chat()->addInfoMessage("/rcon -> Send RCON Command (e.g. /rcon login [pass])");
 		pUI->chat()->addInfoMessage(" ");
 	}
@@ -246,6 +248,27 @@ void cmdCleo(const std::string& params)
 		return;
 	}
 	CleoEngine::toggleMenu();
+}
+
+void cmdNetCap(const std::string& params)
+{
+	if (!pUI) return;
+	if (params == "on") {
+		if (NetCap::start(Client::gameDir(), (uint32_t) Client::netgameVersion(), true)) {
+			pUI->chat()->addInfoMessage("-> NetCap ON: %s", NetCap::currentFile().c_str());
+			pUI->chat()->addInfoMessage("-> Restart the game to capture the join sequence as well");
+		}
+		else {
+			pUI->chat()->addInfoMessage("-> NetCap: cannot create the capture file");
+		}
+	}
+	else if (params == "off") {
+		NetCap::stop(Client::gameDir(), true);
+		pUI->chat()->addInfoMessage("-> NetCap OFF (%u records in the last file)", NetCap::recordCount());
+	}
+	else {
+		pUI->chat()->addInfoMessage("-> Usage: /netcap on|off (now: %s, %u records)", NetCap::isOn() ? "ON" : "OFF", NetCap::recordCount());
+	}
 }
 
 void ClientCmds::initialize()
@@ -276,5 +299,6 @@ void ClientCmds::initialize()
 		pUI->chat()->addClientCommand("rcon", cmdRcon);
 		pUI->chat()->addClientCommand("dl", cmdDL);
 		pUI->chat()->addClientCommand("dw", cmdDW);
+		pUI->chat()->addClientCommand("netcap", cmdNetCap);
 	}
 }

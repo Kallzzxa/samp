@@ -3,11 +3,19 @@
 Extract user-supplied GTA:SA Android v2.10 native binaries and APK assets
 into the local (gitignored) build directories before packaging samp.apk.
 
-Supports two input modes:
-  1. Local APK file(s) or Split-APK directory:
+Supports three input modes:
+  1. No arguments: every dist/gtasa*.apk is used (name must start with "gtasa", any case),
+     e.g. dist/gtasa_2.10_arm64.apk and dist/gtasa_2.10_arm32.apk:
+       python tools/prepare_gtasa.py
+  2. Local APK file(s) or Split-APK directory:
        python tools/prepare_gtasa.py --apk /path/to/gtasa_2.10.apk
-  2. Pulling installed com.rockstargames.gtasa directly from a connected ADB device/emulator:
+  3. Pulling installed com.rockstargames.gtasa directly from a connected ADB device/emulator:
        python tools/prepare_gtasa.py --from-adb
+
+Add --libs-only to extract only the native libraries and leave app/src/main/assets untouched
+(use it when the current assets already work, or when several APKs with different assets are given).
+A library that is byte-identical to the one already in jniLibs is left alone; one that differs
+is first copied to build/gtasa-backup/ and then replaced.
 
 To remove all locally extracted Rockstar files again:
        python tools/prepare_gtasa.py --clean
@@ -31,6 +39,8 @@ from typing import Dict, Iterable, List, Optional
 REPO_ROOT = Path(__file__).resolve().parent.parent
 JNILIBS_DIR = REPO_ROOT / "app/src/main/jniLibs"
 ASSETS_DIR = REPO_ROOT / "app/src/main/assets"
+DIST_DIR = REPO_ROOT / "dist"
+BACKUP_DIR = REPO_ROOT / "build/gtasa-backup"
 PROTECTED_ASSETS = {"monetloader_lib.zip"}
 
 # Heavy OBB / game-data subtrees that may appear inside 2 GB+ "full" (OBB-merged) APKs
@@ -217,6 +227,107 @@ def sanitize_fastman92_elf(path: Path) -> Optional[str]:
     return f"stripped Fastman92 pluginLoader ({removed_relocs} PLT relocs, {details})"
 
 
+def relocate_program_headers(path: Path) -> Optional[str]:
+    """Move the program header table back to its standard place right after the ELF header.
+
+    Fastman92-patched libGTASA.so files keep their program headers in an extra segment at the
+    end of the image (e_phoff far away from the ELF header). Android's own linker copes with
+    that, but ARM translation layers on x86 emulators (libhoudini on LDPlayer) read the table
+    at "load base + e_phoff" and crash while loading the library (SIGFPE / SIGSEGV inside
+    libhoudini.so before JNI_OnLoad runs). The original dynamic-symbol tables that used to
+    follow the header were moved by the patcher as well, so that space is free to reuse.
+    Returns a summary string if the file was rewritten, or None if nothing had to be done or
+    the layout is not one we can safely fix.
+    """
+    buf = bytearray(path.read_bytes())
+    if len(buf) < 64 or buf[:4] != b"\x7fELF" or buf[5] != 1 or buf[4] not in (1, 2):
+        return None
+    is64 = buf[4] == 2
+    ehsize = 0x40 if is64 else 0x34
+    if is64:
+        e_phoff = struct.unpack_from("<Q", buf, 0x20)[0]
+        e_shoff = struct.unpack_from("<Q", buf, 0x28)[0]
+        e_phentsize, e_phnum, e_shentsize, e_shnum = struct.unpack_from("<HHHH", buf, 0x36)
+        ph_fmt, phnum_pos = "<IIQQQQQQ", 0x38
+    else:
+        e_phoff = struct.unpack_from("<I", buf, 0x1C)[0]
+        e_shoff = struct.unpack_from("<I", buf, 0x20)[0]
+        e_phentsize, e_phnum, e_shentsize, e_shnum = struct.unpack_from("<HHHH", buf, 0x2A)
+        ph_fmt, phnum_pos = "<IIIIIIII", 0x2C
+    if e_phoff == ehsize or e_phnum == 0 or e_phentsize != struct.calcsize(ph_fmt):
+        return None
+
+    def unpack(off: int) -> dict:
+        v = struct.unpack_from(ph_fmt, buf, off)
+        if is64:
+            keys = ("type", "flags", "off", "vaddr", "paddr", "filesz", "memsz", "align")
+        else:
+            keys = ("type", "off", "vaddr", "paddr", "filesz", "memsz", "flags", "align")
+        return dict(zip(keys, v))
+
+    def pack(e: dict) -> bytes:
+        if is64:
+            return struct.pack(ph_fmt, e["type"], e["flags"], e["off"], e["vaddr"], e["paddr"], e["filesz"], e["memsz"], e["align"])
+        return struct.pack(ph_fmt, e["type"], e["off"], e["vaddr"], e["paddr"], e["filesz"], e["memsz"], e["flags"], e["align"])
+
+    entries = [unpack(e_phoff + i * e_phentsize) for i in range(e_phnum)]
+    first_load = next((e for e in entries if e["type"] == 1 and e["off"] == 0 and e["vaddr"] == 0), None)
+    old_phdr = next((e for e in entries if e["type"] == 6), None)
+    if first_load is None:
+        return None
+
+    # Drop the segment whose only job was to map the relocated table, and the old PT_PHDR entry.
+    table_vaddr = old_phdr["vaddr"] if old_phdr else None
+    kept = [e for e in entries if e["type"] != 6
+            and not (e["type"] == 1 and table_vaddr is not None and e["vaddr"] == table_vaddr
+                     and e["filesz"] <= e_phnum * e_phentsize)]
+    count = len(kept) + 1
+    table_size = count * e_phentsize
+    table_end = ehsize + table_size
+    if table_end > first_load["filesz"]:
+        return None
+
+    # The target range must not hold anything the loader or the code still uses.
+    def vaddr_in_use(lo: int, hi: int) -> Optional[str]:
+        for e in kept:
+            if e["type"] in (2, 4, 7, 0x6474E550, 0x6474E552) and e["vaddr"] < hi and e["vaddr"] + e["memsz"] > lo:
+                return f"program header type 0x{e['type']:x}"
+        dyn = next((e for e in kept if e["type"] == 2), None)
+        if dyn is not None:
+            step = 16 if is64 else 8
+            ptr_tags = {3, 4, 5, 6, 7, 12, 13, 17, 23, 25, 26, 0x6FFFFEF5, 0x6FFFFFF0, 0x6FFFFFFC, 0x6FFFFFFE}
+            for i in range(0, dyn["filesz"], step):
+                tag, val = struct.unpack_from("<QQ" if is64 else "<II", buf, dyn["off"] + i)
+                if tag == 0:
+                    break
+                if tag in ptr_tags and lo <= val < hi:
+                    return f"dynamic tag 0x{tag:x}"
+        if e_shoff and e_shnum and e_shoff + e_shnum * e_shentsize <= len(buf):
+            for i in range(e_shnum):
+                h = e_shoff + i * e_shentsize
+                if is64:
+                    _n, sh_type, sh_flags, sh_addr, _o, sh_size = struct.unpack_from("<IIQQQQ", buf, h)
+                else:
+                    _n, sh_type, sh_flags, sh_addr, _o, sh_size = struct.unpack_from("<IIIIII", buf, h)
+                if sh_type not in (0, 8) and (sh_flags & 2) and sh_size and sh_addr < hi and sh_addr + sh_size > lo:
+                    return f"section #{i}"
+        return None
+
+    blocker = vaddr_in_use(ehsize, table_end)
+    if blocker:
+        print(f"  [WARN]  program headers left in place: target range is used by {blocker}")
+        return None
+
+    phdr = {"type": 6, "flags": 4, "off": ehsize, "vaddr": ehsize, "paddr": ehsize,
+            "filesz": table_size, "memsz": table_size, "align": 8 if is64 else 4}
+    blob = b"".join(pack(e) for e in [phdr] + kept)
+    buf[ehsize:table_end] = blob
+    struct.pack_into("<Q" if is64 else "<I", buf, 0x20 if is64 else 0x1C, ehsize)
+    struct.pack_into("<H", buf, phnum_pos, count)
+    path.write_bytes(buf)
+    return f"program headers moved back to 0x{ehsize:x} ({e_phnum} -> {count} entries) for emulator compatibility"
+
+
 def resolve_adb(explicit: Optional[str]) -> str:
     if explicit:
         if not Path(explicit).is_file():
@@ -301,6 +412,30 @@ def collect_apk_paths(inputs: Iterable[str]) -> List[Path]:
     return apks
 
 
+def find_dist_apks() -> List[Path]:
+    """APKs in dist/ whose file name starts with "gtasa" (case-insensitive), sorted by name."""
+    if not DIST_DIR.is_dir():
+        return []
+    return sorted(p for p in DIST_DIR.glob("*.apk") if p.name.lower().startswith("gtasa"))
+
+
+def install_lib(tmp: Path, dest: Path) -> str:
+    """Move a freshly extracted library into jniLibs; keep the old one in build/gtasa-backup/ if it differs."""
+    if dest.is_file():
+        if sha256_file(dest) == sha256_file(tmp):
+            tmp.unlink()
+            return "unchanged"
+        backup = BACKUP_DIR / dest.parent.name / dest.name
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(dest, backup)
+        note = f"replaced, previous copy kept at {backup.relative_to(REPO_ROOT)}"
+    else:
+        note = "new"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(tmp), str(dest))
+    return note
+
+
 def clean_extracted() -> None:
     removed = 0
     for dest in TARGET_LIBS.values():
@@ -319,6 +454,10 @@ def clean_extracted() -> None:
                 item.unlink()
             print(f"Removed: {item.relative_to(REPO_ROOT)}")
             removed += 1
+    if BACKUP_DIR.is_dir():
+        shutil.rmtree(BACKUP_DIR)
+        print(f"Removed: {BACKUP_DIR.relative_to(REPO_ROOT)}")
+        removed += 1
     print(f"Clean complete ({removed} items removed).")
 
 
@@ -333,7 +472,7 @@ def clean_extracted_assets_only() -> None:
                 item.unlink()
 
 
-def extract_from_apks(apks: List[Path]) -> int:
+def extract_from_apks(apks: List[Path], libs_only: bool = False) -> int:
     # Pre-scan APKs before touching local assets/ so incompatible APKs (e.g. v2.11+ or wrapper APKs)
     # fail fast without polluting app/src/main/assets/.
     found_any_gtasa = False
@@ -352,9 +491,11 @@ def extract_from_apks(apks: List[Path]) -> int:
         print("       Make sure you are using GTA:SA Android v2.10 (if using Split APKs, include ABI split APKs).")
         return 1
 
-    clean_extracted_assets_only()
+    if not libs_only:
+        clean_extracted_assets_only()
 
     extracted_libs: List[str] = []
+    lib_source: Dict[str, Path] = {}
     extracted_assets = 0
     skipped_heavy = 0
 
@@ -369,24 +510,36 @@ def extract_from_apks(apks: List[Path]) -> int:
                 # 1. Native GTA:SA libraries
                 if name in TARGET_LIBS:
                     dest = TARGET_LIBS[name]
+                    if name in lib_source:
+                        print(f"  [SKIP]  {name}: already taken from {lib_source[name].name}")
+                        continue
                     dest.parent.mkdir(parents=True, exist_ok=True)
-                    with zf.open(info, "r") as src, dest.open("wb") as dst:
+                    tmp = dest.with_name(dest.name + ".extracting")
+                    with zf.open(info, "r") as src, tmp.open("wb") as dst:
                         shutil.copyfileobj(src, dst)
-                    digest = sha256_file(dest)
+                    digest = sha256_file(tmp)
                     expected = VERIFIED_V210_SHA256.get(name)
                     if digest == expected:
                         status = "verified v2.10"
                     else:
-                        patch_note = sanitize_fastman92_elf(dest) if name.endswith("libGTASA.so") else None
+                        patch_note = sanitize_fastman92_elf(tmp) if name.endswith("libGTASA.so") else None
                         if patch_note:
                             status = f"auto-sanitized ({patch_note})"
                         else:
                             status = "WARNING: SHA-256 differs from verified v2.10"
+                        if name.endswith("libGTASA.so"):
+                            phdr_note = relocate_program_headers(tmp)
+                            if phdr_note:
+                                status += "; " + phdr_note
+                    status += "; " + install_lib(tmp, dest)
                     print(f"  [LIB]   {name} -> {dest.relative_to(REPO_ROOT)} ({status})")
                     extracted_libs.append(name)
+                    lib_source[name] = apk
                     continue
 
                 # 2. Lightweight APK assets/ (skip heavy OBB trees if a 2 GB+ merged APK was passed)
+                if libs_only:
+                    continue
                 if name.startswith("assets/"):
                     rel = name[len("assets/"):]
                     if not rel or rel.startswith("/") or ".." in Path(rel).parts:
@@ -405,7 +558,7 @@ def extract_from_apks(apks: List[Path]) -> int:
 
     # Ensure assetfile.txt exists (NvAPKFileHelper uses it as a fast index)
     assetfile = ASSETS_DIR / "assetfile.txt"
-    if extracted_assets > 0 and not assetfile.is_file():
+    if not libs_only and extracted_assets > 0 and not assetfile.is_file():
         entries = sorted(
             p.relative_to(ASSETS_DIR).as_posix()
             for p in ASSETS_DIR.rglob("*")
@@ -416,6 +569,8 @@ def extract_from_apks(apks: List[Path]) -> int:
         print(f"  [INDEX] Generated {assetfile.relative_to(REPO_ROOT)} ({len(all_entries)} entries)")
 
     msg = f"\nExtracted {len(extracted_libs)} native libraries and {extracted_assets} asset files."
+    if libs_only:
+        msg = f"\nExtracted {len(extracted_libs)} native libraries (--libs-only: assets left untouched)."
     if skipped_heavy:
         msg += f" (Skipped {skipped_heavy} heavy OBB/gamedata files — use tools/build_gamedata.py for those.)"
     print(msg)
@@ -435,23 +590,31 @@ def main() -> int:
     ap.add_argument("--serial", help="Target ADB device serial (used with --from-adb)")
     ap.add_argument("--package", default="com.rockstargames.gtasa", help="Installed package name (default: com.rockstargames.gtasa)")
     ap.add_argument("--clean", action="store_true", help="Remove all locally extracted Rockstar binaries and GTA assets")
+    ap.add_argument("--libs-only", action="store_true", help="Extract native libraries only; do not touch app/src/main/assets")
     args = ap.parse_args()
 
     if args.clean:
         clean_extracted()
         return 0
 
-    if not args.apk and not args.from_adb:
-        ap.error("Specify either --apk <path>..., --from-adb, or --clean.")
-
     if args.from_adb:
         adb = resolve_adb(args.adb)
         with tempfile.TemporaryDirectory(prefix="gtasa_adb_") as td:
             apks = pull_apks_from_adb(adb, args.serial, args.package, Path(td))
-            return extract_from_apks(apks)
+            return extract_from_apks(apks, args.libs_only)
 
-    apks = collect_apk_paths(args.apk)
-    return extract_from_apks(apks)
+    if args.apk:
+        apks = collect_apk_paths(args.apk)
+    else:
+        apks = find_dist_apks()
+        if not apks:
+            ap.error('No APK given and no dist/gtasa*.apk found. Put the GTA:SA v2.10 APK(s) in dist/ with a name '
+                     'starting with "gtasa" (e.g. dist/gtasa_2.10_arm64.apk), or use --apk / --from-adb.')
+        print("Using APKs found in dist/: " + ", ".join(p.name for p in apks))
+        if len(apks) > 1 and not args.libs_only:
+            print("NOTE: several APKs given without --libs-only: assets are wiped once, then files with the same")
+            print("      name are overwritten by the APK that comes later in the list above.")
+    return extract_from_apks(apks, args.libs_only)
 
 
 if __name__ == "__main__":

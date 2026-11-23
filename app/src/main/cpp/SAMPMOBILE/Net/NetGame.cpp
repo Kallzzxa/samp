@@ -1,6 +1,8 @@
 #include "../Client.h"
 #include "../Game/Game.h"
 #include "NetGame.h"
+#include "NetCap.h"
+#include <RakNet/SAMP/NetCapHook.h>
 #include "../UI/UI.h"
 #include "RakNet/SAMP/samp_auth.h"
 #include "../Game/AudioStream.h"
@@ -85,6 +87,8 @@ NetGame::NetGame(const char* host, int port, const char* playerName, const char*
 		m_host[sizeof(m_host) - 1] = '\0';
 	}
 	m_port = port;
+
+	NetCap::startIfEnabled(Client::gameDir(), (uint32_t) Client::netgameVersion());
 
 	m_rakClient = RakNetworkFactory::GetRakClientInterface();
 	{
@@ -264,6 +268,9 @@ void NetGame::UpdateNetwork()
 	Packet* pkt = nullptr;
 	unsigned char packetIdentifier;
 	while ((pkt = m_rakClient->Receive())) {
+		if (g_rakNetCapHook && pkt->data && pkt->length > 0) {
+			g_rakNetCapHook(0, 1, pkt->data[0], pkt->data, pkt->length * 8);
+		}
 		packetIdentifier = GetPacketID(pkt);
 
 		switch (packetIdentifier) {
