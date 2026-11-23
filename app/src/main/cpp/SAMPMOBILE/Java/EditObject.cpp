@@ -7,6 +7,7 @@
 #include "../UI/UI.h"
 #include "../Game/Game.h"
 #include "../Net/NetGame.h"
+#include "../Net/Proto/RpcOutbound.h"
 #include "EditObject.h"
 
 extern UI* pUI;
@@ -236,11 +237,14 @@ void EditObject::applyClick(int button, bool state)
 			pObject->GetRotation(&rot.x, &rot.y, &rot.z);
 
 			RakNet::BitStream bsSend;
-			bsSend.Write(EditObject::m_playerObj);
-			bsSend.Write((uint16_t) EditObject::m_id);
-			bsSend.Write((uint32_t) EditObject::eResponse::EDIT_RESPONSE_UPDATE);
-			bsSend.Write(matrix.pos);
-			bsSend.Write(rot);
+			proto::Writer writer(bsSend);
+			proto::EditObjectReply reply{};
+			reply.playerObject = EditObject::m_playerObj;
+			reply.objectId = static_cast<uint16_t>(EditObject::m_id);
+			reply.response = static_cast<uint32_t>(EditObject::eResponse::EDIT_RESPONSE_UPDATE);
+			reply.position = {matrix.pos.x, matrix.pos.y, matrix.pos.z};
+			reply.rotation = {rot.x, rot.y, rot.z};
+			reply.serialize(writer, proto::ProtoVersion::V037);
 			pNetGame->GetRakClient()->RPC(&RPC_EditObject, &bsSend, HIGH_PRIORITY, RELIABLE, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 
 			EditObject::m_lastUpdate = GetTickCount();
@@ -260,11 +264,14 @@ void EditObject::applyExit()
 				pObject->GetRotation(&rot.x, &rot.y, &rot.z);
 
 				RakNet::BitStream bsSend;
-				bsSend.Write(EditObject::m_playerObj);
-				bsSend.Write((uint16_t) EditObject::m_id);
-				bsSend.Write((uint32_t) EditObject::eResponse::EDIT_RESPONSE_CANCEL);
-				bsSend.Write(matrix.pos);
-				bsSend.Write(rot);
+				proto::Writer writer(bsSend);
+				proto::EditObjectReply reply{};
+				reply.playerObject = EditObject::m_playerObj;
+				reply.objectId = static_cast<uint16_t>(EditObject::m_id);
+				reply.response = static_cast<uint32_t>(EditObject::eResponse::EDIT_RESPONSE_CANCEL);
+				reply.position = {matrix.pos.x, matrix.pos.y, matrix.pos.z};
+				reply.rotation = {rot.x, rot.y, rot.z};
+				reply.serialize(writer, proto::ProtoVersion::V037);
 				pNetGame->GetRakClient()->RPC(&RPC_EditObject, &bsSend, HIGH_PRIORITY, RELIABLE, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 			}
 		}
@@ -276,9 +283,18 @@ void EditObject::applyExit()
 					&pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed()->m_attachedObjects[EditObject::m_id].info;
 
 			RakNet::BitStream bsSend;
-			bsSend.Write((uint32_t) EditObject::eResponse::EDIT_RESPONSE_CANCEL);
-			bsSend.Write(EditObject::m_id);
-			bsSend.Write((const char*) pAttach, sizeof(NEW_ATTACHED_OBJECT));
+			proto::Writer writer(bsSend);
+			proto::EditAttachedObjectReply reply{};
+			reply.response = static_cast<uint32_t>(EditObject::eResponse::EDIT_RESPONSE_CANCEL);
+			reply.index = EditObject::m_id;
+			reply.modelId = pAttach->iModel;
+			reply.boneId = pAttach->iBoneID;
+			reply.offset = {pAttach->vecOffset.x, pAttach->vecOffset.y, pAttach->vecOffset.z};
+			reply.rotation = {pAttach->vecRot.x, pAttach->vecRot.y, pAttach->vecRot.z};
+			reply.scale = {pAttach->vecScale.x, pAttach->vecScale.y, pAttach->vecScale.z};
+			reply.color1 = pAttach->dwMaterialColor1;
+			reply.color2 = pAttach->dwMaterialColor2;
+			reply.serialize(writer, proto::ProtoVersion::V037);
 			pNetGame->GetRakClient()->RPC(&RPC_EditAttachedObject, &bsSend, HIGH_PRIORITY, RELIABLE, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 		}
 	}
@@ -298,9 +314,18 @@ void EditObject::applySave()
 					auto& attach = pPlayer->m_attachedObjects[EditObject::m_id].info;
 
 					RakNet::BitStream bsSend;
-					bsSend.Write((uint32_t) EditObject::eResponse::EDIT_RESPONSE_FINAL);
-					bsSend.Write(EditObject::m_id);
-					bsSend.Write((const char*) &attach, sizeof(NEW_ATTACHED_OBJECT));
+					proto::Writer writer(bsSend);
+					proto::EditAttachedObjectReply reply{};
+					reply.response = static_cast<uint32_t>(EditObject::eResponse::EDIT_RESPONSE_FINAL);
+					reply.index = EditObject::m_id;
+					reply.modelId = attach.iModel;
+					reply.boneId = attach.iBoneID;
+					reply.offset = {attach.vecOffset.x, attach.vecOffset.y, attach.vecOffset.z};
+					reply.rotation = {attach.vecRot.x, attach.vecRot.y, attach.vecRot.z};
+					reply.scale = {attach.vecScale.x, attach.vecScale.y, attach.vecScale.z};
+					reply.color1 = attach.dwMaterialColor1;
+					reply.color2 = attach.dwMaterialColor2;
+					reply.serialize(writer, proto::ProtoVersion::V037);
 					pNetGame->GetRakClient()->RPC(&RPC_EditAttachedObject, &bsSend, HIGH_PRIORITY, RELIABLE, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 				}
 			}
@@ -317,11 +342,14 @@ void EditObject::applySave()
 					pObject->GetRotation(&rot.x, &rot.y, &rot.z);
 
 					RakNet::BitStream bsSend;
-					bsSend.Write(EditObject::m_playerObj);
-					bsSend.Write((uint16_t) EditObject::m_id);
-					bsSend.Write((uint32_t) EditObject::eResponse::EDIT_RESPONSE_FINAL);
-					bsSend.Write(matrix.pos);
-					bsSend.Write(rot);
+					proto::Writer writer(bsSend);
+					proto::EditObjectReply reply{};
+					reply.playerObject = EditObject::m_playerObj;
+					reply.objectId = static_cast<uint16_t>(EditObject::m_id);
+					reply.response = static_cast<uint32_t>(EditObject::eResponse::EDIT_RESPONSE_FINAL);
+					reply.position = {matrix.pos.x, matrix.pos.y, matrix.pos.z};
+					reply.rotation = {rot.x, rot.y, rot.z};
+					reply.serialize(writer, proto::ProtoVersion::V037);
 					pNetGame->GetRakClient()->RPC(&RPC_EditObject, &bsSend, HIGH_PRIORITY, RELIABLE, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 				}
 			}

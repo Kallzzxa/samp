@@ -40,10 +40,9 @@ nul
 __pycache__/
 *.pyc
 
-# Local game data & external references (large / copyrighted - keep out of VCS)
+# Local game data (large / copyrighted - keep out of VCS)
 Android/
 GTA/
 gamefiles/
 gamefiles.tar
 dist/
-reference/

@@ -1,6 +1,7 @@
 #include "Game.h"
 #include "../UI/UI.h"
 #include "../Net/NetGame.h"
+#include "../Net/Proto/Sync.h"
 #include "../Client.h"
 #include "RenderWare/rphanim.h"
 #include "PlayerPed.h"
@@ -2402,8 +2403,15 @@ void CPlayerPed::ProcessBulletData(BULLET_DATA* btData)
 							bulletSyncData.weaponId = pPlayerPed->GetCurrentWeapon();
 
 							RakNet::BitStream bsBullet;
-							bsBullet.Write((char) ID_BULLET_SYNC);
-							bsBullet.Write((char*) &bulletSyncData, sizeof(BULLET_SYNC_DATA));
+							proto::Writer writer(bsBullet);
+							proto::OutboundBulletSync pkt{};
+							pkt.targetType = bulletSyncData.targetType;
+							pkt.targetId = bulletSyncData.targetId;
+							pkt.origin = {bulletSyncData.vecOrigin.x, bulletSyncData.vecOrigin.y, bulletSyncData.vecOrigin.z};
+							pkt.pos = {bulletSyncData.vecPos.x, bulletSyncData.vecPos.y, bulletSyncData.vecPos.z};
+							pkt.offset = {bulletSyncData.vecOffset.x, bulletSyncData.vecOffset.y, bulletSyncData.vecOffset.z};
+							pkt.weaponId = bulletSyncData.weaponId;
+							pkt.serialize(writer, proto::ProtoVersion::V037);
 							pNetGame->GetRakClient()->Send(&bsBullet, HIGH_PRIORITY, UNRELIABLE_SEQUENCED, 0);
 						}
 					}

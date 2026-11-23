@@ -1,21 +1,12 @@
 #include "../Game/Game.h"
 #include "../Client.h"
 #include "NetGame.h"
+#include "RpcHandlers.h"
+#include "Proto/RpcOutbound.h"
 #include "../UI/UI.h"
 #include "../Java/Java.h"
 #include <RakNet/GetTime.h>
 #include <cmath>
-
-static inline bool IsFiniteVec(const sa::CVector& v)
-{
-	return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
-}
-
-#define INIT_RPC_BS(bs) \
-	if (!rpcParams || !rpcParams->input || rpcParams->numberOfBitsOfData <= 0 || !pNetGame) return; \
-	auto Data = reinterpret_cast<unsigned char*>(rpcParams->input); \
-	int iBitLength = rpcParams->numberOfBitsOfData; \
-	RakNet::BitStream bs(Data, BITS_TO_BYTES(iBitLength), false)
 
 extern UI* pUI;
 extern Game* pGame;
@@ -35,53 +26,38 @@ int g_iLagCompensationMode = 0;
 
 void ProcessIncommingEvent(PLAYERID playerID, int iEventType, uint32_t dwParam1, uint32_t dwParam2, uint32_t dwParam3);
 
-void InitGame(RPCParameters* rpcParams)
+void RpcHandlers::OnInitGame(const proto::InitGame& p)
 {
 	spdlog::info("RPC: InitGame");
-	INIT_RPC_BS(bsInitGame);
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) return;
 
-	PLAYERID MyPlayerID = 0;
-	int iLagCompensation = 0;
-	bool bStuntBonus = false;
-	bool bLanMode = false;
-	//read server settings - bail out on truncated packets so we never apply garbage state
-	bool bReadOk = true;
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->zoneNames);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->useCJWalk);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->allowWeapons);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->limitGlobalChatRadius);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->globalChatRadius);
-	bReadOk &= bsInitGame.Read(bStuntBonus);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->nameTagDrawDistance);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->disableInteriorEnterExits);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->nameTagLOS);
+	pNetGame->m_netSet->zoneNames = p.zoneNames;
+	pNetGame->m_netSet->useCJWalk = p.useCJWalk;
+	pNetGame->m_netSet->allowWeapons = p.allowWeapons;
+	pNetGame->m_netSet->limitGlobalChatRadius = p.limitGlobalChatRadius;
+	pNetGame->m_netSet->globalChatRadius = p.globalChatRadius;
+	pNetGame->m_netSet->nameTagDrawDistance = p.nameTagDrawDistance;
+	pNetGame->m_netSet->disableInteriorEnterExits = p.disableInteriorEnterExits;
+	pNetGame->m_netSet->nameTagLOS = p.nameTagLOS;
 	//pNetGame->m_netSet->nameTagLOS = true;
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->manualVehicleEngineAndLight);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->spawnsAvailable);
-	bReadOk &= bsInitGame.Read(MyPlayerID);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->showNameTags);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->showPlayerMarkers);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->worldTime_Hour);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->weather);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->gravity);
-	bReadOk &= bsInitGame.Read(bLanMode);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->deathDropMoney);
-	bReadOk &= bsInitGame.Read(pNetGame->m_netSet->instagib);
+	pNetGame->m_netSet->manualVehicleEngineAndLight = p.manualVehicleEngineAndLight;
+	pNetGame->m_netSet->spawnsAvailable = p.spawnsAvailable;
+	pNetGame->m_netSet->showNameTags = p.showNameTags;
+	pNetGame->m_netSet->showPlayerMarkers = p.showPlayerMarkers;
+	pNetGame->m_netSet->worldTime_Hour = p.worldTimeHour;
+	pNetGame->m_netSet->weather = p.weather;
+	pNetGame->m_netSet->gravity = p.gravity;
+	pNetGame->m_netSet->deathDropMoney = p.deathDropMoney;
+	pNetGame->m_netSet->instagib = p.instagib;
 
-	bReadOk &= bsInitGame.Read(iNetModeNormalOnFootSendRate);
-	bReadOk &= bsInitGame.Read(iNetModeNormalInCarSendRate);
-	bReadOk &= bsInitGame.Read(iNetModeFiringSendRate);
-	bReadOk &= bsInitGame.Read(iNetModeSendMultiplier);
-	bReadOk &= bsInitGame.Read(iLagCompensation);
-	if (!bReadOk) {
-		spdlog::warn("InitGame RPC truncated, ignoring");
-		return;
-	}
+	iNetModeNormalOnFootSendRate = p.onFootSendRate;
+	iNetModeNormalInCarSendRate = p.inCarSendRate;
+	iNetModeFiringSendRate = p.firingSendRate;
+	iNetModeSendMultiplier = p.sendMultiplier;
 
-	switch (iLagCompensation) {
+	switch (p.lagCompensation) {
 		case 1: g_iLagCompensationMode = 0;
 			break;
 		case 2: g_iLagCompensationMode = 1;
@@ -94,29 +70,17 @@ void InitGame(RPCParameters* rpcParams)
 		pGame->DisableAutoAim();
 	}
 
-	uint8_t byteStrLen = 0;
-	if (!bsInitGame.Read(byteStrLen)) {
-		return;
-	}
 	memset(pNetGame->m_hostName, 0, sizeof(pNetGame->m_hostName));
-	if (byteStrLen) {
-		if (!bsInitGame.Read(pNetGame->m_hostName, byteStrLen)) {
-			return;
-		}
-	}
-	pNetGame->m_hostName[byteStrLen] = 0;
+	strncpy(pNetGame->m_hostName, p.hostName.c_str(), sizeof(pNetGame->m_hostName) - 1);
+	pNetGame->m_hostName[sizeof(pNetGame->m_hostName) - 1] = '\0';
 
-	uint8_t byteVehicleModels[212];
-	if (!bsInitGame.Read((char*) byteVehicleModels, 212)) {
-		return;
-	}
-//	pGame->PreloadVehicleModels(byteVehicleModels);
+	// pGame->PreloadVehicleModels(p.vehicleModels.data());
 
-	bsInitGame.Read(pNetGame->m_netSet->vehicleFriendlyFire);
-	pPlayerPool->SetLocalPlayerID(MyPlayerID);
-	pGame->EnableStuntBonus(bStuntBonus);
+	pNetGame->m_netSet->vehicleFriendlyFire = p.vehicleFriendlyFire;
+	pPlayerPool->SetLocalPlayerID(p.myPlayerId);
+	pGame->EnableStuntBonus(p.stuntBonus);
 
-	if (bLanMode) {
+	if (p.lanMode) {
 		pNetGame->m_lanMode = true;
 	}
 
@@ -148,45 +112,22 @@ void InitGame(RPCParameters* rpcParams)
 }
 
 //Prompt box rpc processing
-void DialogBox(RPCParameters* rpcParams)
+void RpcHandlers::OnShowDialog(const proto::ShowDialog& p)
 {
 	spdlog::info("RPC: DialogBox");
-	INIT_RPC_BS(bsData);
-
-	int16_t wDialogID = 0;
-	uint8_t byteDialogStyle = 0;
-	uint8_t byteLength = 0;
-	char szTitle[256 + 1] = {0};
-	char szButton1[256 + 1] = {0};
-	char szButton2[256 + 1] = {0};
-	char szMessage[4096 + 1] = {0};
-
-	if (!bsData.Read(wDialogID) || !bsData.Read(byteDialogStyle)) return;
-
-	if (!bsData.Read(byteLength) || (byteLength > 0 && !bsData.Read(szTitle, byteLength))) return;
-	szTitle[byteLength] = '\0';
-
-	if (!bsData.Read(byteLength) || (byteLength > 0 && !bsData.Read(szButton1, byteLength))) return;
-	szButton1[byteLength] = '\0';
-
-	if (!bsData.Read(byteLength) || (byteLength > 0 && !bsData.Read(szButton2, byteLength))) return;
-	szButton2[byteLength] = '\0';
-
-	stringCompressor->DecodeString(szMessage, 4096, &bsData);
-
-	spdlog::info("wDialogID {}", wDialogID);
-	spdlog::info("byteDialogStyle {}", (int) byteDialogStyle);
-	spdlog::info("szTitle {}", szTitle);
-	spdlog::info("szButton1 {}", szButton1);
-	spdlog::info("szButton2 {}", szButton2);
-	spdlog::info("szMessage {}", szMessage);
+	spdlog::info("wDialogID {}", p.id);
+	spdlog::info("byteDialogStyle {}", (int) p.style);
+	spdlog::info("szTitle {}", p.title);
+	spdlog::info("szButton1 {}", p.button1);
+	spdlog::info("szButton2 {}", p.button2);
+	spdlog::info("szMessage {}", p.body);
 
 	if (g_java) {
-		std::string uTitle = Encoding::cp2utf(szTitle);
-		std::string uMessage = Encoding::cp2utf(szMessage);
-		std::string uBtn1 = Encoding::cp2utf(szButton1);
-		std::string uBtn2 = Encoding::cp2utf(szButton2);
-		g_java->showDialog(wDialogID, byteDialogStyle,
+		std::string uTitle = Encoding::cp2utf(p.title.c_str());
+		std::string uMessage = Encoding::cp2utf(p.body.c_str());
+		std::string uBtn1 = Encoding::cp2utf(p.button1.c_str());
+		std::string uBtn2 = Encoding::cp2utf(p.button2.c_str());
+		g_java->showDialog(p.id, p.style,
 			const_cast<char*>(uTitle.c_str()),
 			const_cast<char*>(uMessage.c_str()),
 			const_cast<char*>(uBtn1.c_str()),
@@ -195,100 +136,62 @@ void DialogBox(RPCParameters* rpcParams)
 }
 
 //chat handling
-void Chat(RPCParameters* rpcParams)
+void RpcHandlers::OnChatMessage(const proto::ChatMessage& p)
 {
-	INIT_RPC_BS(bsData);
-
 	if (pNetGame->GetGameState() != GAMESTATE_CONNECTED) {
 		return;
 	}
 
-	PLAYERID playerId = INVALID_PLAYER_ID;
-	uint8_t byteLen = 0;
-	unsigned char szText[256 + 1] = {0};
-
-	if (!bsData.Read(playerId) || !bsData.Read(byteLen)) return;
-	if (byteLen > 0 && !bsData.Read((char*) szText, byteLen)) return;
-	szText[byteLen] = '\0';
-
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) return;
-	if (playerId == pPlayerPool->GetLocalPlayerID()) {
+	if (p.playerId == pPlayerPool->GetLocalPlayerID()) {
 		if (pUI && pUI->chat() && pPlayerPool->GetLocalPlayer()) {
-			pUI->chat()->addChatMessage(Encoding::cp2utf((char*) szText), Encoding::cp2utf(pPlayerPool->GetLocalPlayerName()), pPlayerPool->GetLocalPlayer()->GetPlayerColorAsRGBA());
+			pUI->chat()->addChatMessage(Encoding::cp2utf(p.text.c_str()), Encoding::cp2utf(pPlayerPool->GetLocalPlayerName()), pPlayerPool->GetLocalPlayer()->GetPlayerColorAsRGBA());
 		}
 	}
 	else {
-		CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(playerId);
+		CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(p.playerId);
 		if (pRemotePlayer) {
-			pRemotePlayer->Say((char*) szText);
+			pRemotePlayer->Say(const_cast<char*>(p.text.c_str()));
 		}
 	}
 }
 
 //client message
-void ClientMessage(RPCParameters* rpcParams)
+void RpcHandlers::OnClientMessage(const proto::ClientMessage& p)
 {
 	spdlog::info("RPC: Client message ");
-	INIT_RPC_BS(bsData);
-
-	uint32_t dwStrLen = 0, dwColor = 0;
-
-	if (!bsData.Read(dwColor) || !bsData.Read(dwStrLen)) return;
-
-	if (dwStrLen == 0 || dwStrLen > 4096 || (int) (dwStrLen * 8) > bsData.GetNumberOfUnreadBits()) {
+	if (p.message.empty()) {
 		return;
 	}
 
-	char* szMsg = (char*) malloc(dwStrLen + 1);
-	if (!szMsg) return;
-
-	if (!bsData.Read(szMsg, dwStrLen)) {
-		free(szMsg);
-		return;
-	}
-
-	szMsg[dwStrLen] = '\0';
-
-	spdlog::info("dwColor {}", dwColor);
-	spdlog::info("dwStrLen {}", dwStrLen);
-	spdlog::info("szMsg {}", szMsg);
+	spdlog::info("dwColor {}", p.color);
+	spdlog::info("dwStrLen {}", p.message.size());
+	spdlog::info("szMsg {}", p.message);
 
 	if (pUI && pUI->chat()) {
-		pUI->chat()->addClientMessage(Encoding::cp2utf(szMsg), dwColor);
+		pUI->chat()->addClientMessage(Encoding::cp2utf(p.message.c_str()), p.color);
 	}
-
-	free(szMsg);
 }
 
-void RequestClass(RPCParameters* rpcParams)
+void RpcHandlers::OnRequestClass(const proto::RequestClassReply& p)
 {
 	spdlog::info("RPC: Request class");
-	INIT_RPC_BS(bsData);
 
-	uint8_t byteRequestOutcome = 0;
-	PLAYER_SPAWN_INFO SpawnInfo{};
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool || !pPlayerPool->GetLocalPlayer()) return;
 	CLocalPlayer* pLocalPlayer = pPlayerPool->GetLocalPlayer();
 
-	if (!bsData.Read(byteRequestOutcome)) return;
-	if (Client::isDL()) {
-		PLAYER_SPAWN_INFO_DL spawnInfoDl{};
-		if (!bsData.Read((char*) &spawnInfoDl, sizeof(spawnInfoDl))) return;
-		SpawnInfo.byteTeam = spawnInfoDl.byteTeam;
-		SpawnInfo.iSkin = spawnInfoDl.iSkin;
-		SpawnInfo.unk = spawnInfoDl.unk;
-		SpawnInfo.vecPos = spawnInfoDl.vecPos;
-		SpawnInfo.fRotation = spawnInfoDl.fRotation;
-		memcpy(SpawnInfo.iSpawnWeapons, spawnInfoDl.iSpawnWeapons, sizeof(SpawnInfo.iSpawnWeapons));
-		memcpy(SpawnInfo.iSpawnWeaponsAmmo, spawnInfoDl.iSpawnWeaponsAmmo, sizeof(SpawnInfo.iSpawnWeaponsAmmo));
-	}
-	else {
-		if (!bsData.Read((char*) &SpawnInfo, sizeof(PLAYER_SPAWN_INFO))) return;
-	}
+	PLAYER_SPAWN_INFO SpawnInfo{};
+	SpawnInfo.byteTeam = p.spawnInfo.team;
+	SpawnInfo.iSkin = p.spawnInfo.skin;
+	SpawnInfo.unk = p.spawnInfo.unk;
+	SpawnInfo.vecPos = sa::CVector(p.spawnInfo.position.x, p.spawnInfo.position.y, p.spawnInfo.position.z);
+	SpawnInfo.fRotation = p.spawnInfo.rotation;
+	memcpy(SpawnInfo.iSpawnWeapons, p.spawnInfo.spawnWeapons.data(), sizeof(SpawnInfo.iSpawnWeapons));
+	memcpy(SpawnInfo.iSpawnWeaponsAmmo, p.spawnInfo.spawnWeaponsAmmo.data(), sizeof(SpawnInfo.iSpawnWeaponsAmmo));
 
-	if (byteRequestOutcome) {
+	if (p.selectable) {
 		pLocalPlayer->SetSpawnInfo(&SpawnInfo);
 		pLocalPlayer->HandleClassSelectionOutcome(true);
 	}
@@ -298,20 +201,17 @@ void RequestClass(RPCParameters* rpcParams)
 }
 
 //Request spawn players
-void RequestSpawn(RPCParameters* rpcParams)
+void RpcHandlers::OnRequestSpawn(const proto::RequestSpawnReply& p)
 {
 	spdlog::info("RPC: Request spawn");
-	INIT_RPC_BS(bsData);
 
-	uint8_t byteRequestOutcome = 0;
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool || !pPlayerPool->GetLocalPlayer()) return;
 	CLocalPlayer* pLocalPlayer = pPlayerPool->GetLocalPlayer();
 
-	if (!bsData.Read(byteRequestOutcome)) return;
-	spdlog::info("byteRequestOutcome {}", byteRequestOutcome);
+	spdlog::info("byteRequestOutcome {}", p.outcome);
 
-	if (byteRequestOutcome == 2 || (byteRequestOutcome && pLocalPlayer->m_bWaitingForSpawnRequestReply)) {
+	if (p.outcome == 2 || (p.outcome && pLocalPlayer->m_bWaitingForSpawnRequestReply)) {
 		pLocalPlayer->Spawn();
 	}
 	else {
@@ -319,16 +219,12 @@ void RequestSpawn(RPCParameters* rpcParams)
 	}
 }
 
-void ToggleClock(RPCParameters* rpcParams)
+void RpcHandlers::OnToggleClock(const proto::ToggleClock& p)
 {
 	spdlog::info("RPC: Toggle clock");
-	INIT_RPC_BS(bsData);
+	spdlog::info("byteClock {}", p.toggle);
 
-	uint8_t byteClock = 0;
-	if (!bsData.Read(byteClock)) return;
-	spdlog::info("byteClock {}", byteClock);
-
-	if (byteClock) {
+	if (p.toggle) {
 		pNetGame->m_netSet->holdTime = false;
 	}
 	else {
@@ -342,58 +238,37 @@ void ToggleClock(RPCParameters* rpcParams)
 	}
 }
 
-void SetTimeEx(RPCParameters* rpcParams)
+void RpcHandlers::OnSetTimeEx(const proto::SetTimeEx& p)
 {
 	spdlog::info("RPC: SetTimeEx");
-	INIT_RPC_BS(bsData);
+	spdlog::info("byteHour {}", p.hour);
+	spdlog::info("byteMinute {}", p.minute);
 
-	uint8_t byteHour = 0;
-	uint8_t byteMinute = 0;
-	if (!bsData.Read(byteHour) || !bsData.Read(byteMinute)) return;
-
-	spdlog::info("byteHour {}", byteHour);
-	spdlog::info("byteMinute {}", byteMinute);
-
-	if (pGame) pGame->SetWorldTime(byteHour, byteMinute);
-	pNetGame->m_netSet->worldTime_Hour = byteHour;
-	pNetGame->m_netSet->worldTime_Minute = byteMinute;
+	if (pGame) pGame->SetWorldTime(p.hour, p.minute);
+	pNetGame->m_netSet->worldTime_Hour = p.hour;
+	pNetGame->m_netSet->worldTime_Minute = p.minute;
 }
 
-void Weather(RPCParameters* rpcParams)
+void RpcHandlers::OnWeather(const proto::Weather& p)
 {
 	spdlog::info("RPC: Weather");
-	INIT_RPC_BS(bsData);
+	spdlog::info("weather {}", p.weatherId);
 
-	uint8_t byteWeather = 0;
-	if (!bsData.Read(byteWeather)) return;
-
-	spdlog::info("weather {}", byteWeather);
-
-	pNetGame->m_netSet->weather = byteWeather;
-	if (pGame) pGame->SetWorldWeather(byteWeather);
+	pNetGame->m_netSet->weather = p.weatherId;
+	if (pGame) pGame->SetWorldWeather(p.weatherId);
 }
 
-void WorldTime(RPCParameters* rpcParams)
+void RpcHandlers::OnWorldTime(const proto::WorldTime& p)
 {
 	spdlog::info("RPC: World time");
-	INIT_RPC_BS(bsData);
+	spdlog::info("byteWorldTIme {}", p.hour);
 
-	uint8_t byteWorldTIme = 0;
-	if (!bsData.Read(byteWorldTIme)) return;
-
-	spdlog::info("byteWorldTIme {}", byteWorldTIme);
-
-	pNetGame->m_netSet->worldTime_Hour = byteWorldTIme;
+	pNetGame->m_netSet->worldTime_Hour = p.hour;
 }
 
-void ConnectionRejected(RPCParameters* rpcParams)
+void RpcHandlers::OnConnectionRejected(const proto::ConnectionRejected& p)
 {
-	INIT_RPC_BS(bsData);
-
-	uint8_t byteRejectReason = 0;
-	if (!bsData.Read(byteRejectReason)) return;
-
-	switch (byteRejectReason) {
+	switch (p.reason) {
 		case REJECT_REASON_BAD_VERSION:
 			if (pUI) {
 				pUI->chat()->addInfoMessage("CONNECTION REJECTED: Incorrect Version.");
@@ -426,108 +301,67 @@ void ConnectionRejected(RPCParameters* rpcParams)
 	pNetGame->GetRakClient()->Disconnect(500);
 }
 
-void GameModeRestart(RPCParameters* rpcParams)
+void RpcHandlers::OnGameModeRestart(const proto::GameModeRestart&)
 {
 	pNetGame->ShutdownForGameModeRestart();
 }
 
-void ServerJoin(RPCParameters* rpcParams)
+void RpcHandlers::OnServerJoin(const proto::ServerJoin& p)
 {
-	INIT_RPC_BS(bsData);
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) return;
-	CRemotePlayer* pRemotePlayer = nullptr;
-	uint8_t byteNameLen = 0;
-	uint8_t byteIsNPC = 0;
-	PLAYERID PlayerID = INVALID_PLAYER_ID;
-	uint32_t dwMarkerColor = 0;
-	char szPlayerName[256 + 1] = {0};
 
-	if (!bsData.Read(PlayerID) || !bsData.Read(dwMarkerColor) || !bsData.Read(byteIsNPC) || !bsData.Read(byteNameLen)) {
-		return;
-	}
-	if (byteNameLen > 0 && !bsData.Read(szPlayerName, byteNameLen)) {
-		return;
-	}
-	szPlayerName[byteNameLen] = '\0';
+	spdlog::info("PlayerID {}", p.playerId);
+	spdlog::info("dwMarkerColor {}", p.markerColor);
+	spdlog::info("byteIsNPC {}", p.isNpc);
+	spdlog::info("szPlayerName {}", p.name);
 
-	spdlog::info("PlayerID {}", PlayerID);
-	spdlog::info("dwMarkerColor {}", dwMarkerColor);
-	spdlog::info("byteIsNPC {}", byteIsNPC);
-	spdlog::info("szPlayerName {}", szPlayerName);
-
-	if (strlen(szPlayerName) > MAX_PLAYER_NAME) {
+	if (p.name.size() > MAX_PLAYER_NAME) {
 		return;
 	}
 
-	pPlayerPool->New(PlayerID, szPlayerName, byteIsNPC);
+	pPlayerPool->New(p.playerId, p.name.c_str(), p.isNpc);
 
-	pRemotePlayer = pPlayerPool->GetAt(PlayerID);
+	CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(p.playerId);
 
-	if (dwMarkerColor && pRemotePlayer) {
-		pRemotePlayer->SetPlayerColor(dwMarkerColor);
+	if (p.markerColor && pRemotePlayer) {
+		pRemotePlayer->SetPlayerColor(p.markerColor);
 	}
 }
 
-void ServerQuit(RPCParameters* rpcParams)
+void RpcHandlers::OnServerQuit(const proto::ServerQuit& p)
 {
 	spdlog::info("RPC: Server quit");
-	INIT_RPC_BS(bsData);
-
-	PLAYERID playerId = INVALID_PLAYER_ID;
-	uint8_t byteReason = 0;
-	if (!bsData.Read(playerId) || !bsData.Read(byteReason)) return;
 
 	if (pNetGame->GetPlayerPool()) {
-		pNetGame->GetPlayerPool()->Delete(playerId, byteReason);
+		pNetGame->GetPlayerPool()->Delete(p.playerId, p.reason);
 	}
 }
 
-void WorldPlayerAdd(RPCParameters* rpcParams)
+void RpcHandlers::OnWorldPlayerAdd(const proto::WorldPlayerAdd& p)
 {
 	spdlog::info("RPC: World player add");
-	INIT_RPC_BS(bsData);
+
+	if (!proto::isFinite(p.position) || !std::isfinite(p.rotation)) return;
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
-	CRemotePlayer* pRemotePlayer = nullptr;
-	CPlayerPed* pPlayerPed = nullptr;
-	PLAYERID playerId = INVALID_PLAYER_ID;
-	uint8_t byteTeam = 0;
-	int iSkin = 0;
-	sa::CVector vecPos{};
-	float fRotation = 0.0f;
-	uint32_t dwColor = 0;
-	uint8_t byteFightingStyle = 0;
-	uint16_t wUnkData[11] = {0};
-
-	if (!bsData.Read(playerId) || !bsData.Read(byteTeam) || !bsData.Read(iSkin)) return;
-	if (Client::isDL()) {
-		int iCustomSkin = 0;
-		if (!bsData.Read(iCustomSkin)) return;
-	}
-	if (!bsData.Read(vecPos.x) || !bsData.Read(vecPos.y) || !bsData.Read(vecPos.z) ||
-			!bsData.Read(fRotation) || !bsData.Read(dwColor) || !bsData.Read(byteFightingStyle)) {
-		return;
-	}
-	bsData.Read((char*) wUnkData, sizeof(wUnkData));
-	if (!IsFiniteVec(vecPos) || !std::isfinite(fRotation)) return;
-
 	if (pPlayerPool) {
-		pRemotePlayer = pPlayerPool->GetAt(playerId);
+		CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(p.playerId);
 		if (pRemotePlayer) {
-			if (pRemotePlayer->Spawn(byteTeam, iSkin, &vecPos, fRotation, dwColor, byteFightingStyle)) {
-				pPlayerPed = pRemotePlayer->GetPlayerPed();
+			sa::CVector vecPos(p.position.x, p.position.y, p.position.z);
+			if (pRemotePlayer->Spawn(p.team, p.skin, &vecPos, p.rotation, p.color, p.fightingStyle)) {
+				CPlayerPed* pPlayerPed = pRemotePlayer->GetPlayerPed();
 				if (pPlayerPed) {
 					for (int i = 0; i < 11; i++) {
-						pPlayerPed->SetSkillLevel(i, wUnkData[i]);
+						pPlayerPed->SetSkillLevel(i, p.skillLevels[i]);
 					}
 				}
 
-				if (byteTeam != 0xFF) {
-					pRemotePlayer->SetTeam(byteTeam);
+				if (p.team != 0xFF) {
+					pRemotePlayer->SetTeam(p.team);
 				}
 
-				if (pPlayerPool->IsPlayerNPC(playerId)) {
+				if (pPlayerPool->IsPlayerNPC(p.playerId)) {
 					if (pPlayerPed) {
 						pPlayerPed->SetImmunities(0, 1, 1, 0, 0);
 					}
@@ -535,73 +369,69 @@ void WorldPlayerAdd(RPCParameters* rpcParams)
 			}
 			else {
 				if (pUI && pUI->chat()) {
-					pUI->chat()->addDebugMessage("Warning: Couldn't spawn player(%u)", playerId);
+					pUI->chat()->addDebugMessage("Warning: Couldn't spawn player(%u)", p.playerId);
 				}
 			}
 		}
 	}
 }
 
-void WorldPlayerRemove(RPCParameters* rpcParams)
+void RpcHandlers::OnWorldPlayerRemove(const proto::WorldPlayerRemove& p)
 {
 	spdlog::info("RPC: World player remove");
-	INIT_RPC_BS(bsData);
+	spdlog::info("playerId {}", p.playerId);
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
-	CRemotePlayer* pRemotePlayer = nullptr;
-	PLAYERID playerId = INVALID_PLAYER_ID;
-
-	if (!bsData.Read(playerId)) return;
-	spdlog::info("playerId {}", playerId);
 	if (pPlayerPool) {
-		pRemotePlayer = pPlayerPool->GetAt(playerId);
+		CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(p.playerId);
 		if (pRemotePlayer) {
 			pRemotePlayer->Remove();
 		}
 	}
 }
 
-void WorldPlayerDeath(RPCParameters* rpcParams)
+void RpcHandlers::OnWorldPlayerDeath(const proto::WorldPlayerDeath& p)
 {
 	spdlog::info("RPC: Player Death");
-	INIT_RPC_BS(bsData);
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
-	CRemotePlayer* pRemotePlayer = nullptr;
-	PLAYERID playerId = INVALID_PLAYER_ID;
-
-	if (!bsData.Read(playerId)) return;
 	if (pPlayerPool) {
-		pRemotePlayer = pPlayerPool->GetAt(playerId);
+		CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(p.playerId);
 		if (pRemotePlayer) {
 			pRemotePlayer->HandleDeath();
 		}
 	}
 }
 
-void WorldVehicleAdd(RPCParameters* rpcParams)
+void RpcHandlers::OnWorldVehicleAdd(const proto::WorldVehicleAdd& p)
 {
 	spdlog::info("RPC: World vehicle add");
-	INIT_RPC_BS(bsData);
-
-	NEW_VEHICLE VehicleInfo{};
-	VEHICLE_MOD VehicleModinfo{};
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
 		return;
 	}
 
-	if (!bsData.Read((char*) &VehicleInfo, sizeof(NEW_VEHICLE)) ||
-			!bsData.Read((char*) &VehicleModinfo, sizeof(VEHICLE_MOD))) {
+	if (p.modelId < 400 || p.modelId > 611 ||
+			p.vehicleId >= MAX_VEHICLES ||
+			!proto::isFinite(p.position) || !std::isfinite(p.rotation)) {
 		return;
 	}
 
-	if (VehicleInfo.iVehicleType < 400 || VehicleInfo.iVehicleType > 611 ||
-			VehicleInfo.VehicleID >= MAX_VEHICLES ||
-			!IsFiniteVec(VehicleInfo.vecPos) || !std::isfinite(VehicleInfo.fRotation)) {
-		return;
-	}
+	NEW_VEHICLE VehicleInfo{};
+	VehicleInfo.VehicleID = p.vehicleId;
+	VehicleInfo.iVehicleType = p.modelId;
+	VehicleInfo.vecPos = sa::CVector(p.position.x, p.position.y, p.position.z);
+	VehicleInfo.fRotation = p.rotation;
+	VehicleInfo.byteInteriorColor1 = p.interiorColor1;
+	VehicleInfo.byteInteriorColor2 = p.interiorColor2;
+	VehicleInfo.fHealth = p.health;
+	VehicleInfo.byteInterior = p.interior;
+	VehicleInfo.dwDoorDamageStatus = p.doorDamageStatus;
+	VehicleInfo.dwPanelDamageStatus = p.panelDamageStatus;
+	VehicleInfo.byteLightDamageStatus = p.lightDamageStatus;
+	VehicleInfo.byteTireDamageStatus = p.tireDamageStatus;
+	VehicleInfo.byteAddSiren = p.addSiren;
 
 	pVehiclePool->New(&VehicleInfo);
 	CVehicle* pVehicle = pVehiclePool->GetAt(VehicleInfo.VehicleID);
@@ -632,256 +462,194 @@ void WorldVehicleAdd(RPCParameters* rpcParams)
 
 	if (pVehicle->GetVehicleSubtype() == VEHICLE_SUBTYPE_CAR) {
 		for (int i = 0; i < 14; i++) {
-			uint8_t byteMod = VehicleModinfo.byteModSlots[i];
+			uint8_t byteMod = p.modSlots[i];
 			if (byteMod) {
 				pVehicle->AddComponent(byteMod + 999);
 			}
 		}
 
-		if (VehicleModinfo.bytePaintJob) {
-			pVehicle->SetPaintJob(VehicleModinfo.bytePaintJob - 1);
+		if (p.paintJob) {
+			pVehicle->SetPaintJob(p.paintJob - 1);
 		}
 	}
 
-	if (VehicleModinfo.iBodyColor1 != -1 || VehicleModinfo.iBodyColor2 != -1) {
-		pVehicle->SetColor(VehicleModinfo.iBodyColor1, VehicleModinfo.iBodyColor2);
+	if (p.bodyColor1 != -1 || p.bodyColor2 != -1) {
+		pVehicle->SetColor(p.bodyColor1, p.bodyColor2);
 	}
 }
 
-void WorldVehicleRemove(RPCParameters* rpcParams)
+void RpcHandlers::OnWorldVehicleRemove(const proto::WorldVehicleRemove& p)
 {
 	spdlog::info("RPC: World vehicle remove");
-	INIT_RPC_BS(bsData);
 
-	VEHICLEID VehicleID = INVALID_VEHICLE_ID;
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
 		return;
 	}
 
-	if (!bsData.Read(VehicleID)) {
-		return;
-	}
+	spdlog::info("VehicleID {}", p.vehicleId);
 
-	spdlog::info("VehicleID {}", VehicleID);
-
-	CVehicle* pVehicle = pVehiclePool->GetAt(VehicleID);
+	CVehicle* pVehicle = pVehiclePool->GetAt(p.vehicleId);
 	if (!pVehicle) {
 		return;
 	}
 
 	int iModel = pVehicle->GetModelIndex();
-	pVehiclePool->Delete(VehicleID);
+	pVehiclePool->Delete(p.vehicleId);
 
 	if (iModel == 537 || iModel == 538) {
-		pVehiclePool->Delete(VehicleID + 1);
-		pVehiclePool->Delete(VehicleID + 2);
-		pVehiclePool->Delete(VehicleID + 3);
+		pVehiclePool->Delete(p.vehicleId + 1);
+		pVehiclePool->Delete(p.vehicleId + 2);
+		pVehiclePool->Delete(p.vehicleId + 3);
 	}
 }
 
-void TimerUpdate(RPCParameters* rpcParams)
+void RpcHandlers::OnTimerUpdate(const proto::TimerUpdate& p)
 {
-	INIT_RPC_BS(bsData);
-	uint32_t dwTime = 0;
+	spdlog::info("dwTime {}", p.time);
 
-	if (!bsData.Read(dwTime)) return;
-	spdlog::info("dwTime {}", dwTime);
-
-	if (pGame) pGame->UpdateGlobalTimer(dwTime);
+	if (pGame) pGame->UpdateGlobalTimer(p.time);
 }
 
-void ScmEvent(RPCParameters* rpcParams)
+void RpcHandlers::OnScmEvent(const proto::ScmEvent& p)
 {
 	spdlog::info("RPC: SCM event");
-	INIT_RPC_BS(bsData);
+	spdlog::info("playerId {}", p.playerId);
+	spdlog::info("iEvent {}", p.eventType);
+	spdlog::info("dwParam1 {}", p.param1);
+	spdlog::info("dwParam2 {}", p.param2);
+	spdlog::info("dwParam3 {}", p.param3);
 
-	PLAYERID playerId = INVALID_PLAYER_ID;
-	int iEvent = 0;
-	uint32_t dwParam1 = 0, dwParam2 = 0, dwParam3 = 0;
-
-	if (!bsData.Read(playerId) || !bsData.Read(iEvent) ||
-			!bsData.Read(dwParam1) || !bsData.Read(dwParam2) || !bsData.Read(dwParam3)) {
-		return;
-	}
-
-	spdlog::info("playerId {}", playerId);
-	spdlog::info("iEvent {}", iEvent);
-	spdlog::info("dwParam1 {}", dwParam1);
-	spdlog::info("dwParam2 {}", dwParam2);
-	spdlog::info("dwParam3 {}", dwParam3);
-
-	ProcessIncommingEvent(playerId, iEvent, dwParam1, dwParam2, dwParam3);
+	ProcessIncommingEvent(p.playerId, p.eventType, p.param1, p.param2, p.param3);
 }
 
-void UpdateScoresPingsIPs(RPCParameters* rpcParams)
+void RpcHandlers::OnUpdateScoresPingsIPs(const proto::UpdateScoresPingsIPs& p)
 {
 	spdlog::info("RPC: Update scores and pings");
-	INIT_RPC_BS(bsData);
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) return;
 
-	PLAYERID playerId = INVALID_PLAYER_ID;
-	int iPlayerScore = 0;
-	int iPlayerPing = 0;
+	for (const auto& entry : p.entries) {
+		spdlog::info("RPC_PINGIP: ({}): score: {}, ping: {}", entry.playerId, entry.score, entry.ping);
 
-	for (int i = 0; i < (iBitLength / 8) / 10; i++) {
-		if (!bsData.Read(playerId) || !bsData.Read(iPlayerScore) || !bsData.Read(iPlayerPing)) {
-			break;
-		}
-
-		spdlog::info("RPC_PINGIP: ({}): score: {}, ping: {}", playerId, iPlayerScore, iPlayerPing);
-
-		pPlayerPool->UpdatePlayerScore(playerId, iPlayerScore);
-		pPlayerPool->UpdatePlayerPing(playerId, iPlayerPing);
+		pPlayerPool->UpdatePlayerScore(entry.playerId, entry.score);
+		pPlayerPool->UpdatePlayerPing(entry.playerId, entry.ping);
 	}
 }
 
-void Pickup(RPCParameters* rpcParams)
+void RpcHandlers::OnCreatePickup(const proto::CreatePickup& p)
 {
 	spdlog::info("RPC: Pickup");
-	INIT_RPC_BS(bsData);
 
-	int iIndex = -1;
-	PICKUP Pickup{};
-	if (!bsData.Read(iIndex) || !bsData.Read((char*) &Pickup, sizeof(PICKUP))) return;
+	PICKUP pickup{};
+	pickup.iModel = p.model;
+	pickup.iType = p.type;
+	pickup.fX = p.position.x;
+	pickup.fY = p.position.y;
+	pickup.fZ = p.position.z;
 
 	CPickupPool* pPickupPool = pNetGame->GetPickupPool();
 	if (pPickupPool) {
-		pPickupPool->New(&Pickup, iIndex);
+		pPickupPool->New(&pickup, p.pickupId);
 	}
 }
 
 //destroy pickup
-void DestroyPickup(RPCParameters* rpcParams)
+void RpcHandlers::OnDestroyPickup(const proto::DestroyPickup& p)
 {
 	spdlog::info("RPC: Destroy pickup");
-	INIT_RPC_BS(bsData);
-
-	int iIndex = -1;
-	if (!bsData.Read(iIndex)) return;
-	//Get pickup pool
 	CPickupPool* pPickupPool = pNetGame->GetPickupPool();
 	if (pPickupPool) {
-		//destroyed by index
-		pPickupPool->Destroy(iIndex);
+		pPickupPool->Destroy(p.pickupId);
 	}
 }
 
 //destroy dropped weapon pickup by owner (0.3.DL, RPC 151)
-void DestroyWeaponPickup(RPCParameters* rpcParams)
+void RpcHandlers::OnDestroyWeaponPickup(const proto::DestroyWeaponPickup& p)
 {
 	spdlog::info("RPC: Destroy weapon pickup");
-	INIT_RPC_BS(bsData);
-
-	uint8_t byteOwner = 0;
-	if (!bsData.Read(byteOwner)) return;
-
 	CPickupPool* pPickupPool = pNetGame->GetPickupPool();
 	if (pPickupPool) {
-		pPickupPool->DestroyWeaponByOwner(byteOwner);
+		pPickupPool->DestroyWeaponByOwner(p.owner);
 	}
 }
 
 //anti-cheat probe (0.3.DL, RPC 103): we can't checksum PC-side memory
 //structures on Android, so we answer well-formed replies - result 0 for
 //checksum types, real RakNet time for the 0x48 keep-alive
-void ClientCheck(RPCParameters* rpcParams)
+void RpcHandlers::OnClientCheck(const proto::ClientCheckRequest& p)
 {
-	INIT_RPC_BS(bsData);
+	if (p.offset > 256 || p.length > 256 || p.length < 2) return;
 
-	uint8_t byteType = 0;
-	uint32_t dwArgument = 0;
-	uint16_t wOffset = 0, wLength = 0;
-	if (!bsData.Read(byteType)) return;
-	if (!bsData.Read(dwArgument)) return;
-	if (!bsData.Read(wOffset)) return;
-	if (!bsData.Read(wLength)) return;
-
-	if (wOffset > 256 || wLength > 256 || wLength < 2) return;
-
+	uint32_t dwArgument = p.argument;
 	uint8_t byteResult = 0;
-	if (byteType == 0x48) {
+	if (p.type == 0x48) {
 		dwArgument = (uint32_t) RakNet::GetTime();
 	}
 
 	RakNet::BitStream bsReply;
-	bsReply.Write(byteType);
-	bsReply.Write(dwArgument);
-	bsReply.Write(byteResult);
+	proto::Writer writer(bsReply);
+	proto::ClientCheckReply reply{};
+	reply.type = p.type;
+	reply.argument = dwArgument;
+	reply.result = byteResult;
+	reply.serialize(writer, proto::ProtoVersion::V037);
 	if (pNetGame->GetRakClient()) {
 		pNetGame->GetRakClient()->RPC(&RPC_ClientCheck, &bsReply, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 	}
 }
 
 //Create 3D text
-void Create3DTextLabel(RPCParameters* rpcParams)
+void RpcHandlers::OnCreate3DTextLabel(const proto::Create3DTextLabel& p)
 {
 	spdlog::info("RPC: Create 3D text label");
-	INIT_RPC_BS(bsData);
 
 	CTextLabelPool* pTextLabelPool = pNetGame->GetTextLabelPool();
 	if (pTextLabelPool == nullptr) {
 		return;
 	}
 
-	uint16_t wLabelId = 0xFFFF;
+	if (!proto::isFinite(p.position) || !std::isfinite(p.drawDistance)) return;
+
 	TEXT_LABEL label{};
-	char szBuffer[2048 + 1] = {0};
-
-	if (!bsData.Read(wLabelId) || !bsData.Read(label.dwColor) ||
-			!bsData.Read(label.vecPos.x) || !bsData.Read(label.vecPos.y) || !bsData.Read(label.vecPos.z) ||
-			!bsData.Read(label.fDistance) || !bsData.Read(label.bTestLOS) ||
-			!bsData.Read(label.playerId) || !bsData.Read(label.vehicleId)) {
-		return;
-	}
-	if (!IsFiniteVec(label.vecPos) || !std::isfinite(label.fDistance)) return;
-
-	stringCompressor->DecodeString(szBuffer, 2048, &bsData);
-	strncpy(label.text, szBuffer, sizeof(label.text) - 1);
+	label.dwColor = p.color;
+	label.vecPos = sa::CVector(p.position.x, p.position.y, p.position.z);
+	label.fDistance = p.drawDistance;
+	label.bTestLOS = p.testLOS;
+	label.playerId = p.attachedPlayerId;
+	label.vehicleId = p.attachedVehicleId;
+	strncpy(label.text, p.text.c_str(), sizeof(label.text) - 1);
 	label.text[sizeof(label.text) - 1] = '\0';
 
-	if (wLabelId < MAX_TEXT_LABELS) {
-		pTextLabelPool->NewLabel(wLabelId, &label);
+	if (p.labelId < MAX_TEXT_LABELS) {
+		pTextLabelPool->NewLabel(p.labelId, &label);
 	}
 }
 
 //update 3d text
-void Update3DTextLabel(RPCParameters* rpcParams)
+void RpcHandlers::OnDelete3DTextLabel(const proto::Delete3DTextLabel& p)
 {
 	spdlog::info("RPC: Update 3D text label");
-	INIT_RPC_BS(bsData);
 
 	CTextLabelPool* pTextLabelPool = pNetGame->GetTextLabelPool();
 	if (pTextLabelPool == nullptr) {
 		return;
 	}
 
-	uint16_t wLabelId = 0xFFFF;
-	if (!bsData.Read(wLabelId)) return;
-
-	if (pTextLabelPool->GetSlotState(wLabelId)) {
-		pTextLabelPool->ClearLabel(wLabelId);
+	if (pTextLabelPool->GetSlotState(p.labelId)) {
+		pTextLabelPool->ClearLabel(p.labelId);
 	}
 }
 
-void SetCheckpoint(RPCParameters* rpcParams)
+void RpcHandlers::OnSetCheckpoint(const proto::SetCheckpoint& p)
 {
 	spdlog::info("RPC: Set checkpoint");
-	INIT_RPC_BS(bsData);
 
-	sa::CVector vecPos{};
-	float fSize = 0.0f;
-	if (!bsData.Read(vecPos.x) || !bsData.Read(vecPos.y) || !bsData.Read(vecPos.z) || !bsData.Read(fSize)) {
-		return;
-	}
-	if (!IsFiniteVec(vecPos) || !std::isfinite(fSize)) return;
+	if (!proto::isFinite(p.position) || !std::isfinite(p.size)) return;
 
-	sa::CVector vecSize;
-	vecSize.x = fSize;
-	vecSize.y = fSize;
-	vecSize.z = fSize;
+	sa::CVector vecPos(p.position.x, p.position.y, p.position.z);
+	sa::CVector vecSize(p.size, p.size, p.size);
 
 	if (pGame) {
 		pGame->SetCheckpointInformation(&vecPos, &vecSize);
@@ -889,111 +657,75 @@ void SetCheckpoint(RPCParameters* rpcParams)
 	}
 }
 
-void DisableCheckpoint(RPCParameters* rpcParams)
+void RpcHandlers::OnDisableCheckpoint(const proto::DisableCheckpoint&)
 {
 	spdlog::info("RPC: Disable checkpoint");
 	if (pGame) pGame->EnableCheckpoints(false);
 }
 
-void SetRaceCheckpoint(RPCParameters* rpcParams)
+void RpcHandlers::OnSetRaceCheckpoint(const proto::SetRaceCheckpoint& p)
 {
 	spdlog::info("RPC: Set race checkpoint");
-	INIT_RPC_BS(bsData);
 
-	uint8_t byteType = 0;
-	sa::CVector vecPos{};
-	sa::CVector vecNextPos{};
-	float fRadius = 0.0f;
-	if (!bsData.Read(byteType) ||
-			!bsData.Read(vecPos.x) || !bsData.Read(vecPos.y) || !bsData.Read(vecPos.z) ||
-			!bsData.Read(vecNextPos.x) || !bsData.Read(vecNextPos.y) || !bsData.Read(vecNextPos.z) ||
-			!bsData.Read(fRadius)) {
-		return;
-	}
-	if (!IsFiniteVec(vecPos) || !IsFiniteVec(vecNextPos) || !std::isfinite(fRadius)) return;
+	if (!proto::isFinite(p.position) || !proto::isFinite(p.nextPosition) || !std::isfinite(p.radius)) return;
+
+	sa::CVector vecPos(p.position.x, p.position.y, p.position.z);
+	sa::CVector vecNextPos(p.nextPosition.x, p.nextPosition.y, p.nextPosition.z);
 
 	if (pGame) {
-		pGame->SetRaceCheckpointInformation(byteType, &vecPos, &vecNextPos, fRadius);
+		pGame->SetRaceCheckpointInformation(p.type, &vecPos, &vecNextPos, p.radius);
 		pGame->EnableRaceCheckpoints(true);
 	}
 }
 
-void DisableRaceCheckpoint(RPCParameters* rpcParams)
+void RpcHandlers::OnDisableRaceCheckpoint(const proto::DisableRaceCheckpoint&)
 {
 	spdlog::info("RPC: Disable race checkpoint");
 	if (pGame) pGame->EnableRaceCheckpoints(false);
 }
 
-void DamageVehicle(RPCParameters* rpcParams)
+void RpcHandlers::OnDamageVehicle(const proto::DamageVehicle& p)
 {
 	spdlog::info("RPC: Damage vehicle");
-	INIT_RPC_BS(bsData);
-
-	VEHICLEID VehicleID = INVALID_VEHICLE_ID;
-	uint32_t dwPanels = 0;
-	uint32_t dwDoors = 0;
-	uint8_t byteLight = 0;
-	uint8_t byteTires = 0;
-	if (!bsData.Read(VehicleID) || !bsData.Read(dwPanels) || !bsData.Read(dwDoors) ||
-			!bsData.Read(byteLight) || !bsData.Read(byteTires)) {
-		return;
-	}
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
 		return;
 	}
-	CVehicle* pVehicle = pVehiclePool->GetAt(VehicleID);
+	CVehicle* pVehicle = pVehiclePool->GetAt(p.vehicleId);
 	if (pVehicle) {
-		pVehicle->SetDamageStatus(dwPanels, dwDoors, byteLight);
-		pVehicle->SetTireDamageStatus(byteTires);
+		pVehicle->SetDamageStatus(p.panelDamageStatus, p.doorDamageStatus, p.lightDamageStatus);
+		pVehicle->SetTireDamageStatus(p.tireDamageStatus);
 	}
 }
 
-void EnterVehicle(RPCParameters* rpcParams)
+void RpcHandlers::OnEnterVehicle(const proto::EnterVehicle& p)
 {
 	spdlog::info("RPC: Enter vehicle");
-	INIT_RPC_BS(bsData);
 
-	PLAYERID PlayerID = INVALID_PLAYER_ID;
-	VEHICLEID VehicleID = INVALID_VEHICLE_ID;
-	uint8_t bytePassenger = 0;
-	if (!bsData.Read(PlayerID) || !bsData.Read(VehicleID) || !bsData.Read(bytePassenger)) {
-		return;
-	}
-
-	if (bytePassenger) {
-		bytePassenger = 1;
-	}
+	uint8_t bytePassenger = p.passenger ? 1 : 0;
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
-	if (!pPlayerPool || VehicleID >= MAX_VEHICLES) {
+	if (!pPlayerPool || p.vehicleId >= MAX_VEHICLES) {
 		return;
 	}
-	CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(PlayerID);
+	CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(p.playerId);
 	if (pRemotePlayer) {
 		if (pRemotePlayer->GetDistanceFromLocalPlayer() < 200.0f) {
-			pRemotePlayer->EnterVehicle(VehicleID, bytePassenger);
+			pRemotePlayer->EnterVehicle(p.vehicleId, bytePassenger);
 		}
 	}
 }
 
-void ExitVehicle(RPCParameters* rpcParams)
+void RpcHandlers::OnExitVehicle(const proto::ExitVehicle& p)
 {
 	spdlog::info("RPC: Exit vehicle");
-	INIT_RPC_BS(bsData);
-
-	PLAYERID PlayerID = INVALID_PLAYER_ID;
-	VEHICLEID VehicleID = INVALID_VEHICLE_ID;
-	if (!bsData.Read(PlayerID) || !bsData.Read(VehicleID)) {
-		return;
-	}
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) {
 		return;
 	}
-	CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(PlayerID);
+	CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(p.playerId);
 	if (pRemotePlayer) {
 		if (pRemotePlayer->GetDistanceFromLocalPlayer() < 200.0f) {
 			pRemotePlayer->ExitVehicle();
@@ -1002,78 +734,71 @@ void ExitVehicle(RPCParameters* rpcParams)
 }
 
 //Vehicle parameters
-void VehicleParamsEx(RPCParameters* rpcParams)
+void RpcHandlers::OnVehicleParamsEx(const proto::VehicleParamsEx& p)
 {
 	spdlog::info("RPC: VehicleParamsEx");
-	INIT_RPC_BS(bsData);
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
 		return;
 	}
 
-	VEHICLEID VehicleID = INVALID_VEHICLE_ID;
-	VEHICLE_PARAMS_EX vehParamsEx{};
-	if (!bsData.Read(VehicleID) || !bsData.Read((char*) &vehParamsEx, sizeof(VEHICLE_PARAMS_EX))) {
-		return;
-	}
-
-	CVehicle* pVehicle = pVehiclePool->GetAt(VehicleID);
+	CVehicle* pVehicle = pVehiclePool->GetAt(p.vehicleId);
 	if (!pVehicle) {
 		return;
 	}
 	//engine status
-	if (vehParamsEx.byteEngine <= 1) {
-		pVehicle->SetEngineState(vehParamsEx.byteEngine == 1);
+	if (p.engine <= 1) {
+		pVehicle->SetEngineState(p.engine == 1);
 	}
 
-	if (vehParamsEx.byteLight <= 1) {
-		pVehicle->SetLightState(vehParamsEx.byteLight == 1);
+	if (p.lights <= 1) {
+		pVehicle->SetLightState(p.lights == 1);
 	}
 	//door state
-	if (vehParamsEx.byteDoors <= 1) {
-		pVehicle->SetDoorState(vehParamsEx.byteDoors == 1);
+	if (p.doors <= 1) {
+		pVehicle->SetDoorState(p.doors == 1);
 	}
 	//vehicle object
-	if (vehParamsEx.byteObjective <= 1) {
-		pVehicle->m_byteObjectiveVehicle = vehParamsEx.byteObjective == 1;
+	if (p.objective <= 1) {
+		pVehicle->m_byteObjectiveVehicle = p.objective == 1;
 	}
 
-	if (vehParamsEx.byteBoot <= 1) {
-		pVehicle->SetComponentOpenState(1, 17, vehParamsEx.byteBoot == 1 ? 1.0f : 0.0f);
+	if (p.boot <= 1) {
+		pVehicle->SetComponentOpenState(1, 17, p.boot == 1 ? 1.0f : 0.0f);
 	}
 
-	if (vehParamsEx.byteBonnet <= 1) {
-		pVehicle->SetComponentOpenState(0, 16, vehParamsEx.byteBonnet == 1 ? 1.0f : 0.0f);
+	if (p.bonnet <= 1) {
+		pVehicle->SetComponentOpenState(0, 16, p.bonnet == 1 ? 1.0f : 0.0f);
 	}
 
-	if (vehParamsEx.byteAlarm <= 1) {
-		pVehicle->SetSirenOn(vehParamsEx.byteAlarm == 1);
-		pVehicle->SetAlarmState(vehParamsEx.byteAlarm == 1 ? 20000 : 0);
+	if (p.alarm <= 1) {
+		pVehicle->SetSirenOn(p.alarm == 1);
+		pVehicle->SetAlarmState(p.alarm == 1 ? 20000 : 0);
 	}
 
-	if (vehParamsEx.byteSiren <= 1) {
-		pVehicle->SetSirenOn(vehParamsEx.byteSiren == 1);
+	if (p.siren <= 1) {
+		pVehicle->SetSirenOn(p.siren == 1);
 	}
 
-	if (vehParamsEx.byteDoor1 <= 1) {
-		pVehicle->SetComponentOpenState(2, 10, vehParamsEx.byteDoor1 == 1 ? 1.0f : 0.0f);
+	if (p.doorDriver <= 1) {
+		pVehicle->SetComponentOpenState(2, 10, p.doorDriver == 1 ? 1.0f : 0.0f);
 	}
 
-	if (vehParamsEx.byteDoor2 <= 1) {
-		pVehicle->SetComponentOpenState(3, 8, vehParamsEx.byteDoor2 == 1 ? 1.0f : 0.0f);
+	if (p.doorPassenger <= 1) {
+		pVehicle->SetComponentOpenState(3, 8, p.doorPassenger == 1 ? 1.0f : 0.0f);
 	}
 
-	if (vehParamsEx.byteDoor3 <= 1) {
-		pVehicle->SetComponentOpenState(4, 11, vehParamsEx.byteDoor3 == 1 ? 1.0f : 0.0f);
+	if (p.doorBackLeft <= 1) {
+		pVehicle->SetComponentOpenState(4, 11, p.doorBackLeft == 1 ? 1.0f : 0.0f);
 	}
 
-	if (vehParamsEx.byteDoor4 <= 1) {
-		pVehicle->SetComponentOpenState(5, 9, vehParamsEx.byteDoor4 == 1 ? 1.0f : 0.0f);
+	if (p.doorBackRight <= 1) {
+		pVehicle->SetComponentOpenState(5, 9, p.doorBackRight == 1 ? 1.0f : 0.0f);
 	}
 
-	if (vehParamsEx.byteWindow1) {
-		if (vehParamsEx.byteWindow1 == 1) {
+	if (p.windowDriver) {
+		if (p.windowDriver == 1) {
 			pVehicle->CloseWindow(10);
 		}
 	}
@@ -1081,8 +806,8 @@ void VehicleParamsEx(RPCParameters* rpcParams)
 		pVehicle->OpenWindow(10);
 	}
 
-	if (vehParamsEx.byteWindow2) {
-		if (vehParamsEx.byteWindow2 == 1) {
+	if (p.windowPassenger) {
+		if (p.windowPassenger == 1) {
 			pVehicle->CloseWindow(8);
 		}
 	}
@@ -1090,8 +815,8 @@ void VehicleParamsEx(RPCParameters* rpcParams)
 		pVehicle->OpenWindow(8);
 	}
 
-	if (vehParamsEx.byteWindow3) {
-		if (vehParamsEx.byteWindow3 == 1) {
+	if (p.windowBackLeft) {
+		if (p.windowBackLeft == 1) {
 			pVehicle->CloseWindow(11);
 		}
 	}
@@ -1099,8 +824,8 @@ void VehicleParamsEx(RPCParameters* rpcParams)
 		pVehicle->OpenWindow(11);
 	}
 
-	if (vehParamsEx.byteWindow4) {
-		if (vehParamsEx.byteWindow4 == 1) {
+	if (p.windowBackRight) {
+		if (p.windowBackRight == 1) {
 			pVehicle->CloseWindow(9);
 		}
 	}
@@ -1110,56 +835,45 @@ void VehicleParamsEx(RPCParameters* rpcParams)
 }
 
 //show npc
-void ShowActor(RPCParameters* rpcParams)
+void RpcHandlers::OnShowActor(const proto::ShowActor& p)
 {
 	spdlog::info("RPC: Show actor");
-	INIT_RPC_BS(bsData);
 
 	CActorPool* pActorPool = pNetGame->GetActorPool();
 	if (!pActorPool) {
 		return;
 	}
 
+	if (!proto::isFinite(p.position) || !std::isfinite(p.angle)) return;
+
 	NEW_ACTOR newActor{};
-	if (Client::isDL()) {
-		int iCustomSkin = 0;
-		if (!bsData.Read(newActor.ActorID) || !bsData.Read(newActor.iSkin) ||
-				!bsData.Read(iCustomSkin) ||
-				!bsData.Read(newActor.vecPos.x) || !bsData.Read(newActor.vecPos.y) || !bsData.Read(newActor.vecPos.z) ||
-				!bsData.Read(newActor.fAngle) || !bsData.Read(newActor.fHealth) || !bsData.Read(newActor.bInvulnerable)) {
-			return;
-		}
-	}
-	else {
-		if (!bsData.Read((char*) &newActor, sizeof(NEW_ACTOR))) return;
-	}
-	if (!IsFiniteVec(newActor.vecPos) || !std::isfinite(newActor.fAngle)) return;
+	newActor.ActorID = p.actorId;
+	newActor.iSkin = p.skin;
+	newActor.vecPos = sa::CVector(p.position.x, p.position.y, p.position.z);
+	newActor.fAngle = p.angle;
+	newActor.fHealth = p.health;
+	newActor.bInvulnerable = p.invulnerable != 0;
 
 	pActorPool->New(&newActor);
 }
 
 //hide npc
-void HideActor(RPCParameters* rpcParams)
+void RpcHandlers::OnHideActor(const proto::HideActor& p)
 {
 	spdlog::info("RPC: Hide actor");
-	INIT_RPC_BS(bsData);
 
 	CActorPool* pActorPool = pNetGame->GetActorPool();
 	if (!pActorPool) {
 		return;
 	}
 
-	PLAYERID ActorID = INVALID_PLAYER_ID;
-	if (!bsData.Read(ActorID)) return;
-
-	pActorPool->Delete(ActorID);
+	pActorPool->Delete(p.actorId);
 }
 
 //chat bubble
-void ChatBubble(RPCParameters* rpcParams)
+void RpcHandlers::OnChatBubble(const proto::ChatBubble& p)
 {
 	spdlog::info("RPC: ChatBubble");
-	INIT_RPC_BS(bsData);
 
 	CPlayerBubblePool* pPlayerBubblePool = pNetGame->GetPlayerBubblePool();
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
@@ -1167,192 +881,46 @@ void ChatBubble(RPCParameters* rpcParams)
 		return;
 	}
 
-	PLAYERID playerId = INVALID_PLAYER_ID;
-	uint32_t color = 0;
-	float drawDistance = 0.0f;
-	uint32_t duration = 0;
-	uint8_t byteTextLen = 0;
-
-	char szText[256 + 1] = {0};
-
-	if (!bsData.Read(playerId)) return;
-
-	if (playerId == pPlayerPool->GetLocalPlayerID() || playerId >= MAX_PLAYERS) {
+	if (p.playerId == pPlayerPool->GetLocalPlayerID() || p.playerId >= MAX_PLAYERS) {
 		return;
 	}
 
-	if (!bsData.Read(color) || !bsData.Read(drawDistance) || !bsData.Read(duration) || !bsData.Read(byteTextLen)) {
-		return;
-	}
-	if (byteTextLen > 0 && !bsData.Read((char*) szText, byteTextLen)) {
-		return;
-	}
-	szText[byteTextLen] = '\0';
-
-	pPlayerBubblePool->New(playerId, szText, color, drawDistance, duration);
+	pPlayerBubblePool->New(p.playerId, p.text.c_str(), p.color, p.drawDistance, p.duration);
 }
 
 //Edit attached object
-void EditAttachedObject(RPCParameters* rpcParams)
+void RpcHandlers::OnEditAttachedObject(const proto::EditAttachedObject& p)
 {
 	spdlog::info("RPC: EditAttachedObject");
-	INIT_RPC_BS(bsData);
-
-	int attachedObjectIndex = -1;
-	if (!bsData.Read(attachedObjectIndex)) return;
-
-	EditObject::startEditAttachedObject(attachedObjectIndex);
+	EditObject::startEditAttachedObject(p.index);
 }
 
 //edit object
-void EditObject(RPCParameters* rpcParams)
+void RpcHandlers::OnEditObject(const proto::EditObject& p)
 {
 	spdlog::info("RPC: EditObject");
-	INIT_RPC_BS(bsData);
 
-	bool bPlayerObject = false;
-	OBJECTID objectId = INVALID_OBJECT_ID;
-
-	if (!bsData.Read(bPlayerObject)) return;
-	if (!bsData.Read(objectId)) return;
-
-	EditObject::m_playerObj = bPlayerObject;
+	EditObject::m_playerObj = p.playerObject;
 
 	// there is no player-object pool — editing a global object id here
 	// would mutate an unrelated object and send bogus results back
-	if (bPlayerObject) {
-		spdlog::warn("RPC: EditObject - player objects unsupported, ignoring (id {})", objectId);
+	if (p.playerObject) {
+		spdlog::warn("RPC: EditObject - player objects unsupported, ignoring (id {})", p.objectId);
 		if (pUI && pUI->chat()) pUI->chat()->addDebugMessage("PlayerObject editing not supported");
 		return;
 	}
-	EditObject::startEditObject(objectId);
+	EditObject::startEditObject(p.objectId);
 }
 
 //Go to edit object
-void EnterEditObject(RPCParameters* rpcParams)
+void RpcHandlers::OnEnterEditObject(const proto::EnterEditObject&)
 {
 	spdlog::info("RPC: EnterEditObject");
 }
 
 //cancel editor object
-void CancelEditObject(RPCParameters* rpcParams)
+void RpcHandlers::OnCancelEditObject(const proto::CancelEditObject&)
 {
 	spdlog::info("RPC: CancelEditObject");
 	EditObject::cancelEdit();
-}
-
-void RegisterRPCs(RakClientInterface* pRakClient)
-{
-	spdlog::info("Registering RPC's..");
-
-	// RPC_SetPlayerSkillLevel
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_ScrCreate3DTextLabel, Create3DTextLabel);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_ScrUpdate3DTextLabel, Update3DTextLabel);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_DialogBox, DialogBox);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_SetCheckpoint, SetCheckpoint);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_DisableCheckpoint, DisableCheckpoint);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_SetRaceCheckpoint, SetRaceCheckpoint);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_DisableRaceCheckpoint, DisableRaceCheckpoint);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_UpdateScoresPingsIPs, UpdateScoresPingsIPs);
-	// RPC_SvrStats - useless
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_GameModeRestart, GameModeRestart);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_ConnectionRejected, ConnectionRejected);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_ClientMessage, ClientMessage);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_WorldTime, WorldTime);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_Pickup, Pickup);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_DestroyPickup, DestroyPickup);
-	// RPC_DestroyWeaponPickup(97) - unused in 037; 0.3.DL moved it to 151
-	if (Client::isDL()) {
-		pRakClient->RegisterAsRemoteProcedureCall(&RPC_ScrDestroyWeaponPickup, DestroyWeaponPickup);
-		pRakClient->RegisterAsRemoteProcedureCall(&RPC_ClientCheck, ClientCheck);
-	}
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_ScmEvent, ScmEvent);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_Weather, Weather);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_SetTimeEx, SetTimeEx);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_ToggleClock, ToggleClock);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_TimerUpdate, TimerUpdate);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_WorldPlayerAdd, WorldPlayerAdd);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_WorldPlayerDeath, WorldPlayerDeath);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_WorldPlayerRemove, WorldPlayerRemove);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_WorldVehicleAdd, WorldVehicleAdd);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_WorldVehicleRemove, WorldVehicleRemove);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_DamageVehicle, DamageVehicle);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_VehicleParamsEx, VehicleParamsEx);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_EnterVehicle, EnterVehicle);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_ExitVehicle, ExitVehicle);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_ServerJoin, ServerJoin);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_ServerQuit, ServerQuit);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_InitGame, InitGame);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_Chat, Chat);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_RequestClass, RequestClass);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_RequestSpawn, RequestSpawn);
-
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_EditAttachedObject, EditAttachedObject);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_EditObject, EditObject);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_EnterEditObject, EnterEditObject);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_CancelEditObject, CancelEditObject);
-
-	// RPC_SetTargeting
-	// RPC_ClientCheckResponse
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_ShowActor, ShowActor);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_HideActor, HideActor);
-	pRakClient->RegisterAsRemoteProcedureCall(&RPC_ChatBubble, ChatBubble);
-}
-
-void UnregisterRPCs(RakClientInterface* pRakClient)
-{
-	spdlog::info("Unregistering RPC's..");
-
-	// RPC_SetPlayerSkillLevel
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ScrCreate3DTextLabel);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ScrUpdate3DTextLabel);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_DialogBox);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_SetCheckpoint);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_DisableCheckpoint);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_SetRaceCheckpoint);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_DisableRaceCheckpoint);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_UpdateScoresPingsIPs);
-	// RPC_SvrStats - useless
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_GameModeRestart);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ConnectionRejected);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ClientMessage);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_WorldTime);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_Pickup);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_DestroyPickup);
-	// RPC_DestroyWeaponPickup(97) - unused in 037; 0.3.DL moved it to 151
-	if (Client::isDL()) {
-		pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ScrDestroyWeaponPickup);
-		pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ClientCheck);
-	}
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ScmEvent);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_Weather);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_SetTimeEx);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ToggleClock);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_TimerUpdate);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_WorldPlayerAdd);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_WorldPlayerDeath);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_WorldPlayerRemove);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_WorldVehicleAdd);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_WorldVehicleRemove);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_DamageVehicle);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_VehicleParamsEx);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_EnterVehicle);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ExitVehicle);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ServerJoin);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ServerQuit);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_InitGame);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_Chat);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_RequestClass);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_RequestSpawn);
-
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_EditAttachedObject);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_EditObject);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_EnterEditObject);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_CancelEditObject);
-
-	// RPC_SetTargeting
-	// RPC_ClientCheckResponse
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ShowActor);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_HideActor);
-	pRakClient->UnregisterAsRemoteProcedureCall(&RPC_ChatBubble);
 }

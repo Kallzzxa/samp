@@ -3,6 +3,8 @@
 #include "../Game/Util.h"
 #include "Enums/WidgetIDs.h"
 #include "../Net/NetGame.h"
+#include "Proto/RpcOutbound.h"
+#include "Proto/Sync.h"
 #include "../UI/UI.h"
 
 extern UI* pUI;
@@ -457,8 +459,13 @@ void CLocalPlayer::ProcessSpectating()
 
 	if ((GetTickCount() - m_dwLastSendSpecTick) > GetOptimumOnFootSendRate()) {
 		m_dwLastSendSpecTick = GetTickCount();
-		bsSpectatorSync.Write((uint8_t) ID_SPECTATOR_SYNC);
-		bsSpectatorSync.Write((char*) &spSync, sizeof(SPECTATOR_SYNC_DATA));
+		proto::OutboundSpectatorSync pkt{};
+		pkt.lrAnalog = spSync.lrAnalog;
+		pkt.udAnalog = spSync.udAnalog;
+		pkt.keys = spSync.wKeys;
+		pkt.position = {spSync.vecPos.x, spSync.vecPos.y, spSync.vecPos.z};
+		proto::Writer w(bsSpectatorSync);
+		pkt.serialize(w, proto::ProtoVersion::V037);
 		pNetGame->GetRakClient()->Send(&bsSpectatorSync, HIGH_PRIORITY, UNRELIABLE, 0);
 
 		if ((GetTickCount() - m_dwLastSendAimSyncTick) > (GetOptimumOnFootSendRate() * 2)) {
@@ -584,6 +591,9 @@ bool CLocalPlayer::Spawn()
 	m_surfSync.bIsActive = false;
 
 	RakNet::BitStream bsSendSpawn;
+	proto::SpawnReq req{};
+	proto::Writer w(bsSendSpawn);
+	req.serialize(w, proto::ProtoVersion::V037);
 	pNetGame->GetRakClient()->RPC(&RPC_Spawn, &bsSendSpawn, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 	return true;
 }
@@ -604,8 +614,11 @@ void CLocalPlayer::SendWastedNotification()
 	PLAYERID WhoWasResponsible;
 	RakNet::BitStream bsPlayerDeath;
 	byteDeathReason = m_pPlayerPed->FindDeathReasonAndResponsiblePlayer(&WhoWasResponsible);
-	bsPlayerDeath.Write(byteDeathReason);
-	bsPlayerDeath.Write(WhoWasResponsible);
+	proto::DeathReq req{};
+	req.reason = byteDeathReason;
+	req.killerId = WhoWasResponsible;
+	proto::Writer w(bsPlayerDeath);
+	req.serialize(w, proto::ProtoVersion::V037);
 	pNetGame->GetRakClient()->RPC(&RPC_Death, &bsPlayerDeath, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 }
 
@@ -674,8 +687,23 @@ void CLocalPlayer::SendOnFootFullSyncData()
 	if ((GetTickCount() - m_dwLastOnFootSyncTick) > 500 || memcmp(&m_ofSync, &ofSync, sizeof(ONFOOT_SYNC_DATA))) {
 		m_dwLastOnFootSyncTick = GetTickCount();
 
-		bsPlayerSync.Write((uint8_t) ID_PLAYER_SYNC);
-		bsPlayerSync.Write((char*) &ofSync, sizeof(ONFOOT_SYNC_DATA));
+		proto::OutboundPlayerSync pkt{};
+		pkt.lrAnalog = ofSync.lrAnalog;
+		pkt.udAnalog = ofSync.udAnalog;
+		pkt.keys = ofSync.wKeys;
+		pkt.position = {ofSync.vecPos.x, ofSync.vecPos.y, ofSync.vecPos.z};
+		pkt.quat = {ofSync.quat.w, ofSync.quat.x, ofSync.quat.y, ofSync.quat.z};
+		pkt.health = ofSync.byteHealth;
+		pkt.armour = ofSync.byteArmour;
+		pkt.currentWeapon = ofSync.byteCurrentWeapon;
+		pkt.specialAction = ofSync.byteSpecialAction;
+		pkt.moveSpeed = {ofSync.vecMoveSpeed.x, ofSync.vecMoveSpeed.y, ofSync.vecMoveSpeed.z};
+		pkt.surfOffsets = {ofSync.vecSurfOffsets.x, ofSync.vecSurfOffsets.y, ofSync.vecSurfOffsets.z};
+		pkt.surfInfo = ofSync.wSurfInfo;
+		pkt.animation = ofSync.dwAnimation;
+
+		proto::Writer w(bsPlayerSync);
+		pkt.serialize(w, proto::ProtoVersion::V037);
 		pNetGame->GetRakClient()->Send(&bsPlayerSync, HIGH_PRIORITY, UNRELIABLE_SEQUENCED, 1);
 		memcpy(&m_ofSync, &ofSync, sizeof(ONFOOT_SYNC_DATA));
 	}
@@ -771,8 +799,25 @@ void CLocalPlayer::SendInCarFullSyncData()
 //	 icSync.byteLandingGearState = pVehicle->GetLandingGearState();
 
 	if (IsNeedSyncDataSend(&m_icSync, &icSync, sizeof(INCAR_SYNC_DATA), m_dwLastInCarSyncTick)) {
-		bsVehicleSync.Write((uint8_t) ID_VEHICLE_SYNC);
-		bsVehicleSync.Write((char*) &icSync, sizeof(INCAR_SYNC_DATA));
+		proto::OutboundVehicleSync pkt{};
+		pkt.vehicleId = icSync.VehicleID;
+		pkt.lrAnalog = icSync.lrAnalog;
+		pkt.udAnalog = icSync.udAnalog;
+		pkt.keys = icSync.wKeys;
+		pkt.quat = {icSync.quat.w, icSync.quat.x, icSync.quat.y, icSync.quat.z};
+		pkt.position = {icSync.vecPos.x, icSync.vecPos.y, icSync.vecPos.z};
+		pkt.moveSpeed = {icSync.vecMoveSpeed.x, icSync.vecMoveSpeed.y, icSync.vecMoveSpeed.z};
+		pkt.carHealth = icSync.fCarHealth;
+		pkt.playerHealth = icSync.bytePlayerHealth;
+		pkt.playerArmour = icSync.bytePlayerArmour;
+		pkt.currentWeapon = icSync.byteCurrentWeapon;
+		pkt.sirenOn = icSync.byteSirenOn;
+		pkt.landingGearState = icSync.byteLandingGearState;
+		pkt.trailerId = icSync.TrailerID;
+		memcpy(&pkt.trainOrHydra, &icSync.fTrainSpeed, sizeof(pkt.trainOrHydra));
+
+		proto::Writer w(bsVehicleSync);
+		pkt.serialize(w, proto::ProtoVersion::V037);
 		pNetGame->GetRakClient()->Send(&bsVehicleSync, HIGH_PRIORITY, UNRELIABLE_SEQUENCED, true);
 
 		memcpy(&m_icSync, &icSync, sizeof(INCAR_SYNC_DATA));
@@ -830,8 +875,19 @@ void CLocalPlayer::SendPassengerFullSyncData()
 	psSync.vecPos.z = mat.pos.z;
 
 	if (IsNeedSyncDataSend(&m_psSync, &psSync, sizeof(PASSENGER_SYNC_DATA), m_dwLastPassengerSyncTick)) {
-		bsData.Write((char) ID_PASSENGER_SYNC);
-		bsData.Write((char*) &psSync, sizeof(PASSENGER_SYNC_DATA));
+		proto::OutboundPassengerSync pkt{};
+		pkt.vehicleId = psSync.VehicleID;
+		pkt.seatFlags = psSync.byteSeatFlags;
+		pkt.currentWeapon = psSync.byteCurrentWeapon;
+		pkt.playerHealth = psSync.bytePlayerHealth;
+		pkt.playerArmour = psSync.bytePlayerArmour;
+		pkt.lrAnalog = psSync.lrAnalog;
+		pkt.udAnalog = psSync.udAnalog;
+		pkt.keys = psSync.wKeys;
+		pkt.position = {psSync.vecPos.x, psSync.vecPos.y, psSync.vecPos.z};
+
+		proto::Writer w(bsData);
+		pkt.serialize(w, proto::ProtoVersion::V037);
 		pNetGame->GetRakClient()->Send(&bsData, HIGH_PRIORITY, UNRELIABLE_SEQUENCED, 1);
 		memcpy(&m_psSync, &psSync, sizeof(PASSENGER_SYNC_DATA));
 	}
@@ -869,8 +925,15 @@ void CLocalPlayer::SendTrailerFullSyncData(VEHICLEID vehicleId)
 
 		if (IsNeedSyncDataSend(&m_trSync, &trSync, sizeof(TRAILER_SYNC_DATA), m_dwLastTrailerSyncTick)) {
 			RakNet::BitStream bsTrailerSync;
-			bsTrailerSync.Write((uint8_t) ID_TRAILER_SYNC);
-			bsTrailerSync.Write((char*) &trSync, sizeof(TRAILER_SYNC_DATA));
+			proto::OutboundTrailerSync pkt{};
+			pkt.trailerId = trSync.trailerId;
+			pkt.position = {trSync.vecPos.x, trSync.vecPos.y, trSync.vecPos.z};
+			pkt.quat = {trSync.quat.w, trSync.quat.x, trSync.quat.y, trSync.quat.z};
+			pkt.moveSpeed = {trSync.vecMoveSpeed.x, trSync.vecMoveSpeed.y, trSync.vecMoveSpeed.z};
+			pkt.turnSpeed = {trSync.vecTurnSpeed.x, trSync.vecTurnSpeed.y, trSync.vecTurnSpeed.z};
+
+			proto::Writer w(bsTrailerSync);
+			pkt.serialize(w, proto::ProtoVersion::V037);
 			pNetGame->GetRakClient()->Send(&bsTrailerSync, HIGH_PRIORITY, UNRELIABLE_SEQUENCED, 0);
 			memcpy(&m_trSync, &trSync, sizeof(TRAILER_SYNC_DATA));
 		}
@@ -993,8 +1056,18 @@ void CLocalPlayer::SendUnoccupiedFullSyncData(VEHICLEID vehicleId, uint8_t byteS
 
 	if (IsNeedSyncDataSend(&m_ucSync, &ucSync, sizeof(UNOCCUPIED_SYNC_DATA), m_dwLastUnoccupiedSyncTick)) {
 		RakNet::BitStream bsSend;
-		bsSend.Write((uint8_t) ID_UNOCCUPIED_SYNC);
-		bsSend.Write((char*) &ucSync, sizeof(UNOCCUPIED_SYNC_DATA));
+		proto::OutboundUnoccupiedSync pkt{};
+		pkt.vehicleId = ucSync.vehicleId;
+		pkt.seatId = ucSync.byteSeatId;
+		pkt.roll = {ucSync.vecRoll.x, ucSync.vecRoll.y, ucSync.vecRoll.z};
+		pkt.direction = {ucSync.vecDirection.x, ucSync.vecDirection.y, ucSync.vecDirection.z};
+		pkt.position = {ucSync.vecPos.x, ucSync.vecPos.y, ucSync.vecPos.z};
+		pkt.moveSpeed = {ucSync.vecMoveSpeed.x, ucSync.vecMoveSpeed.y, ucSync.vecMoveSpeed.z};
+		pkt.turnSpeed = {ucSync.vecTurnSpeed.x, ucSync.vecTurnSpeed.y, ucSync.vecTurnSpeed.z};
+		pkt.carHealth = ucSync.fCarHealth;
+
+		proto::Writer w(bsSend);
+		pkt.serialize(w, proto::ProtoVersion::V037);
 		pNetGame->GetRakClient()->Send(&bsSend, HIGH_PRIORITY, UNRELIABLE_SEQUENCED, 1);
 		memcpy(&m_ucSync, &ucSync, sizeof(UNOCCUPIED_SYNC_DATA));
 		pVehicle->m_bLocalUnoccupiedSync = true;
@@ -1036,8 +1109,16 @@ void CLocalPlayer::SendAimSyncData()
 	if ((GetTickCount() - m_dwLastAimDataSyncTick) > 500 || memcmp(&m_aimSync, &aimSync, sizeof(AIM_SYNC_DATA))) {
 		m_dwLastAimDataSyncTick = GetTickCount();
 		RakNet::BitStream bsAimSync;
-		bsAimSync.Write((char) ID_AIM_SYNC);
-		bsAimSync.Write((char*) &aimSync, sizeof(AIM_SYNC_DATA));
+		proto::OutboundAimSync pkt{};
+		pkt.camMode = aimSync.byteCamMode;
+		pkt.aimF1 = {aimSync.vecAimf1.x, aimSync.vecAimf1.y, aimSync.vecAimf1.z};
+		pkt.aimPos = {aimSync.vecAimPos.x, aimSync.vecAimPos.y, aimSync.vecAimPos.z};
+		pkt.aimZ = aimSync.fAimZ;
+		pkt.zoomWeaponState = static_cast<uint8_t>(((aimSync.byteWeaponState & 0x03) << 6) | (aimSync.byteCamExtZoom & 0x3F));
+		pkt.aspectRatio = aimSync.byteAspectRatio;
+
+		proto::Writer w(bsAimSync);
+		pkt.serialize(w, proto::ProtoVersion::V037);
 		pNetGame->GetRakClient()->Send(&bsAimSync, HIGH_PRIORITY, UNRELIABLE_SEQUENCED, 1);
 		memcpy(&m_aimSync, &aimSync, sizeof(AIM_SYNC_DATA));
 	}
@@ -1050,9 +1131,11 @@ void CLocalPlayer::SendStatsUpdate()
 		m_statsSync.dwLastDrunkLevel = m_pPlayerPed->GetDrunkLevel();
 
 		RakNet::BitStream bsStats;
-		bsStats.Write((uint8_t) ID_STATS_UPDATE);
-		bsStats.Write(m_statsSync.dwLastMoney);
-		bsStats.Write(m_statsSync.dwLastDrunkLevel);
+		proto::OutboundStatsUpdate pkt{};
+		pkt.money = static_cast<int32_t>(m_statsSync.dwLastMoney);
+		pkt.drunkLevel = static_cast<int32_t>(m_statsSync.dwLastDrunkLevel);
+		proto::Writer w(bsStats);
+		pkt.serialize(w, proto::ProtoVersion::V037);
 		pNetGame->GetRakClient()->Send(&bsStats, HIGH_PRIORITY, UNRELIABLE, 0);
 	}
 }
@@ -1062,7 +1145,6 @@ void CLocalPlayer::CheckWeapons()
 	uint8_t byteCurWeapon = m_pPlayerPed->GetCurrentWeapon();
 	PLAYERID TargetPlayerID = INVALID_PLAYER_ID;
 	PLAYERID TargetActorID = INVALID_PLAYER_ID;
-	bool bMSend = false;
 
 	if (byteCurWeapon == m_byteCurrentWeapon) {
 		if (GetTickCount() - m_dwLastWeaponsUpdateTick < 100) {
@@ -1073,23 +1155,22 @@ void CLocalPlayer::CheckWeapons()
 		m_byteCurrentWeapon = byteCurWeapon;
 	}
 
-	RakNet::BitStream bsSend;
-	bsSend.Write((char) ID_WEAPONS_UPDATE);
-	bsSend.Write(TargetPlayerID);
-	bsSend.Write(TargetActorID);
+	proto::OutboundWeaponsUpdate pkt{};
+	pkt.targetPlayerId = TargetPlayerID;
+	pkt.targetActorId = TargetActorID;
 
 	for (int i = 0; i < 13; i++) {
 		if (m_byteLastWeapon[i] != m_pPlayerPed->m_ped->m_aWeapons[i].dwType || m_dwLastAmmo[i] != m_pPlayerPed->m_ped->m_aWeapons[i].dwAmmo) {
 			m_byteLastWeapon[i] = m_pPlayerPed->m_ped->m_aWeapons[i].dwType;
 			m_dwLastAmmo[i] = m_pPlayerPed->m_ped->m_aWeapons[i].dwAmmo;
-			bsSend.Write((char) i);
-			bsSend.Write(m_byteLastWeapon[i]);
-			bsSend.Write((uint16_t) m_dwLastAmmo[i]);
-			bMSend = true;
+			pkt.slots.push_back({static_cast<uint8_t>(i), m_byteLastWeapon[i], static_cast<uint16_t>(m_dwLastAmmo[i])});
 		}
 	}
 
-	if (bMSend) {
+	if (!pkt.slots.empty()) {
+		RakNet::BitStream bsSend;
+		proto::Writer w(bsSend);
+		pkt.serialize(w, proto::ProtoVersion::V037);
 		m_dwLastWeaponsUpdateTick = GetTickCount();
 		pNetGame->GetRakClient()->Send(&bsSend, PacketPriority::HIGH_PRIORITY, UNRELIABLE, 0);
 	}
@@ -1099,7 +1180,10 @@ void CLocalPlayer::UpdateRemoteInterior(uint8_t byteInterior)
 {
 	m_byteCurInterior = byteInterior;
 	RakNet::BitStream bsUpdateInterior;
-	bsUpdateInterior.Write(byteInterior);
+	proto::SetInteriorReq req{};
+	req.interiorId = byteInterior;
+	proto::Writer w(bsUpdateInterior);
+	req.serialize(w, proto::ProtoVersion::V037);
 	pNetGame->GetRakClient()->RPC(&RPC_SetInteriorId, &bsUpdateInterior, HIGH_PRIORITY, RELIABLE, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 }
 
@@ -1240,11 +1324,14 @@ void CLocalPlayer::UpdateVehicleDamage(VEHICLEID vehicleID)
 	m_byteDamageTires = byteTires;
 
 	RakNet::BitStream bsDamage;
-	bsDamage.Write(vehicleID);
-	bsDamage.Write(dwPanels);
-	bsDamage.Write(dwDoors);
-	bsDamage.Write(byteLights);
-	bsDamage.Write(byteTires);
+	proto::DamageVehicleReq req{};
+	req.vehicleId = vehicleID;
+	req.panelDamageStatus = dwPanels;
+	req.doorDamageStatus = dwDoors;
+	req.lightDamageStatus = byteLights;
+	req.tireDamageStatus = byteTires;
+	proto::Writer w(bsDamage);
+	req.serialize(w, proto::ProtoVersion::V037);
 	pNetGame->GetRakClient()->RPC(&RPC_DamageVehicle, &bsDamage, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 }
 
@@ -1305,13 +1392,19 @@ void CLocalPlayer::SendSpawn()
 void CLocalPlayer::RequestClass(int iClass)
 {
 	RakNet::BitStream bsClassRequest;
-	bsClassRequest.Write(iClass);
+	proto::RequestClassReq req{};
+	req.classId = iClass;
+	proto::Writer w(bsClassRequest);
+	req.serialize(w, proto::ProtoVersion::V037);
 	pNetGame->GetRakClient()->RPC(&RPC_RequestClass, &bsClassRequest, HIGH_PRIORITY, RELIABLE, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 }
 
 void CLocalPlayer::RequestSpawn()
 {
 	RakNet::BitStream bsSpawnRequest;
+	proto::RequestSpawnReq req{};
+	proto::Writer w(bsSpawnRequest);
+	req.serialize(w, proto::ProtoVersion::V037);
 	pNetGame->GetRakClient()->RPC(&RPC_RequestSpawn, &bsSpawnRequest, HIGH_PRIORITY, RELIABLE, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 }
 
@@ -1397,8 +1490,11 @@ void CLocalPlayer::SendEnterVehicleNotification(VEHICLEID VehicleID, bool bPasse
 	}
 
 	RakNet::BitStream bsSend;
-	bsSend.Write(VehicleID);
-	bsSend.Write((uint8_t) bPassenger);
+	proto::EnterVehicleReq req{};
+	req.vehicleId = VehicleID;
+	req.passenger = static_cast<uint8_t>(bPassenger);
+	proto::Writer w(bsSend);
+	req.serialize(w, proto::ProtoVersion::V037);
 	pNetGame->GetRakClient()->RPC(&RPC_EnterVehicle, &bsSend, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 }
 
@@ -1453,7 +1549,10 @@ void CLocalPlayer::SendExitVehicleNotification(VEHICLEID VehicleID)
 		}
 
 		if (!pVehicle->IsRCVehicle()) {
-			bsSend.Write(VehicleID);
+			proto::ExitVehicleReq req{};
+			req.vehicleId = VehicleID;
+			proto::Writer w(bsSend);
+			req.serialize(w, proto::ProtoVersion::V037);
 			pNetGame->GetRakClient()->RPC(&RPC_ExitVehicle, &bsSend, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 		}
 	}
@@ -1466,11 +1565,14 @@ void CLocalPlayer::SendTakeDamageEvent(PLAYERID PlayerID, float fDamageFactor, i
 	fDamageFactor *= 0.33f;
 
 	RakNet::BitStream bsSend;
-	bsSend.Write(true);
-	bsSend.Write(PlayerID);
-	bsSend.Write(fDamageFactor);
-	bsSend.Write(weaponType);
-	bsSend.Write(pedPieceType);
+	proto::GiveTakeDamageReq req{};
+	req.taking = true;
+	req.playerId = PlayerID;
+	req.damage = fDamageFactor;
+	req.weaponId = weaponType;
+	req.bodyPart = pedPieceType;
+	proto::Writer w(bsSend);
+	req.serialize(w, proto::ProtoVersion::V037);
 
 	pNetGame->GetRakClient()->RPC(&RPC_PlayerGiveTakeDamage, &bsSend, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 }
@@ -1482,11 +1584,14 @@ void CLocalPlayer::SendGiveDamageEvent(PLAYERID PlayerID, float fDamageFactor, i
 	fDamageFactor *= 0.33f;
 
 	RakNet::BitStream bsSend;
-	bsSend.Write(false);
-	bsSend.Write(PlayerID);
-	bsSend.Write(fDamageFactor);
-	bsSend.Write(weaponType);
-	bsSend.Write(pedPieceType);
+	proto::GiveTakeDamageReq req{};
+	req.taking = false;
+	req.playerId = PlayerID;
+	req.damage = fDamageFactor;
+	req.weaponId = weaponType;
+	req.bodyPart = pedPieceType;
+	proto::Writer w(bsSend);
+	req.serialize(w, proto::ProtoVersion::V037);
 
 	pNetGame->GetRakClient()->RPC(&RPC_PlayerGiveTakeDamage, &bsSend, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 }
@@ -1494,11 +1599,14 @@ void CLocalPlayer::SendGiveDamageEvent(PLAYERID PlayerID, float fDamageFactor, i
 void CLocalPlayer::SendGiveDamageActorEvent(PLAYERID ActorID, float fDamageFactor, int weaponType, int pedPieceType)
 {
 	RakNet::BitStream bsSend;
-	bsSend.Write(false);
-	bsSend.Write(ActorID);
-	bsSend.Write(fDamageFactor);
-	bsSend.Write(weaponType);
-	bsSend.Write(pedPieceType);
+	proto::GiveDamageActorReq req{};
+	req.unknown = false;
+	req.actorId = ActorID;
+	req.damage = fDamageFactor;
+	req.weaponId = weaponType;
+	req.bodyPart = pedPieceType;
+	proto::Writer w(bsSend);
+	req.serialize(w, proto::ProtoVersion::V037);
 
 	pNetGame->GetRakClient()->RPC(&RPC_GiveDamageActor, &bsSend, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 }

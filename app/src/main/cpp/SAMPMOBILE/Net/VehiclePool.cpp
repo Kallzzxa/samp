@@ -1,6 +1,7 @@
 #include "../Game/Game.h"
 #include "../UI/UI.h"
 #include "NetGame.h"
+#include "Proto/RpcOutbound.h"
 #include "../Client.h"
 
 extern UI* pUI;
@@ -288,7 +289,10 @@ void CVehiclePool::NotifyVehicleDeath(VEHICLEID VehicleID)
 
 	if (pLocalPlayer->m_LastVehicle == VehicleID) {
 		RakNet::BitStream bsVehicleDeath;
-		bsVehicleDeath.Write(VehicleID);
+		proto::Writer writer(bsVehicleDeath);
+		proto::VehicleDestroyedReq req{};
+		req.vehicleId = VehicleID;
+		req.serialize(writer, proto::ProtoVersion::V037);
 		pNetGame->GetRakClient()->RPC(&RPC_VehicleDestroyed, &bsVehicleDeath, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 		pLocalPlayer->m_LastVehicle = INVALID_VEHICLE_ID;
 	}

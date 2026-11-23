@@ -1,5 +1,6 @@
 #include "../Game/Game.h"
 #include "NetGame.h"
+#include "Proto/RpcOutbound.h"
 
 extern Game* pGame;
 extern NetGame* pNetGame;
@@ -113,7 +114,10 @@ void CTextDrawPool::SendClick()
 {
 	if (!pNetGame || !pNetGame->GetRakClient()) return;
 	RakNet::BitStream bsClick;
-	bsClick.Write(m_wClickedTextDrawID);
+	proto::Writer writer(bsClick);
+	proto::ClickTextDrawReq req{};
+	req.textDrawId = m_wClickedTextDrawID;
+	req.serialize(writer, proto::ProtoVersion::V037);
 	pNetGame->GetRakClient()->RPC(&RPC_ClickTextDraw, &bsClick, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 }
 

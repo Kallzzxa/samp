@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "Game.h"
+#include "../Net/Proto/RpcOutbound.h"
 #include "../GameSA/include/Enums/WidgetIDs.h"
 #include "Core/Rect.h"
 #include <cmath>
@@ -1791,9 +1792,10 @@ DECL_HOOK(int, CRadar_SetCoordBlip, uint32_t BlpType, sa::CVector vecPosition, u
 	if (pNetGame && pNetGame->GetRakClient() && pScriptName && !strncmp(pScriptName, "CODEWAY", 7))
 	{
 		RakNet::BitStream bsSend;
-		bsSend.Write(vecPosition.x);
-		bsSend.Write(vecPosition.y);
-		bsSend.Write(vecPosition.z);
+		proto::Writer writer(bsSend);
+		proto::MapMarkerReq req{};
+		req.position = {vecPosition.x, vecPosition.y, vecPosition.z};
+		req.serialize(writer, proto::ProtoVersion::V037);
 		pNetGame->GetRakClient()->RPC(&RPC_MapMarker, &bsSend, HIGH_PRIORITY, RELIABLE, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 	}
 

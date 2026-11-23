@@ -7,6 +7,8 @@
 #include "Game/Hooks.h"
 #include "Net/NetGame.h"
 #include "Net/NetCap.h"
+#include "Net/RpcTable.h"
+#include "Net/Proto/Sync.h"
 #include "Game/AudioStream.h"
 #include "Game/CleoEngine.h"
 
@@ -45,12 +47,11 @@ void cmdRcon(const std::string& params)
 		return;
 	}
 
-	uint8_t bytePacketId = ID_RCON_COMMAND;
 	RakNet::BitStream bsCommand;
-	bsCommand.Write(bytePacketId);
-	auto dwCmdLen = (uint32_t) strlen(params.c_str());
-	bsCommand.Write(dwCmdLen);
-	bsCommand.Write(params.c_str(), dwCmdLen);
+	proto::Writer writer(bsCommand);
+	proto::RconCommandPacket pkt{};
+	pkt.command = params;
+	pkt.serialize(writer, proto::ProtoVersion::V037);
 	pNetGame->GetRakClient()->Send(&bsCommand, HIGH_PRIORITY, RELIABLE, 0);
 }
 
@@ -225,6 +226,7 @@ void cmdCmds(const std::string& params)
 		pUI->chat()->addInfoMessage("/dl -> Toggle 3D Entity Debug Labels");
 		pUI->chat()->addInfoMessage("/dw -> Toggle Death / Kill Window");
 		pUI->chat()->addInfoMessage("/netcap on|off -> Record network packets to netcap/ (debug)");
+		pUI->chat()->addInfoMessage("/rpcstats [all|reset] -> Show declarative RPC hit/fail counts");
 		pUI->chat()->addInfoMessage("/rcon -> Send RCON Command (e.g. /rcon login [pass])");
 		pUI->chat()->addInfoMessage(" ");
 	}
@@ -271,6 +273,50 @@ void cmdNetCap(const std::string& params)
 	}
 }
 
+void cmdRpcStats(const std::string& params)
+{
+	if (!pUI) return;
+	if (params == "reset") {
+		RpcTable::resetStats();
+		pUI->chat()->addInfoMessage("-> RpcStats reset");
+		return;
+	}
+	const bool showAll = (params == "all");
+	auto stats = RpcTable::snapshotStats();
+	uint64_t totalHits = 0;
+	uint64_t totalFails = 0;
+	size_t activeCount = 0;
+	for (const auto& s : stats) {
+		totalHits += s.hits;
+		totalFails += s.readFails;
+		if (s.hits > 0 || s.readFails > 0) ++activeCount;
+	}
+	spdlog::info("[RPCSTATS] entries={} active={} totalHits={} totalReadFails={}",
+		stats.size(), activeCount, totalHits, totalFails);
+	pUI->chat()->addInfoMessage("-> RpcStats: %zu RPCs (%zu hit), hits=%llu, readFails=%llu",
+		stats.size(), activeCount,
+		static_cast<unsigned long long>(totalHits),
+		static_cast<unsigned long long>(totalFails));
+
+	int chatShown = 0;
+	for (const auto& s : stats) {
+		if (!showAll && s.hits == 0 && s.readFails == 0) continue;
+		spdlog::info("[RPCSTATS] rpc {:3d} {:<24s} hits={} fail={}", s.id, s.name, s.hits, s.readFails);
+		if (chatShown < 12) {
+			pUI->chat()->addInfoMessage("   [%d] %s: hits=%llu fail=%llu", s.id, s.name,
+				static_cast<unsigned long long>(s.hits),
+				static_cast<unsigned long long>(s.readFails));
+			++chatShown;
+		}
+	}
+	if (static_cast<size_t>(chatShown) < (showAll ? stats.size() : activeCount)) {
+		pUI->chat()->addInfoMessage("   ... full list written to client log");
+	}
+	if (auto logger = spdlog::default_logger()) {
+		logger->flush();
+	}
+}
+
 void ClientCmds::initialize()
 {
 	spdlog::info("Initializing client commands..");
@@ -300,5 +346,6 @@ void ClientCmds::initialize()
 		pUI->chat()->addClientCommand("dl", cmdDL);
 		pUI->chat()->addClientCommand("dw", cmdDW);
 		pUI->chat()->addClientCommand("netcap", cmdNetCap);
+		pUI->chat()->addClientCommand("rpcstats", cmdRpcStats);
 	}
 }

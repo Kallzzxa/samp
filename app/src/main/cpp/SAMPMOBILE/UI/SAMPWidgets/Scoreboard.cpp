@@ -2,6 +2,7 @@
 #include "../../Client.h"
 #include "../../Game/Game.h"
 #include "../../Net/NetGame.h"
+#include "../../Net/Proto/RpcOutbound.h"
 
 extern UI* pUI;
 extern Game* pGame;
@@ -130,8 +131,11 @@ void Scoreboard::draw(ImGuiRenderer* renderer)
 			if (ImGui::Selectable(itemid.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0.0f, (UISettings::fontSize() / 2) + ImGui::GetStyle().ItemSpacing.y))) {
 				if (m_lastSelectedItem == m_selectedItem && pNetGame && pNetGame->GetRakClient()) {
 					RakNet::BitStream bsSend;
-					bsSend.Write(static_cast<PLAYERID>(m_players[line].dwID));
-					bsSend.Write(static_cast<uint8_t>(0)); // 0 from scoreboard
+					proto::Writer writer(bsSend);
+					proto::ClickPlayerReq req{};
+					req.playerId = static_cast<PLAYERID>(m_players[line].dwID);
+					req.source = 0; // 0 from scoreboard
+					req.serialize(writer, proto::ProtoVersion::V037);
 					pNetGame->GetRakClient()->RPC(&RPC_ClickPlayer, &bsSend, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 
 					if (visible()) setVisible(false);

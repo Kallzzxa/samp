@@ -1,5 +1,6 @@
 #include "../Game/Game.h"
 #include "NetGame.h"
+#include "Proto/RpcOutbound.h"
 
 extern Game* pGame;
 extern NetGame* pNetGame;
@@ -32,10 +33,14 @@ void CPickupPool::Process()
 				if (ScriptCommand(&is_pickup_picked_up, m_dwHnd[i])) {
 					RakNet::BitStream bsPickup;
 					if (m_droppedWeapon[i].bDroppedWeapon == false) {
-						bsPickup.Write(i);
+						proto::Writer writer(bsPickup);
+						proto::PickedUpPickupReq req{};
+						req.pickupId = i;
+						req.serialize(writer, proto::ProtoVersion::V037);
 						pNetGame->GetRakClient()->RPC(&RPC_PickedUpPickup, &bsPickup, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 					}
 					else {
+						// Dead branch until T23 (dropped weapon pickups) replaces this with RPC 97
 						bsPickup.Write(m_droppedWeapon[i].PlayerID);
 						pNetGame->GetRakClient()->RPC(&RPC_PickedUpPickup, &bsPickup, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 					}
@@ -121,7 +126,10 @@ void CPickupPool::PickedUp(int dwGTAId)
 		if (m_droppedWeapon[PickupID].bDroppedWeapon) return;
 
 		RakNet::BitStream bsPickup;
-		bsPickup.Write(PickupID);
+		proto::Writer writer(bsPickup);
+		proto::PickedUpPickupReq req{};
+		req.pickupId = PickupID;
+		req.serialize(writer, proto::ProtoVersion::V037);
 		pNetGame->GetRakClient()->RPC(&RPC_PickedUpPickup, &bsPickup, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 		m_iTimer[PickupID] = 15;
 	}

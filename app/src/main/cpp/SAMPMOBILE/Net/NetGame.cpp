@@ -2,6 +2,9 @@
 #include "../Game/Game.h"
 #include "NetGame.h"
 #include "NetCap.h"
+#include "RpcTable.h"
+#include "Proto/RpcOutbound.h"
+#include "Proto/Sync.h"
 #include <RakNet/SAMP/NetCapHook.h>
 #include "../UI/UI.h"
 #include "RakNet/SAMP/samp_auth.h"
@@ -53,11 +56,6 @@ int iNetModeNormalInCarSendRate = 30;
 int iNetModeFiringSendRate = 30;
 int iNetModeSendMultiplier = 2;
 
-void RegisterRPCs(RakClientInterface* pRakClient);
-void UnregisterRPCs(RakClientInterface* pRakClient);
-void RegisterScriptRPCs(RakClientInterface* pRakClient);
-void UnregisterScriptRPCs(RakClientInterface* pRakClient);
-
 void InstallVehicleEngineLightPatches();
 
 unsigned char GetPacketID(Packet* p)
@@ -99,8 +97,7 @@ NetGame::NetGame(const char* host, int port, const char* playerName, const char*
 
 	GetPlayerPool()->SetLocalPlayerName(Encoding::utf2cp(playerName).c_str());
 
-	RegisterRPCs(m_rakClient);
-	RegisterScriptRPCs(m_rakClient);
+	RpcTable::registerAll(m_rakClient, proto::versionFromNetgame(static_cast<uint32_t>(Client::netgameVersion())));
 	m_rakClient->SetPassword(password);
 
 	if (Settings::voice()) {
@@ -148,8 +145,7 @@ NetGame::~NetGame()
 		}
 	}
 	m_rakClient->Disconnect(0);
-	UnregisterRPCs(m_rakClient);
-	UnregisterScriptRPCs(m_rakClient);
+	RpcTable::unregisterAll(m_rakClient, proto::versionFromNetgame(static_cast<uint32_t>(Client::netgameVersion())));
 	RakNetworkFactory::DestroyRakClientInterface(m_rakClient);
 
 	UninitializePools();
@@ -523,25 +519,22 @@ char* findAuthKey(const char* key)
 
 void NetGame::Packet_AuthKey(Packet* pkt)
 {
-	uint8_t byteAuthLen;
-	char szAuth[260];
-
-	RakNet::BitStream bsAuth((unsigned char*) pkt->data, pkt->length, false);
-
+	if (!pkt || !pkt->data || pkt->length < 1) return;
 	if (GetGameState() < GAMESTATE_WAIT_CONNECT || GetGameState() > GAMESTATE_AWAIT_JOIN) {
 		return;
 	}
 
-	bsAuth.IgnoreBits(8);
-	if (!bsAuth.Read(byteAuthLen) || !bsAuth.Read(szAuth, byteAuthLen)) {
+	proto::Reader reader(pkt->data, pkt->length * 8);
+	proto::AuthKeyPacket req{};
+	const auto ver = proto::versionFromNetgame(static_cast<uint32_t>(Client::netgameVersion()));
+	if (!req.serialize(reader, ver)) {
 		return;
 	}
-	szAuth[byteAuthLen] = '\0';
 
 	const char* auth_key = nullptr;
 
 	for (auto& x : AuthKeyTable) {
-		if (!strcmp(szAuth, x[0])) {
+		if (!strcmp(req.key.c_str(), x[0])) {
 			auth_key = x[1];
 			break;
 		}
@@ -551,21 +544,20 @@ void NetGame::Packet_AuthKey(Packet* pkt)
 	if (!auth_key) {
 		// table only covers 0.3.7 challenge names; 0.3.DL (and newer 0.3.7)
 		// servers may send anything - compute the real algorithm
-		gen_auth_key(szGenKey, szAuth);
+		gen_auth_key(szGenKey, const_cast<char*>(req.key.c_str()));
 		auth_key = szGenKey;
-		spdlog::info("[AUTH] challenge not in table, computed: {}", szAuth);
+		spdlog::info("[AUTH] challenge not in table, computed: {}", req.key);
 	}
 
 	RakNet::BitStream bsKey;
-	uint8_t byteAuthKeyLen = (uint8_t) strlen(auth_key);
-
-	bsKey.Write((uint8_t) ID_AUTH_KEY);
-	bsKey.Write((uint8_t) byteAuthKeyLen);
-	bsKey.Write(auth_key, byteAuthKeyLen);
+	proto::Writer writer(bsKey);
+	proto::AuthKeyPacket resp{};
+	resp.key = auth_key;
+	resp.serialize(writer, ver);
 
 	m_rakClient->Send(&bsKey, SYSTEM_PRIORITY, RELIABLE, NULL);
 
-	spdlog::info("[AUTH] {} -> {}", szAuth, auth_key);
+	spdlog::info("[AUTH] {} -> {}", req.key, auth_key);
 }
 
 void NetGame::Packet_ConnectAttemptFailed(Packet* pkt)
@@ -617,19 +609,18 @@ void NetGame::Packet_DisconnectionNotification(Packet* pkt)
 
 void NetGame::Packet_ConnectionSucceeded(Packet* pkt)
 {
-	RakNet::BitStream bsSuccAuth(pkt->data, pkt->length, true);
-	PLAYERID MyPlayerID;
-	unsigned int uiChallenge;
-	int iVersion = Client::netgameVersion();
+	if (!pkt || !pkt->data || pkt->length < 1) return;
+
+	const int iVersion = Client::netgameVersion();
+	const auto ver = proto::versionFromNetgame(static_cast<uint32_t>(iVersion));
+	proto::Reader reader(pkt->data, pkt->length * 8);
+	proto::ConnectionSucceededPacket succ{};
+	if (!succ.serialize(reader, ver)) {
+		return;
+	}
+
 	uint8_t byteMod = 1;
-
-	bsSuccAuth.IgnoreBits(8);    // packetId
-	bsSuccAuth.IgnoreBits(32);    // binaryAddress
-	bsSuccAuth.IgnoreBits(16);    // port
-
-	bsSuccAuth.Read(MyPlayerID);
-	bsSuccAuth.Read(uiChallenge);
-	uiChallenge ^= iVersion;
+	unsigned int uiChallenge = succ.challenge ^ static_cast<unsigned int>(iVersion);
 
 	if (pUI) {
 		pUI->chat()->addDebugMessage("Connected. Joining the game...");
@@ -637,24 +628,16 @@ void NetGame::Packet_ConnectionSucceeded(Packet* pkt)
 
 	SetGameState(GAMESTATE_AWAIT_JOIN);
 
-	uint8_t byteNameLen = strlen(GetPlayerPool()->GetLocalPlayerName());
-	uint8_t byteAuthBSLen = strlen(AUTH_BS);
-	uint8_t byteClientVerLen = strlen(Client::sampVersion().c_str());
-
 	RakNet::BitStream bsSend;
-	bsSend.Write(iVersion);
-	bsSend.Write(byteMod);
-	bsSend.Write(byteNameLen);
-	bsSend.Write(GetPlayerPool()->GetLocalPlayerName(), byteNameLen);
-	bsSend.Write(uiChallenge);
-	bsSend.Write(byteAuthBSLen);
-	bsSend.Write(AUTH_BS, byteAuthBSLen);
-	bsSend.Write(byteClientVerLen);
-	bsSend.Write(Client::sampVersion().c_str(), byteClientVerLen);
-	if (Client::isDL()) {
-		// official 0.3.DL appends the challenge response once more after the version string
-		bsSend.Write(uiChallenge);
-	}
+	proto::Writer writer(bsSend);
+	proto::ClientJoin join{};
+	join.version = iVersion;
+	join.mod = byteMod;
+	join.nickname = GetPlayerPool()->GetLocalPlayerName();
+	join.challengeResponse = uiChallenge;
+	join.authKey = AUTH_BS;
+	join.clientVersion = Client::sampVersion();
+	join.serialize(writer, ver);
 
 	if (Settings::voice()) {
 		Network::OnRaknetRpc(RPC_ClientJoin, bsSend);
@@ -716,178 +699,71 @@ void NetGame::Packet_ConnectionLost(Packet* pkt)
 
 void NetGame::Packet_PlayerSync(Packet* pkt)
 {
-	RakNet::BitStream bsData(pkt->data, pkt->length, false);
-	ONFOOT_SYNC_DATA ofSync;
-	uint32_t dwTime = 0;
-	uint8_t bytePacketId;
-	PLAYERID playerId;
-
-	bool bHasLR, bHasUD;
-	bool bHasVehicleSurfingInfo;
-
 	if (GetGameState() != GAMESTATE_CONNECTED) return;
-	if (!pkt->data || pkt->length < 1) return;
+	if (!pkt || !pkt->data || pkt->length < 1) return;
 
-	memset(&ofSync, 0, sizeof(ONFOOT_SYNC_DATA));
-	playerId = INVALID_PLAYER_ID;
+	proto::Reader reader(pkt->data, pkt->length * 8);
+	proto::InboundPlayerSync p{};
+	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
 
-	if (pkt->data[0] == ID_TIMESTAMP) {
-		if (!bsData.Read(bytePacketId) || !bsData.Read(dwTime)) return;
-	}
+	ONFOOT_SYNC_DATA ofSync{};
+	ofSync.lrAnalog = p.hasLR ? p.lrAnalog : 0;
+	ofSync.udAnalog = p.hasUD ? p.udAnalog : 0;
+	ofSync.wKeys = p.keys;
+	ofSync.vecPos = sa::CVector(p.position.x, p.position.y, p.position.z);
+	ofSync.quat.Set(p.quat.x, p.quat.y, p.quat.z, p.quat.w);
+	ofSync.byteHealth = p.health;
+	ofSync.byteArmour = p.armour;
+	ofSync.byteCurrentWeapon = p.currentWeapon & 0x3F;
+	ofSync.byteSpecialAction = p.specialAction;
+	ofSync.vecMoveSpeed = sa::CVector(p.moveSpeed.x, p.moveSpeed.y, p.moveSpeed.z);
+	ofSync.wSurfInfo = p.hasSurfing ? p.surfInfo : INVALID_VEHICLE_ID;
+	ofSync.vecSurfOffsets = p.hasSurfing ? sa::CVector(p.surfOffsets.x, p.surfOffsets.y, p.surfOffsets.z) : sa::CVector{};
+	ofSync.dwAnimation = p.hasAnim ? p.animation : 0x80000000u;
 
-	if (!bsData.Read(bytePacketId) || !bsData.Read(playerId)) return;
-
-	if (!bsData.Read(bHasLR)) return;
-	if (bHasLR) {
-		if (!bsData.Read(ofSync.lrAnalog)) return;
-	}
-
-	if (!bsData.Read(bHasUD)) return;
-	if (bHasUD) {
-		if (!bsData.Read(ofSync.udAnalog)) return;
-	}
-
-	if (!bsData.Read(ofSync.wKeys)) return;
-	if (!bsData.Read((char*) &ofSync.vecPos, sizeof(sa::CVector))) return;
-	float w, x, y, z;
-	if (!bsData.ReadNormQuat(w, x, y, z)) return;
-	ofSync.quat.Set(x, y, z, w);
-
-	uint8_t byteHealthArmour;
-	uint8_t byteArmTemp = 0, byteHlTemp = 0;
-
-	if (!bsData.Read(byteHealthArmour)) return;
-	byteArmTemp = (byteHealthArmour & 0x0F);
-	byteHlTemp = (byteHealthArmour >> 4);
-	if (byteArmTemp == 0xF) { ofSync.byteArmour = 100; }
-	else if (byteArmTemp == 0) { ofSync.byteArmour = 0; }
-	else { ofSync.byteArmour = byteArmTemp * 7; }
-
-	// sync health
-	if (byteHlTemp == 0xF) { ofSync.byteHealth = 100; }
-	else if (byteHlTemp == 0) { ofSync.byteHealth = 0; }
-	else { ofSync.byteHealth = byteHlTemp * 7; }
-	uint8_t byteCurrentWeapon = 0;
-	if (!bsData.Read(byteCurrentWeapon)) return;
-	ofSync.byteCurrentWeapon ^= (byteCurrentWeapon ^ ofSync.byteCurrentWeapon) & 0x3F;
-
-	if (!bsData.Read(ofSync.byteSpecialAction)) return;
-
-	// crash
-	// bsData.ReadVector(ofSync.vecMoveSpeed.X, ofSync.vecMoveSpeed.Y, ofSync.vecMoveSpeed.Z);
-	if (!bsData.ReadVector(x, y, z)) return;
-	ofSync.vecMoveSpeed.x = x;
-	ofSync.vecMoveSpeed.y = y;
-	ofSync.vecMoveSpeed.z = z;
-
-	if (!bsData.Read(bHasVehicleSurfingInfo)) return;
-	if (bHasVehicleSurfingInfo) {
-		if (!bsData.Read(ofSync.wSurfInfo) ||
-				!bsData.Read(ofSync.vecSurfOffsets.x) ||
-				!bsData.Read(ofSync.vecSurfOffsets.y) ||
-				!bsData.Read(ofSync.vecSurfOffsets.z)) return;
-	}
-	else { ofSync.wSurfInfo = INVALID_VEHICLE_ID; }
-
-	bool bHasAnimInfo;
-	ofSync.dwAnimation = 0;
-	if (!bsData.Read(bHasAnimInfo)) return;
-	if (bHasAnimInfo) {
-		if (!bsData.Read(ofSync.dwAnimation)) return;
-	}
-	else {
-		ofSync.dwAnimation = 0b10000000000000000000000000000000;
-	}
 	CPlayerPool* pPlayerPool = GetPlayerPool();
 	if (!pPlayerPool) return;
-	CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(playerId);
+	CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(p.playerId);
 	if (pRemotePlayer) {
-		pRemotePlayer->StoreOnFootFullSyncData(&ofSync, dwTime);
+		pRemotePlayer->StoreOnFootFullSyncData(&ofSync, p.timestamp);
 	}
 }
 // vehicle sync
 void NetGame::Packet_VehicleSync(Packet* pkt)
 {
-	RakNet::BitStream bsData(pkt->data, pkt->length, false);
-	uint32_t dwTime = 0;
-	uint8_t bytePacketId;
-	INCAR_SYNC_DATA icSync;
-	PLAYERID PlayerID;
-
 	if (GetGameState() != GAMESTATE_CONNECTED) return;
-	if (!pkt->data || pkt->length < 1) return;
+	if (!pkt || !pkt->data || pkt->length < 1) return;
 
-	memset(&icSync, 0, sizeof(INCAR_SYNC_DATA));
-	PlayerID = INVALID_PLAYER_ID;
+	proto::Reader reader(pkt->data, pkt->length * 8);
+	proto::InboundVehicleSync p{};
+	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
 
-	if (pkt->data[0] == ID_TIMESTAMP) {
-		if (!bsData.Read(bytePacketId) || !bsData.Read(dwTime)) return;
+	INCAR_SYNC_DATA icSync{};
+	icSync.VehicleID = p.vehicleId;
+	icSync.lrAnalog = p.lrAnalog;
+	icSync.udAnalog = p.udAnalog;
+	icSync.wKeys = p.keys;
+	icSync.quat.Set(p.quat.x, p.quat.y, p.quat.z, p.quat.w);
+	icSync.vecPos = sa::CVector(p.position.x, p.position.y, p.position.z);
+	icSync.vecMoveSpeed = sa::CVector(p.moveSpeed.x, p.moveSpeed.y, p.moveSpeed.z);
+	icSync.fCarHealth = static_cast<float>(p.carHealth);
+	icSync.bytePlayerHealth = p.playerHealth;
+	icSync.bytePlayerArmour = p.playerArmour;
+	icSync.byteCurrentWeapon = p.currentWeapon & 0x3F;
+	icSync.byteSirenOn = p.sirenOn ? 1 : 0;
+	icSync.byteLandingGearState = p.landingGearState ? 1 : 0;
+	if (p.hasTrainOrHydra) {
+		memcpy(&icSync.fTrainSpeed, &p.trainOrHydra, sizeof(icSync.fTrainSpeed));
 	}
-	// read package id
-	if (!bsData.Read(bytePacketId)) return;
-	// player id
-	if (!bsData.Read(PlayerID)) return;
-	// vehicle id
-	if (!bsData.Read(icSync.VehicleID)) return;
-	if (!bsData.Read(icSync.lrAnalog)) return;
-	if (!bsData.Read(icSync.udAnalog)) return;
-	if (!bsData.Read(icSync.wKeys)) return;
-
-	float w, x, y, z;
-	// read quaternion
-	if (!bsData.ReadNormQuat(w, x, y, z)) return;
-	// set sync quaternion
-	icSync.quat.Set(x, y, z, w);
-
-	if (!bsData.Read((char*) &icSync.vecPos, sizeof(sa::CVector))) return;
-	if (!bsData.ReadVector(icSync.vecMoveSpeed.x, icSync.vecMoveSpeed.y, icSync.vecMoveSpeed.z)) return;
-
-	// car health
-	uint16_t wTempVehicleHealth;
-	if (!bsData.Read(wTempVehicleHealth)) return;
-	icSync.fCarHealth = (float) wTempVehicleHealth;
-
-	// health/armour
-	uint8_t byteHealthArmour;
-	uint8_t byteArmTemp = 0, byteHlTemp = 0;
-
-	if (!bsData.Read(byteHealthArmour)) return;
-	byteArmTemp = (byteHealthArmour & 0x0F);
-	byteHlTemp = (byteHealthArmour >> 4);
-
-	if (byteArmTemp == 0xF) { icSync.bytePlayerArmour = 100; }
-	else if (byteArmTemp == 0) { icSync.bytePlayerArmour = 0; }
-	else { icSync.bytePlayerArmour = byteArmTemp * 7; }
-
-	if (byteHlTemp == 0xF) { icSync.bytePlayerHealth = 100; }
-	else if (byteHlTemp == 0) { icSync.bytePlayerHealth = 0; }
-	else { icSync.bytePlayerHealth = byteHlTemp * 7; }
-
-	// current weapon
-	uint8_t byteTempWeapon;
-	if (!bsData.Read(byteTempWeapon)) return;
-	icSync.byteCurrentWeapon ^= (byteTempWeapon ^ icSync.byteCurrentWeapon) & 0x3F;
-
-	bool bCheck;
-
-	// siren
-	if (!bsData.Read(bCheck)) return;
-	if (bCheck) icSync.byteSirenOn = 1;
-	// landinggear
-	if (!bsData.Read(bCheck)) return;
-	if (bCheck) icSync.byteLandingGearState = 1;
-	// train speed
-	if (!bsData.Read(bCheck)) return;
-	if (bCheck && !bsData.Read(icSync.fTrainSpeed)) return;
-	// triler id
-	if (!bsData.Read(bCheck)) return;
-	if (bCheck && !bsData.Read(icSync.TrailerID)) return;
+	if (p.hasTrailer) {
+		icSync.TrailerID = p.trailerId;
+	}
 
 	CPlayerPool* pPlayerPool = GetPlayerPool();
 	if (!pPlayerPool) return;
-	CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(PlayerID);
+	CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(p.playerId);
 	if (pRemotePlayer) {
-		pRemotePlayer->StoreInCarFullSyncData(&icSync, dwTime);
+		pRemotePlayer->StoreInCarFullSyncData(&icSync, p.timestamp);
 	}
 }
 
@@ -895,22 +771,21 @@ void NetGame::Packet_AimSync(Packet* pkt)
 {
 	if (GetGameState() != GAMESTATE_CONNECTED || !pkt || !pkt->data || pkt->length < 1) return;
 
-	RakNet::BitStream bsData(pkt->data, pkt->length, false);
-	uint8_t bytePacketId = 0;
-	uint32_t dwTime = 0;
-	if (pkt->data[0] == ID_TIMESTAMP) {
-		if (!bsData.Read(bytePacketId) || !bsData.Read(dwTime)) return;
-	}
+	proto::Reader reader(pkt->data, pkt->length * 8);
+	proto::InboundAimSync p{};
+	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
 
-	PLAYERID PlayerId = INVALID_PLAYER_ID;
 	AIM_SYNC_DATA aimSync{};
-	if (!bsData.Read(bytePacketId) || !bsData.Read(PlayerId) ||
-			!bsData.Read((char*) &aimSync, sizeof(AIM_SYNC_DATA))) {
-		return;
-	}
+	aimSync.byteCamMode = p.camMode;
+	aimSync.vecAimf1 = sa::CVector(p.aimF1.x, p.aimF1.y, p.aimF1.z);
+	aimSync.vecAimPos = sa::CVector(p.aimPos.x, p.aimPos.y, p.aimPos.z);
+	aimSync.fAimZ = p.aimZ;
+	aimSync.byteCamExtZoom = p.zoomWeaponState & 0x3F;
+	aimSync.byteWeaponState = (p.zoomWeaponState >> 6) & 0x03;
+	aimSync.byteAspectRatio = p.aspectRatio;
 
 	CPlayerPool* pPlayerPool = GetPlayerPool();
-	CRemotePlayer* pPlayer = pPlayerPool ? pPlayerPool->GetAt(PlayerId) : nullptr;
+	CRemotePlayer* pPlayer = pPlayerPool ? pPlayerPool->GetAt(p.playerId) : nullptr;
 	if (pPlayer) {
 		pPlayer->StoreAimFullSyncData(&aimSync);
 	}
@@ -920,23 +795,20 @@ void NetGame::Packet_BulletSync(Packet* pkt)
 {
 	if (GetGameState() != GAMESTATE_CONNECTED || !pkt || !pkt->data || pkt->length < 1) return;
 
-	RakNet::BitStream bsData(pkt->data, pkt->length, false);
-	uint8_t bytePacketId = 0;
-	uint32_t dwTime = 0;
-	if (pkt->data[0] == ID_TIMESTAMP) {
-		if (!bsData.Read(bytePacketId) || !bsData.Read(dwTime)) return;
-	}
+	proto::Reader reader(pkt->data, pkt->length * 8);
+	proto::InboundBulletSync p{};
+	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
 
 	BULLET_SYNC_DATA btSync{};
-	PLAYERID PlayerID = INVALID_PLAYER_ID;
-
-	if (!bsData.Read(bytePacketId) || !bsData.Read(PlayerID) ||
-			!bsData.Read((char*) &btSync, sizeof(BULLET_SYNC_DATA))) {
-		return;
-	}
+	btSync.targetType = p.targetType;
+	btSync.targetId = p.targetId;
+	btSync.vecOrigin = sa::CVector(p.origin.x, p.origin.y, p.origin.z);
+	btSync.vecPos = sa::CVector(p.pos.x, p.pos.y, p.pos.z);
+	btSync.vecOffset = sa::CVector(p.offset.x, p.offset.y, p.offset.z);
+	btSync.weaponId = p.weaponId;
 
 	CPlayerPool* pPlayerPool = GetPlayerPool();
-	CRemotePlayer* pRemotePlayer = pPlayerPool ? pPlayerPool->GetAt(PlayerID) : nullptr;
+	CRemotePlayer* pRemotePlayer = pPlayerPool ? pPlayerPool->GetAt(p.playerId) : nullptr;
 	if (pRemotePlayer) {
 		pRemotePlayer->StoreBulletFullSyncData(&btSync);
 	}
@@ -946,23 +818,23 @@ void NetGame::Packet_PassengerSync(Packet* pkt)
 {
 	if (GetGameState() != GAMESTATE_CONNECTED || !pkt || !pkt->data || pkt->length < 1) return;
 
-	RakNet::BitStream bsData(pkt->data, pkt->length, false);
-	uint8_t bytePacketId = 0;
-	uint32_t dwTime = 0;
-	if (pkt->data[0] == ID_TIMESTAMP) {
-		if (!bsData.Read(bytePacketId) || !bsData.Read(dwTime)) return;
-	}
+	proto::Reader reader(pkt->data, pkt->length * 8);
+	proto::InboundPassengerSync p{};
+	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
 
-	PLAYERID PlayerID = INVALID_PLAYER_ID;
 	PASSENGER_SYNC_DATA psSync{};
-
-	if (!bsData.Read(bytePacketId) || !bsData.Read(PlayerID) ||
-			!bsData.Read((char*) &psSync, sizeof(PASSENGER_SYNC_DATA))) {
-		return;
-	}
+	psSync.VehicleID = p.vehicleId;
+	psSync.byteSeatFlags = p.seatFlags;
+	psSync.byteCurrentWeapon = p.currentWeapon;
+	psSync.bytePlayerHealth = p.playerHealth;
+	psSync.bytePlayerArmour = p.playerArmour;
+	psSync.lrAnalog = p.lrAnalog;
+	psSync.udAnalog = p.udAnalog;
+	psSync.wKeys = p.keys;
+	psSync.vecPos = sa::CVector(p.position.x, p.position.y, p.position.z);
 
 	CPlayerPool* pPlayerPool = GetPlayerPool();
-	CRemotePlayer* pRemotePlayer = pPlayerPool ? pPlayerPool->GetAt(PlayerID) : nullptr;
+	CRemotePlayer* pRemotePlayer = pPlayerPool ? pPlayerPool->GetAt(p.playerId) : nullptr;
 	if (pRemotePlayer) {
 		pRemotePlayer->StorePassengerFullSyncData(&psSync);
 	}
@@ -972,37 +844,19 @@ void NetGame::Packet_MarkerSync(Packet* pkt)
 {
 	if (GetGameState() != GAMESTATE_CONNECTED || !pkt || !pkt->data || pkt->length < 1) return;
 
-	uint8_t bytePacketId = 0;
-	uint32_t dwTime = 0;
-	int iNumberOfPlayers = 0;
-	PLAYERID playerId = INVALID_PLAYER_ID;
-	bool bIsPlayerActive = false;
-	short sPosX = 0, sPosY = 0, sPosZ = 0;
 	CPlayerPool* pPlayerPool = GetPlayerPool();
 	if (!pPlayerPool) return;
-	RakNet::BitStream bsData(pkt->data, pkt->length, false);
 
-	if (pkt->data[0] == ID_TIMESTAMP) {
-		if (!bsData.Read(bytePacketId) || !bsData.Read(dwTime)) return;
-	}
+	proto::Reader reader(pkt->data, pkt->length * 8);
+	proto::InboundMarkersSync p{};
+	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
 
-	if (!bsData.Read(bytePacketId) || !bsData.Read(iNumberOfPlayers)) return;
-	if (iNumberOfPlayers <= 0 || iNumberOfPlayers > MAX_PLAYERS) return;
-
-	for (int i = 0; i < iNumberOfPlayers; i++) {
-		if (!bsData.Read(playerId) || !bsData.ReadCompressed(bIsPlayerActive)) {
-			break;
-		}
-		if (bIsPlayerActive) {
-			if (!bsData.Read(sPosX) || !bsData.Read(sPosY) || !bsData.Read(sPosZ)) {
-				break;
-			}
-		}
-		if (playerId < MAX_PLAYERS && pPlayerPool->GetSlotState(playerId)) {
-			CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(playerId);
+	for (const auto& entry : p.entries) {
+		if (entry.playerId < MAX_PLAYERS && pPlayerPool->GetSlotState(entry.playerId)) {
+			CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(entry.playerId);
 			if (pRemotePlayer) {
-				if (bIsPlayerActive) {
-					pRemotePlayer->ShowGlobalMarker(sPosX, sPosY, sPosZ);
+				if (entry.active) {
+					pRemotePlayer->ShowGlobalMarker(entry.x, entry.y, entry.z);
 				}
 				else {
 					pRemotePlayer->HideGlobalMarker();
@@ -1016,23 +870,19 @@ void NetGame::Packet_TrailerSync(Packet* pkt)
 {
 	if (GetGameState() != GAMESTATE_CONNECTED || !pkt || !pkt->data || pkt->length < 1) return;
 
-	RakNet::BitStream bsTrailerSync((unsigned char*) pkt->data, pkt->length, false);
-	uint8_t bytePacketID = 0;
-	uint32_t dwTime = 0;
-	if (pkt->data[0] == ID_TIMESTAMP) {
-		if (!bsTrailerSync.Read(bytePacketID) || !bsTrailerSync.Read(dwTime)) return;
-	}
+	proto::Reader reader(pkt->data, pkt->length * 8);
+	proto::InboundTrailerSync p{};
+	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
 
-	PLAYERID playerId = INVALID_PLAYER_ID;
 	TRAILER_SYNC_DATA trSync{};
-
-	if (!bsTrailerSync.Read(bytePacketID) || !bsTrailerSync.Read(playerId) ||
-			!bsTrailerSync.Read((char*) &trSync, sizeof(TRAILER_SYNC_DATA))) {
-		return;
-	}
+	trSync.trailerId = p.trailerId;
+	trSync.vecPos = sa::CVector(p.position.x, p.position.y, p.position.z);
+	trSync.quat.Set(p.quat.x, p.quat.y, p.quat.z, p.quat.w);
+	trSync.vecMoveSpeed = sa::CVector(p.moveSpeed.x, p.moveSpeed.y, p.moveSpeed.z);
+	trSync.vecTurnSpeed = sa::CVector(p.turnSpeed.x, p.turnSpeed.y, p.turnSpeed.z);
 
 	if (GetPlayerPool()) {
-		CRemotePlayer* pPlayer = GetPlayerPool()->GetAt(playerId);
+		CRemotePlayer* pPlayer = GetPlayerPool()->GetAt(p.playerId);
 		if (pPlayer) {
 			pPlayer->StoreTrailerFullSyncData(&trSync);
 		}
@@ -1043,23 +893,22 @@ void NetGame::Packet_UnoccupiedSync(Packet* pkt)
 {
 	if (GetGameState() != GAMESTATE_CONNECTED || !pkt || !pkt->data || pkt->length < 1) return;
 
-	RakNet::BitStream bsUnocSync((unsigned char*) pkt->data, pkt->length, false);
-	uint8_t bytePacketID = 0;
-	uint32_t dwTime = 0;
-	if (pkt->data[0] == ID_TIMESTAMP) {
-		if (!bsUnocSync.Read(bytePacketID) || !bsUnocSync.Read(dwTime)) return;
-	}
+	proto::Reader reader(pkt->data, pkt->length * 8);
+	proto::InboundUnoccupiedSync p{};
+	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
 
-	PLAYERID playerId = INVALID_PLAYER_ID;
 	UNOCCUPIED_SYNC_DATA unocSync{};
-
-	if (!bsUnocSync.Read(bytePacketID) || !bsUnocSync.Read(playerId) ||
-			!bsUnocSync.Read((char*) &unocSync, sizeof(UNOCCUPIED_SYNC_DATA))) {
-		return;
-	}
+	unocSync.vehicleId = p.vehicleId;
+	unocSync.byteSeatId = p.seatId;
+	unocSync.vecRoll = sa::CVector(p.roll.x, p.roll.y, p.roll.z);
+	unocSync.vecDirection = sa::CVector(p.direction.x, p.direction.y, p.direction.z);
+	unocSync.vecPos = sa::CVector(p.position.x, p.position.y, p.position.z);
+	unocSync.vecMoveSpeed = sa::CVector(p.moveSpeed.x, p.moveSpeed.y, p.moveSpeed.z);
+	unocSync.vecTurnSpeed = sa::CVector(p.turnSpeed.x, p.turnSpeed.y, p.turnSpeed.z);
+	unocSync.fCarHealth = p.carHealth;
 
 	if (GetPlayerPool()) {
-		CRemotePlayer* pPlayer = GetPlayerPool()->GetAt(playerId);
+		CRemotePlayer* pPlayer = GetPlayerPool()->GetAt(p.playerId);
 		if (pPlayer) {
 			pPlayer->StoreUnoccupiedFullSyncData(&unocSync);
 		}
@@ -1074,6 +923,9 @@ void NetGame::UpdatePlayerScoresAndPings()
 		dwLastUpdateTick = GetTickCount();
 
 		RakNet::BitStream bsSend;
+		proto::Writer writer(bsSend);
+		proto::UpdateScoresPingsReq req{};
+		req.serialize(writer, proto::ProtoVersion::V037);
 		m_rakClient->RPC(&RPC_UpdateScoresPingsIPs, &bsSend, HIGH_PRIORITY, RELIABLE, 0, false,
 				UNASSIGNED_NETWORK_ID, nullptr);
 	}
@@ -1086,14 +938,15 @@ void NetGame::SendDialogResponse(uint16_t wDialogID, uint8_t byteButtonID, uint1
 
 	size_t rawLen = strlen(szInput);
 	if (rawLen > 128) rawLen = 128;
-	uint8_t length = static_cast<uint8_t>(rawLen);
 
 	RakNet::BitStream bsSend;
-	bsSend.Write(wDialogID);
-	bsSend.Write(byteButtonID);
-	bsSend.Write(wListBoxItem);
-	bsSend.Write(length);
-	bsSend.Write(szInput, length);
+	proto::Writer writer(bsSend);
+	proto::DialogResponse resp{};
+	resp.id = static_cast<int16_t>(wDialogID);
+	resp.response = byteButtonID;
+	resp.listItem = static_cast<int16_t>(wListBoxItem);
+	resp.input.assign(szInput, rawLen);
+	resp.serialize(writer, proto::ProtoVersion::V037);
 	m_rakClient->RPC(&RPC_DialogResponse, &bsSend, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 }
 
@@ -1101,13 +954,14 @@ void NetGame::SendChatMessage(const char* szMsg)
 {
 	if (GetGameState() != GAMESTATE_CONNECTED || !m_rakClient || !szMsg) return;
 
-	RakNet::BitStream bsSend;
 	size_t rawLen = strlen(szMsg);
 	if (rawLen > 144) rawLen = 144;
-	uint8_t byteTextLen = static_cast<uint8_t>(rawLen);
 
-	bsSend.Write(byteTextLen);
-	bsSend.Write(szMsg, byteTextLen);
+	RakNet::BitStream bsSend;
+	proto::Writer writer(bsSend);
+	proto::ChatReq req{};
+	req.message.assign(szMsg, rawLen);
+	req.serialize(writer, proto::ProtoVersion::V037);
 
 	m_rakClient->RPC(&RPC_Chat, &bsSend, HIGH_PRIORITY, RELIABLE, 0, false, UNASSIGNED_NETWORK_ID,
 			NULL);
@@ -1117,13 +971,14 @@ void NetGame::SendChatCommand(const char* szCommand)
 {
 	if (GetGameState() != GAMESTATE_CONNECTED || !m_rakClient || !szCommand) return;
 
-	RakNet::BitStream bsParams;
 	size_t rawLen = strlen(szCommand);
 	if (rawLen > 255) rawLen = 255;
-	int iStrlen = static_cast<int>(rawLen);
 
-	bsParams.Write(iStrlen);
-	bsParams.Write(szCommand, iStrlen);
+	RakNet::BitStream bsParams;
+	proto::Writer writer(bsParams);
+	proto::ServerCommandReq req{};
+	req.command.assign(szCommand, rawLen);
+	req.serialize(writer, proto::ProtoVersion::V037);
 	m_rakClient->RPC(&RPC_ServerCommand, &bsParams, HIGH_PRIORITY, RELIABLE, 0, false,
 			UNASSIGNED_NETWORK_ID, NULL);
 }
