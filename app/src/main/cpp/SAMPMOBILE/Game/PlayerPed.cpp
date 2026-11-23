@@ -1,4 +1,5 @@
 #include "Game.h"
+#include "PlayerContextScope.h"
 #include "../UI/UI.h"
 #include "../Net/NetGame.h"
 #include "../Net/Proto/Sync.h"
@@ -1105,9 +1106,10 @@ void CPlayerPed::SetDead()
 		mat = m_ped->GetMatrix().ToRwMatrix();
 		TeleportTo(mat.pos.x, mat.pos.y, mat.pos.z);
 		m_ped->m_fHealth = 0.0f;
-		*pbyteCurrentPlayer = m_bytePlayerNumber;
-		ScriptCommand(&kill_actor, m_gtaId);
-		*pbyteCurrentPlayer = 0;
+		{
+			ScopedPlayerContext ctx(m_bytePlayerNumber, ScopedPlayerContext::kFocusOnly);
+			ScriptCommand(&kill_actor, m_gtaId);
+		}
 	}
 }
 
@@ -1460,9 +1462,8 @@ void CPlayerPed::ClearWeapons()
 		return;
 	}
 
-	*pbyteCurrentPlayer = m_bytePlayerNumber;
+	ScopedPlayerContext ctx(m_bytePlayerNumber, ScopedPlayerContext::kFocusOnly);
 	m_ped->ClearWeapons();
-	*pbyteCurrentPlayer = 0;
 }
 
 void CPlayerPed::ResetHealth()
@@ -1547,11 +1548,12 @@ void CPlayerPed::GiveWeapon(int iWeaponId, int iAmmo)
 				}
 			}
 
-			if (pbyteCurrentPlayer) *pbyteCurrentPlayer = m_bytePlayerNumber;
-			// CPed::GiveWeapon
-			eng::fn::CPed_GiveWeapon( m_ped, iWeaponId, iAmmo, true);
-			SetArmedWeapon(iWeaponId);
-			if (pbyteCurrentPlayer) *pbyteCurrentPlayer = 0;
+			{
+				ScopedPlayerContext ctx(m_bytePlayerNumber, ScopedPlayerContext::kFocusOnly);
+				// CPed::GiveWeapon
+				eng::fn::CPed_GiveWeapon( m_ped, iWeaponId, iAmmo, true);
+				SetArmedWeapon(iWeaponId);
+			}
 		}
 	}
 }
@@ -1559,9 +1561,8 @@ void CPlayerPed::GiveWeapon(int iWeaponId, int iAmmo)
 void CPlayerPed::SetArmedWeapon(uint8_t weapon)
 {
 	if (m_ped && GamePool_Ped_GetAt(m_gtaId)) {
-		*pbyteCurrentPlayer = m_bytePlayerNumber;
+		ScopedPlayerContext ctx(m_bytePlayerNumber, ScopedPlayerContext::kFocusOnly);
 		m_ped->SetCurrentWeapon(weapon);
-		*pbyteCurrentPlayer = 0;
 	}
 }
 
@@ -2435,26 +2436,7 @@ void CPlayerPed::FireInstant()
 {
 	spdlog::info("CPlayerPed::FireInstant");
 
-	uint8_t byteSavedCameraMode = 0;
-	uint16_t wSavedCameraMode2 = 0;
-
-	if (m_bytePlayerNumber != 0) {
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(m_bytePlayerNumber);
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(m_bytePlayerNumber);
-		if (*wCameraMode2 == 4) {
-			*wCameraMode2 = 0;
-		}
-
-		GameStoreLocalPlayerCameraExtZoomAndAspect();
-		GameSetRemotePlayerCameraExtZoomAndAspect(m_bytePlayerNumber);
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(m_bytePlayerNumber);
-
-		//GameStoreLocalPlayerSkills();
-		//GameSetRemotePlayerSkills(m_bytePlayerNumber);
-	}
+	ScopedPlayerContext ctx(m_bytePlayerNumber, ScopedPlayerContext::kFireInstant, m_bytePlayerNumber != 0);
 
 	g_pCurrentFiredPed = this;
 
@@ -2483,16 +2465,6 @@ void CPlayerPed::FireInstant()
 
 	g_pCurrentFiredPed = nullptr;
 	g_pCurrentBulletData = nullptr;
-
-	if (m_bytePlayerNumber != 0) {
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		GameSetLocalPlayerCameraExtZoomAndAspect();
-		GameSetLocalPlayerAim();
-
-		//GameSetLocalPlayerSkills();
-	}
 }
 
 void CPlayerPed::GetWeaponInfoForFire(bool bLeftWrist, sa::CVector* vecBonePos, sa::CVector* vecOut)

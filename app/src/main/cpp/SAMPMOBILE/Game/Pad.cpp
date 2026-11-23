@@ -1,4 +1,5 @@
 #include "Game.h"
+#include "PlayerContextScope.h"
 #include "../UI/UI.h"
 #include "../Net/NetGame.h"
 #include "../Client.h"
@@ -19,9 +20,6 @@ PAD_KEYS RemotePlayerKeys[PLAYER_PED_SLOTS];
 sa::CPed* dwCurPlayerActor = nullptr;
 uint8_t byteInternalPlayer = 0;
 uint8_t byteCurPlayer = 0;
-
-uint8_t byteSavedCameraMode;
-uint16_t wSavedCameraMode2;
 
 void* ghook_CWorld_ProcessLineOfSight = nullptr;
 
@@ -145,51 +143,21 @@ DECL_HOOK(void, CPed_ProcessControl, sa::CPed* _this)
 
 	if (dwCurPlayerActor && (curPlayer != 0) && byteInternalPlayer == 0) {
 		byteCurPlayer = curPlayer;
+		{
+			ScopedPlayerContext ctx(curPlayer, ScopedPlayerContext::kFull);
 
-		// save the internal cammode, apply the context.
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(curPlayer);
+			// Suppress CPed::UpdatePosition (via hookBL) and CWidget::SetEnabled (via hook)
+			// for remote peds without rewriting .text every frame.
+			g_suppressPedUpdatePosition.store(true, std::memory_order_release);
+			g_suppressWidgetSetEnabled.store(true, std::memory_order_release);
 
-		// save the second internal cammode, apply the context.
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(curPlayer);
-		if (*wCameraMode2 == 4) *wCameraMode2 = 0;
+			// call orig
+			CPed_ProcessControl(_this);
 
-		// save the camera zoom factor, apply the context.
-		GameStoreLocalPlayerCameraExtZoomAndAspect();
-		GameSetRemotePlayerCameraExtZoomAndAspect(curPlayer);
-
-		// aim switching.
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(curPlayer);
-
-		// set the internal player to the passed actor.
-		*pbyteCurrentPlayer = curPlayer;
-
-		// Suppress CPed::UpdatePosition (via hookBL) and CWidget::SetEnabled (via hook)
-		// for remote peds without rewriting .text every frame.
-		g_suppressPedUpdatePosition.store(true, std::memory_order_release);
-		g_suppressWidgetSetEnabled.store(true, std::memory_order_release);
-
-		// call orig
-		CPed_ProcessControl(_this);
-
-		// restore
-		g_suppressWidgetSetEnabled.store(false, std::memory_order_release);
-		g_suppressPedUpdatePosition.store(false, std::memory_order_release);
-
-		// restore the camera modes.
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		// restore the local player's camera zoom factor
-		GameSetLocalPlayerCameraExtZoomAndAspect();
-
-		// restore the local player's internal ID.
-		*pbyteCurrentPlayer = 0;
-
-		// restore aim switching.
-		GameSetLocalPlayerAim();
+			// restore
+			g_suppressWidgetSetEnabled.store(false, std::memory_order_release);
+			g_suppressPedUpdatePosition.store(false, std::memory_order_release);
+		}
 	}
 	else {
 		// Allow local player / actors to update m_fAimingRotation from camera
@@ -567,867 +535,80 @@ DECL_HOOK(int, CPad_GetHydraulicJump, uintptr_t _this)
 	}
 }
 
-uint8_t savedControlFlags = 0;
-
-DECL_HOOK(void, CAutomobile_ProcessControl, sa::CVehicle* _this)
+static inline void ApplyVehicleTyreBurstFix(sa::CVehicle* pVehicle)
 {
-	sa::CVehicle* pVehicle = _this;
+	if (pVehicle->pDriver) {
+		if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
+			pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
+		}
+		if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) {
+			pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
+		}
+	}
+	else {
+		if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
+			pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
+		}
+		if (pVehicle->m_nVehicleFlags.bCanBeDamaged) {
+			pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
+		}
+	}
+}
+
+template <bool CallAudioService, typename OrigFn>
+static void ProcessRemoteVehicleControl(OrigFn orig, sa::CVehicle* pVehicle)
+{
 	byteInternalPlayer = *pbyteCurrentPlayer;
 
-	if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0) {
+	if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0
+		&& pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0) {
 		byteCurPlayer = FindPlayerNumFromPedPtr(pVehicle->pDriver);
 
-		// save the internal cammode, apply the context.
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(byteCurPlayer);
-
-		// save the second internal cammode, apply the context.
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(byteCurPlayer);
-		if (*wCameraMode2 == 4) *wCameraMode2 = 0;
-
-		// aim switching.
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(byteCurPlayer);
+		ScopedPlayerContext camAimCtx(byteCurPlayer, ScopedPlayerContext::kVehicleCamAim);
 
 		// Tyre burst fix
-		if (pVehicle->pDriver) {
-			if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-			}
-			if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-		}
-		else {
-			if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-			}
-			if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-		}
-
-		*pbyteCurrentPlayer = 0;
+		ApplyVehicleTyreBurstFix(pVehicle);
 
 		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_CIVMALE; // So CPed::IsPlayer returns FALSE
-		savedControlFlags = pVehicle->nControlFlags;
+		const uint8_t savedControlFlags = pVehicle->nControlFlags;
 		pVehicle->nControlFlags = 26;
 
-		// CAEVehicleAudioEntity::Service
-		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
+		if constexpr (CallAudioService) {
+			eng::fn::CAEVehicleAudioEntity_Service(&pVehicle->m_VehicleAudioEntity);
+		}
 
 		pVehicle->nControlFlags = savedControlFlags;
 		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
 
-		// set the internal player to the passed actor.
-		*pbyteCurrentPlayer = byteCurPlayer;
-
-		CAutomobile_ProcessControl(pVehicle);
-
-		// restore the local player's internal ID.
-		*pbyteCurrentPlayer = 0;
-
-		// restore the camera modes.
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		// restore aim switching.
-		GameSetLocalPlayerAim();
+		{
+			ScopedPlayerContext focusCtx(byteCurPlayer, ScopedPlayerContext::kFocusOnly);
+			orig(pVehicle);
+		}
 	}
 	else {
-		if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && GamePool_FindPlayerPed() == pVehicle->pDriver) {
-			// Tyre burst fix
-			if (pVehicle->pDriver) {
-				if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-				}
-				if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-			}
-			else {
-				if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-				}
-				if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-			}
+		if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0
+			&& GamePool_FindPlayerPed() == pVehicle->pDriver) {
+			ApplyVehicleTyreBurstFix(pVehicle);
 		}
 
-		// CAEVehicleAudioEntity::Service
-		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
+		if constexpr (CallAudioService) {
+			eng::fn::CAEVehicleAudioEntity_Service(&pVehicle->m_VehicleAudioEntity);
+		}
 
-		CAutomobile_ProcessControl(pVehicle);
+		orig(pVehicle);
 	}
 }
 
-DECL_HOOK(void, CBoat_ProcessControl, sa::CVehicle* _this)
-{
-	sa::CVehicle* pVehicle = _this;
-	byteInternalPlayer = *pbyteCurrentPlayer;
-
-	if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0) {
-		byteCurPlayer = FindPlayerNumFromPedPtr(pVehicle->pDriver);
-
-		// save the internal cammode, apply the context.
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(byteCurPlayer);
-
-		// save the second internal cammode, apply the context.
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(byteCurPlayer);
-		if (*wCameraMode2 == 4) *wCameraMode2 = 0;
-
-		// aim switching.
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(byteCurPlayer);
-
-		// Tyre burst fix
-		if (pVehicle->pDriver) {
-			if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-			}
-			if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-		}
-		else {
-			if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-			}
-			if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-		}
-
-		*pbyteCurrentPlayer = 0;
-
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_CIVMALE; // So CPed::IsPlayer returns FALSE
-		savedControlFlags = pVehicle->nControlFlags;
-		pVehicle->nControlFlags = 26;
-
-		// CAEVehicleAudioEntity::Service
-		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
-
-		pVehicle->nControlFlags = savedControlFlags;
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
-
-		// set the internal player to the passed actor.
-		*pbyteCurrentPlayer = byteCurPlayer;
-
-		CBoat_ProcessControl(pVehicle);
-
-		// restore the local player's internal ID.
-		*pbyteCurrentPlayer = 0;
-
-		// restore the camera modes.
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		// restore aim switching.
-		GameSetLocalPlayerAim();
-	}
-	else {
-		if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && GamePool_FindPlayerPed() == pVehicle->pDriver) {
-			// Tyre burst fix
-			if (pVehicle->pDriver) {
-				if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-				}
-				if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-			}
-			else {
-				if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-				}
-				if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-			}
-		}
-
-		// CAEVehicleAudioEntity::Service
-		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
-
-		CBoat_ProcessControl(pVehicle);
-	}
-}
-
-DECL_HOOK(void, CBike_ProcessControl, sa::CVehicle* _this)
-{
-	sa::CVehicle* pVehicle = _this;
-	byteInternalPlayer = *pbyteCurrentPlayer;
-
-	if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0) {
-		byteCurPlayer = FindPlayerNumFromPedPtr(pVehicle->pDriver);
-
-		// save the internal cammode, apply the context.
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(byteCurPlayer);
-
-		// save the second internal cammode, apply the context.
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(byteCurPlayer);
-		if (*wCameraMode2 == 4) *wCameraMode2 = 0;
-
-		// aim switching.
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(byteCurPlayer);
-
-		// Tyre burst fix
-		if (pVehicle->pDriver) {
-			if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-			}
-			if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-		}
-		else {
-			if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-			}
-			if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-		}
-
-		*pbyteCurrentPlayer = 0;
-
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_CIVMALE; // So CPed::IsPlayer returns FALSE
-		savedControlFlags = pVehicle->nControlFlags;
-		pVehicle->nControlFlags = 26;
-
-		// CAEVehicleAudioEntity::Service
-		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
-
-		pVehicle->nControlFlags = savedControlFlags;
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
-
-		// set the internal player to the passed actor.
-		*pbyteCurrentPlayer = byteCurPlayer;
-
-		CBike_ProcessControl(pVehicle);
-
-		// restore the local player's internal ID.
-		*pbyteCurrentPlayer = 0;
-
-		// restore the camera modes.
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		// restore aim switching.
-		GameSetLocalPlayerAim();
-	}
-	else {
-		if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && GamePool_FindPlayerPed() == pVehicle->pDriver) {
-			// Tyre burst fix
-			if (pVehicle->pDriver) {
-				if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-				}
-				if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-			}
-			else {
-				if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-				}
-				if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-			}
-		}
-
-		// CAEVehicleAudioEntity::Service
-		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
-
-		CBike_ProcessControl(pVehicle);
-	}
-}
-
-DECL_HOOK(void, CHeli_ProcessControl, sa::CVehicle* _this)
-{
-	sa::CVehicle* pVehicle = _this;
-	byteInternalPlayer = *pbyteCurrentPlayer;
-
-	if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0) {
-		byteCurPlayer = FindPlayerNumFromPedPtr(pVehicle->pDriver);
-
-		// save the internal cammode, apply the context.
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(byteCurPlayer);
-
-		// save the second internal cammode, apply the context.
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(byteCurPlayer);
-		if (*wCameraMode2 == 4) *wCameraMode2 = 0;
-
-		// aim switching.
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(byteCurPlayer);
-
-		// Tyre burst fix
-		if (pVehicle->pDriver) {
-			if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-			}
-			if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-		}
-		else {
-			if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-			}
-			if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-		}
-
-		*pbyteCurrentPlayer = 0;
-
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_CIVMALE; // So CPed::IsPlayer returns FALSE
-		savedControlFlags = pVehicle->nControlFlags;
-		pVehicle->nControlFlags = 26;
-
-		// CAEVehicleAudioEntity::Service
-		// Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
-
-		pVehicle->nControlFlags = savedControlFlags;
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
-
-		// set the internal player to the passed actor.
-		*pbyteCurrentPlayer = byteCurPlayer;
-
-		CHeli_ProcessControl(pVehicle);
-
-		// restore the local player's internal ID.
-		*pbyteCurrentPlayer = 0;
-
-		// restore the camera modes.
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		// restore aim switching.
-		GameSetLocalPlayerAim();
-	}
-	else {
-		if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && GamePool_FindPlayerPed() == pVehicle->pDriver) {
-			// Tyre burst fix
-			if (pVehicle->pDriver) {
-				if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-				}
-				if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-			}
-			else {
-				if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-				}
-				if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-			}
-		}
-
-		// CAEVehicleAudioEntity::Service
-		// Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
-
-		CHeli_ProcessControl(pVehicle);
-	}
-}
-
-DECL_HOOK(void, CPlane_ProcessControl, sa::CVehicle* _this)
-{
-	sa::CVehicle* pVehicle = _this;
-	byteInternalPlayer = *pbyteCurrentPlayer;
-
-	if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0) {
-		byteCurPlayer = FindPlayerNumFromPedPtr(pVehicle->pDriver);
-
-		// save the internal cammode, apply the context.
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(byteCurPlayer);
-
-		// save the second internal cammode, apply the context.
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(byteCurPlayer);
-		if (*wCameraMode2 == 4) *wCameraMode2 = 0;
-
-		// aim switching.
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(byteCurPlayer);
-
-		// Tyre burst fix
-		if (pVehicle->pDriver) {
-			if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-			}
-			if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-		}
-		else {
-			if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-			}
-			if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-		}
-
-		*pbyteCurrentPlayer = 0;
-
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_CIVMALE; // So CPed::IsPlayer returns FALSE
-		savedControlFlags = pVehicle->nControlFlags;
-		pVehicle->nControlFlags = 26;
-
-		// CAEVehicleAudioEntity::Service
-		// Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
-
-		pVehicle->nControlFlags = savedControlFlags;
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
-
-		// set the internal player to the passed actor.
-		*pbyteCurrentPlayer = byteCurPlayer;
-
-		CPlane_ProcessControl(pVehicle);
-
-		// restore the local player's internal ID.
-		*pbyteCurrentPlayer = 0;
-
-		// restore the camera modes.
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		// restore aim switching.
-		GameSetLocalPlayerAim();
-	}
-	else {
-		if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && GamePool_FindPlayerPed() == pVehicle->pDriver) {
-			// Tyre burst fix
-			if (pVehicle->pDriver) {
-				if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-				}
-				if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-			}
-			else {
-				if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-				}
-				if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-			}
-		}
-
-		// CAEVehicleAudioEntity::Service
-		// Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
-
-		CPlane_ProcessControl(pVehicle);
-	}
-}
-
-DECL_HOOK(void, CBmx_ProcessControl, sa::CVehicle* _this)
-{
-	sa::CVehicle* pVehicle = _this;
-	byteInternalPlayer = *pbyteCurrentPlayer;
-
-	if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0) {
-		byteCurPlayer = FindPlayerNumFromPedPtr(pVehicle->pDriver);
-
-		// save the internal cammode, apply the context.
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(byteCurPlayer);
-
-		// save the second internal cammode, apply the context.
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(byteCurPlayer);
-		if (*wCameraMode2 == 4) *wCameraMode2 = 0;
-
-		// aim switching.
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(byteCurPlayer);
-
-		// Tyre burst fix
-		if (pVehicle->pDriver) {
-			if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-			}
-			if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-		}
-		else {
-			if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-			}
-			if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-		}
-
-		*pbyteCurrentPlayer = 0;
-
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_CIVMALE; // So CPed::IsPlayer returns FALSE
-		savedControlFlags = pVehicle->nControlFlags;
-		pVehicle->nControlFlags = 26;
-
-		// CAEVehicleAudioEntity::Service
-		// Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
-
-		pVehicle->nControlFlags = savedControlFlags;
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
-
-		// set the internal player to the passed actor.
-		*pbyteCurrentPlayer = byteCurPlayer;
-
-		CBmx_ProcessControl(pVehicle);
-
-		// restore the local player's internal ID.
-		*pbyteCurrentPlayer = 0;
-
-		// restore the camera modes.
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		// restore aim switching.
-		GameSetLocalPlayerAim();
-	}
-	else {
-		if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && GamePool_FindPlayerPed() == pVehicle->pDriver) {
-			// Tyre burst fix
-			if (pVehicle->pDriver) {
-				if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-				}
-				if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-			}
-			else {
-				if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-				}
-				if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-			}
-		}
-
-		// CAEVehicleAudioEntity::Service
-		// Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
-
-		CBmx_ProcessControl(pVehicle);
-	}
-}
-
-DECL_HOOK(void, CMonsterTruck_ProcessControl, sa::CVehicle* _this)
-{
-	sa::CVehicle* pVehicle = _this;
-	byteInternalPlayer = *pbyteCurrentPlayer;
-
-	if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0) {
-		byteCurPlayer = FindPlayerNumFromPedPtr(pVehicle->pDriver);
-
-		// save the internal cammode, apply the context.
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(byteCurPlayer);
-
-		// save the second internal cammode, apply the context.
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(byteCurPlayer);
-		if (*wCameraMode2 == 4) *wCameraMode2 = 0;
-
-		// aim switching.
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(byteCurPlayer);
-
-		// Tyre burst fix
-		if (pVehicle->pDriver) {
-			if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-			}
-			if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-		}
-		else {
-			if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-			}
-			if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-		}
-
-		*pbyteCurrentPlayer = 0;
-
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_CIVMALE; // So CPed::IsPlayer returns FALSE
-		savedControlFlags = pVehicle->nControlFlags;
-		pVehicle->nControlFlags = 26;
-
-		// CAEVehicleAudioEntity::Service
-		// Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
-
-		pVehicle->nControlFlags = savedControlFlags;
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
-
-		// set the internal player to the passed actor.
-		*pbyteCurrentPlayer = byteCurPlayer;
-
-		CMonsterTruck_ProcessControl(pVehicle);
-
-		// restore the local player's internal ID.
-		*pbyteCurrentPlayer = 0;
-
-		// restore the camera modes.
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		// restore aim switching.
-		GameSetLocalPlayerAim();
-	}
-	else {
-		if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && GamePool_FindPlayerPed() == pVehicle->pDriver) {
-			// Tyre burst fix
-			if (pVehicle->pDriver) {
-				if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-				}
-				if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-			}
-			else {
-				if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-				}
-				if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-			}
-		}
-
-		// CAEVehicleAudioEntity::Service
-		// Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
-
-		CMonsterTruck_ProcessControl(pVehicle);
-	}
-}
-
-DECL_HOOK(void, CQuadBike_ProcessControl, sa::CVehicle* _this)
-{
-	sa::CVehicle* pVehicle = _this;
-	byteInternalPlayer = *pbyteCurrentPlayer;
-
-	if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0) {
-		byteCurPlayer = FindPlayerNumFromPedPtr(pVehicle->pDriver);
-
-		// save the internal cammode, apply the context.
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(byteCurPlayer);
-
-		// save the second internal cammode, apply the context.
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(byteCurPlayer);
-		if (*wCameraMode2 == 4) *wCameraMode2 = 0;
-
-		// aim switching.
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(byteCurPlayer);
-
-		// Tyre burst fix
-		if (pVehicle->pDriver) {
-			if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-			}
-			if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-		}
-		else {
-			if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-			}
-			if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-		}
-
-		*pbyteCurrentPlayer = 0;
-
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_CIVMALE; // So CPed::IsPlayer returns FALSE
-		savedControlFlags = pVehicle->nControlFlags;
-		pVehicle->nControlFlags = 26;
-
-		// CAEVehicleAudioEntity::Service
-		// Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
-
-		pVehicle->nControlFlags = savedControlFlags;
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
-
-		// set the internal player to the passed actor.
-		*pbyteCurrentPlayer = byteCurPlayer;
-
-		CQuadBike_ProcessControl(pVehicle);
-
-		// restore the local player's internal ID.
-		*pbyteCurrentPlayer = 0;
-
-		// restore the camera modes.
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		// restore aim switching.
-		GameSetLocalPlayerAim();
-	}
-	else {
-		if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && GamePool_FindPlayerPed() == pVehicle->pDriver) {
-			// Tyre burst fix
-			if (pVehicle->pDriver) {
-				if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-				}
-				if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-			}
-			else {
-				if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-				}
-				if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-			}
-		}
-
-		// CAEVehicleAudioEntity::Service
-		// Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
-
-		CQuadBike_ProcessControl(pVehicle);
-	}
-}
-
-DECL_HOOK(void, CTrain_ProcessControl, sa::CVehicle* _this)
-{
-	sa::CVehicle* pVehicle = _this;
-	byteInternalPlayer = *pbyteCurrentPlayer;
-
-	if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0) {
-		byteCurPlayer = FindPlayerNumFromPedPtr(pVehicle->pDriver);
-
-		// save the internal cammode, apply the context.
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(byteCurPlayer);
-
-		// save the second internal cammode, apply the context.
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(byteCurPlayer);
-		if (*wCameraMode2 == 4) *wCameraMode2 = 0;
-
-		// aim switching.
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(byteCurPlayer);
-
-		// Tyre burst fix
-		if (pVehicle->pDriver) {
-			if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-			}
-			if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-		}
-		else {
-			if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-			}
-			if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-		}
-
-		*pbyteCurrentPlayer = 0;
-
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_CIVMALE; // So CPed::IsPlayer returns FALSE
-		savedControlFlags = pVehicle->nControlFlags;
-		pVehicle->nControlFlags = 26;
-
-		// CAEVehicleAudioEntity::Service
-		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
-
-		pVehicle->nControlFlags = savedControlFlags;
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
-
-		// set the internal player to the passed actor.
-		*pbyteCurrentPlayer = byteCurPlayer;
-
-		CTrain_ProcessControl(pVehicle);
-
-		// restore the local player's internal ID.
-		*pbyteCurrentPlayer = 0;
-
-		// restore the camera modes.
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		// restore aim switching.
-		GameSetLocalPlayerAim();
-	}
-	else {
-		if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && GamePool_FindPlayerPed() == pVehicle->pDriver) {
-			// Tyre burst fix
-			if (pVehicle->pDriver) {
-				if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-				}
-				if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-			}
-			else {
-				if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-				}
-				if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-			}
-		}
-
-		// CAEVehicleAudioEntity::Service
-		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
-
-		CTrain_ProcessControl(pVehicle);
-	}
-}
-
-DECL_HOOK(void, CTrailer_ProcessControl, sa::CVehicle* _this)
-{
-	sa::CVehicle* pVehicle = _this;
-	byteInternalPlayer = *pbyteCurrentPlayer;
-
-	if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0) {
-		byteCurPlayer = FindPlayerNumFromPedPtr(pVehicle->pDriver);
-
-		// save the internal cammode, apply the context.
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(byteCurPlayer);
-
-		// save the second internal cammode, apply the context.
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(byteCurPlayer);
-		if (*wCameraMode2 == 4) *wCameraMode2 = 0;
-
-		// aim switching.
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(byteCurPlayer);
-
-		// Tyre burst fix
-		if (pVehicle->pDriver) {
-			if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-			}
-			if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-		}
-		else {
-			if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-				pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-			}
-			if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-		}
-
-		*pbyteCurrentPlayer = 0;
-
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_CIVMALE; // So CPed::IsPlayer returns FALSE
-		savedControlFlags = pVehicle->nControlFlags;
-		pVehicle->nControlFlags = 26;
-
-		// CAEVehicleAudioEntity::Service
-		// Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
-
-		pVehicle->nControlFlags = savedControlFlags;
-		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
-
-		// set the internal player to the passed actor.
-		*pbyteCurrentPlayer = byteCurPlayer;
-
-		CTrailer_ProcessControl(pVehicle);
-
-		// restore the local player's internal ID.
-		*pbyteCurrentPlayer = 0;
-
-		// restore the camera modes.
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		// restore aim switching.
-		GameSetLocalPlayerAim();
-	}
-	else {
-		if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0 && GamePool_FindPlayerPed() == pVehicle->pDriver) {
-			// Tyre burst fix
-			if (pVehicle->pDriver) {
-				if (pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 0;
-				}
-				if (!pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = true;
-			}
-			else {
-				if (!pVehicle->m_nVehicleFlags.bTyresDontBurst) {
-					pVehicle->m_nVehicleFlags.bTyresDontBurst = 1;
-				}
-				if (pVehicle->m_nVehicleFlags.bCanBeDamaged) pVehicle->m_nVehicleFlags.bCanBeDamaged = false;
-			}
-		}
-
-		// CAEVehicleAudioEntity::Service
-		// Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
-
-		CTrailer_ProcessControl(pVehicle);
-	}
-}
+DECL_HOOK(void, CAutomobile_ProcessControl, sa::CVehicle* _this)   { ProcessRemoteVehicleControl<true>(CAutomobile_ProcessControl, _this); }
+DECL_HOOK(void, CBoat_ProcessControl, sa::CVehicle* _this)         { ProcessRemoteVehicleControl<true>(CBoat_ProcessControl, _this); }
+DECL_HOOK(void, CBike_ProcessControl, sa::CVehicle* _this)         { ProcessRemoteVehicleControl<true>(CBike_ProcessControl, _this); }
+DECL_HOOK(void, CHeli_ProcessControl, sa::CVehicle* _this)         { ProcessRemoteVehicleControl<false>(CHeli_ProcessControl, _this); }
+DECL_HOOK(void, CPlane_ProcessControl, sa::CVehicle* _this)        { ProcessRemoteVehicleControl<false>(CPlane_ProcessControl, _this); }
+DECL_HOOK(void, CBmx_ProcessControl, sa::CVehicle* _this)          { ProcessRemoteVehicleControl<false>(CBmx_ProcessControl, _this); }
+DECL_HOOK(void, CMonsterTruck_ProcessControl, sa::CVehicle* _this) { ProcessRemoteVehicleControl<false>(CMonsterTruck_ProcessControl, _this); }
+DECL_HOOK(void, CQuadBike_ProcessControl, sa::CVehicle* _this)     { ProcessRemoteVehicleControl<false>(CQuadBike_ProcessControl, _this); }
+DECL_HOOK(void, CTrain_ProcessControl, sa::CVehicle* _this)        { ProcessRemoteVehicleControl<true>(CTrain_ProcessControl, _this); }
+DECL_HOOK(void, CTrailer_ProcessControl, sa::CVehicle* _this)      { ProcessRemoteVehicleControl<false>(CTrailer_ProcessControl, _this); }
 
 bool NotifyEnterVehicle(sa::CVehicle* _pVehicle)
 {
@@ -1523,47 +704,8 @@ DECL_HOOK(uint32_t, CTaskSimpleUseGun_SetPedPosition, uintptr_t _this, sa::CPed*
 
 	if (dwCurPlayerActor && (byteCurPlayer != 0) && byteInternalPlayer == 0) // remote player
 	{
-		// save the internal mode, apply the context.
-		byteSavedCameraMode = *pbyteCameraMode;
-		*pbyteCameraMode = GameGetPlayerCameraMode(byteCurPlayer);
-
-		// save the second internal cammode, apply the context.
-		wSavedCameraMode2 = *wCameraMode2;
-		*wCameraMode2 = GameGetPlayerCameraMode(byteCurPlayer);
-		if (*wCameraMode2 == 4) *wCameraMode2 = 0;
-
-		// save the camera zoom factor, apply the context.
-		GameStoreLocalPlayerCameraExtZoomAndAspect();
-		GameSetRemotePlayerCameraExtZoomAndAspect(byteCurPlayer);
-
-		// aim switching.
-		GameStoreLocalPlayerAim();
-		GameSetRemotePlayerAim(byteCurPlayer);
-
-		// weapon skills.
-		//GameStoreLocalPlayerSkills();
-		//GameSetRemotePlayerSkills(byteCurPlayer);
-
-		// set the internal player to the passed actor.
-		*pbyteCurrentPlayer = byteCurPlayer;
-
+		ScopedPlayerContext ctx(byteCurPlayer, ScopedPlayerContext::kFull);
 		CTaskSimpleUseGun_SetPedPosition(_this, ped);
-
-		// restore weapon skills.
-		//GameSetLocalPlayerSkills();
-
-		// restore the camera modes.
-		*pbyteCameraMode = byteSavedCameraMode;
-		*wCameraMode2 = wSavedCameraMode2;
-
-		// remote the local player's camera zoom factor
-		GameSetLocalPlayerCameraExtZoomAndAspect();
-
-		// restore the local player's internal ID.
-		*pbyteCurrentPlayer = 0;
-
-		// restore aim switching.
-		GameSetLocalPlayerAim();
 	}
 	else // localplayer
 	{
