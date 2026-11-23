@@ -62,8 +62,9 @@ bool apply(Scope scope);
 bool set(const char* name, bool enabled);
 
 // Update bytes of an existing Bytes patch in-place (backs up original bytes once).
-// Creates the entry under Session scope if not registered yet (used for FPS limit).
-bool updateBytes(const char* name, const char* purpose, uintptr_t targetAddr, const void* bytes, size_t len);
+// Creates the entry if not registered yet (defaults to Session/reversible for dynamic patches).
+bool updateBytes(const char* name, const char* purpose, uintptr_t targetAddr, const void* bytes, size_t len,
+                 Scope scope = Scope::Session, bool reversible = true);
 
 // Install and register hooks (inline hooks are never uninstalled for AML chain safety).
 void* installHook(const char* name, const char* purpose, Scope scope, eng::Sym sym,

@@ -109,12 +109,24 @@ static constexpr uintptr_t kTaskPlayerOnFootTimerOffset = VER_x32 ? 40 : 56;
 
 extern std::atomic<bool> g_suppressWidgetSetEnabled;
 static std::atomic<bool> g_suppressPedUpdatePosition{false};
-static std::atomic<bool> g_suppressPedRotFromCam{true};
 static bool g_bEnableLineOfSightHook = false;
+
+static inline uint8_t CurrentPlayerSlot()
+{
+	return pbyteCurrentPlayer ? *pbyteCurrentPlayer : 0;
+}
+
+struct ScopedAtomicBool {
+	std::atomic<bool>& flag;
+	bool prev;
+	ScopedAtomicBool(std::atomic<bool>& f, bool next)
+		: flag(f), prev(f.exchange(next, std::memory_order_acq_rel)) {}
+	~ScopedAtomicBool() { flag.store(prev, std::memory_order_release); }
+};
 
 DECL_HOOK(void, CPed_UpdatePosition_fromProcessControl, sa::CPed* _this)
 {
-	if (g_suppressPedUpdatePosition.load(std::memory_order_acquire)) {
+	if (g_suppressPedUpdatePosition.load(std::memory_order_acquire) && _this == dwCurPlayerActor) {
 		return;
 	}
 	CPed_UpdatePosition_fromProcessControl(_this);
@@ -122,7 +134,9 @@ DECL_HOOK(void, CPed_UpdatePosition_fromProcessControl, sa::CPed* _this)
 
 DECL_HOOK(void, CTaskSimplePlayerOnFoot_PlayerControlZelda, void* _this, sa::CPed* pPed, bool bUnk)
 {
-	if (!pPed || !g_suppressPedRotFromCam.load(std::memory_order_acquire)) {
+	// Allow local player and non-player actors to update m_fAimingRotation from camera;
+	// suppress camera-driven rotation for remote players without rewriting .text or global flags.
+	if (!pPed || pPed == GamePool_FindPlayerPed() || FindPlayerNumFromPedPtr(pPed) == 0) {
 		CTaskSimplePlayerOnFoot_PlayerControlZelda(_this, pPed, bUnk);
 		return;
 	}
@@ -137,7 +151,7 @@ DECL_HOOK(void, CPed_ProcessControl, sa::CPed* _this)
 	uint8_t prevCurPlayer = byteCurPlayer;
 
 	dwCurPlayerActor = _this;
-	byteInternalPlayer = *pbyteCurrentPlayer;
+	byteInternalPlayer = CurrentPlayerSlot();
 	uint8_t curPlayer = FindPlayerNumFromPedPtr(_this);
 
 	if (dwCurPlayerActor && (curPlayer != 0) && byteInternalPlayer == 0) {
@@ -146,28 +160,15 @@ DECL_HOOK(void, CPed_ProcessControl, sa::CPed* _this)
 			ScopedPlayerContext ctx(curPlayer, ScopedPlayerContext::kFull);
 
 			// Suppress CPed::UpdatePosition (via hookBL) and CWidget::SetEnabled (via hook)
-			// for remote peds without rewriting .text every frame.
-			g_suppressPedUpdatePosition.store(true, std::memory_order_release);
-			g_suppressWidgetSetEnabled.store(true, std::memory_order_release);
+			// for remote peds without rewriting .text every frame (nesting-safe RAII guards).
+			ScopedAtomicBool posGuard(g_suppressPedUpdatePosition, true);
+			ScopedAtomicBool widgetGuard(g_suppressWidgetSetEnabled, true);
 
-			// call orig
 			CPed_ProcessControl(_this);
-
-			// restore
-			g_suppressWidgetSetEnabled.store(false, std::memory_order_release);
-			g_suppressPedUpdatePosition.store(false, std::memory_order_release);
 		}
 	}
 	else {
-		// Allow local player / actors to update m_fAimingRotation from camera
-		// in CTaskSimplePlayerOnFoot::PlayerControlZelda without rewriting .text.
-		g_suppressPedRotFromCam.store(false, std::memory_order_release);
-
-		// call orig
 		CPed_ProcessControl(_this);
-
-		// Re-enable suppression for non-local peds
-		g_suppressPedRotFromCam.store(true, std::memory_order_release);
 	}
 
 	dwCurPlayerActor = prevCurActor;
@@ -176,7 +177,7 @@ DECL_HOOK(void, CPed_ProcessControl, sa::CPed* _this)
 
 DECL_HOOK(uint16_t, CPad_GetPedWalkLeftRight, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		uint16_t dwResult = RemotePlayerKeys[byteCurPlayer].wKeyLR;
 		if ((dwResult == 0xFF80 || dwResult == 0x80) && RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_WALK]) {
 			dwResult = 0x40;
@@ -190,7 +191,7 @@ DECL_HOOK(uint16_t, CPad_GetPedWalkLeftRight, uintptr_t _this)
 }
 DECL_HOOK(uint16_t, CPad_GetPedWalkUpDown, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		uint16_t dwResult = RemotePlayerKeys[byteCurPlayer].wKeyUD;
 		if ((dwResult == 0xFF80 || dwResult == 0x80) && RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_WALK]) {
 			dwResult = 0x40;
@@ -205,7 +206,7 @@ DECL_HOOK(uint16_t, CPad_GetPedWalkUpDown, uintptr_t _this)
 
 DECL_HOOK(uint16_t, CPad_JumpJustDown, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		if (!RemotePlayerKeys[byteCurPlayer].bIgnoreJump && RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_JUMP] && !RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_HANDBRAKE]) {
 			RemotePlayerKeys[byteCurPlayer].bIgnoreJump = true;
 			return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_JUMP];
@@ -220,7 +221,7 @@ DECL_HOOK(uint16_t, CPad_JumpJustDown, uintptr_t _this)
 }
 DECL_HOOK(uint16_t, CPad_GetJump, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		if (RemotePlayerKeys[byteCurPlayer].bIgnoreJump) return 0;
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_JUMP];
 	}
@@ -232,7 +233,7 @@ DECL_HOOK(uint16_t, CPad_GetJump, uintptr_t _this)
 
 DECL_HOOK(uint16_t, CPad_GetDuck, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_CROUCH];
 	}
 	else {
@@ -243,7 +244,7 @@ DECL_HOOK(uint16_t, CPad_GetDuck, uintptr_t _this)
 
 DECL_HOOK(uint16_t, CPad_MeleeAttackJustDown, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		if (RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_HANDBRAKE] && RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_SECONDARY_ATTACK]) {
 			return 2;
 		}
@@ -265,7 +266,7 @@ DECL_HOOK(uint16_t, CPad_MeleeAttackJustDown, uintptr_t _this)
 
 DECL_HOOK(uint16_t, CPad_DuckJustDown, uintptr_t _this, int unk)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_CROUCH];
 	}
 	else {
@@ -276,7 +277,7 @@ DECL_HOOK(uint16_t, CPad_DuckJustDown, uintptr_t _this, int unk)
 
 DECL_HOOK(uint32_t, CPad_GetSprint, uintptr_t _this, uint32_t unk)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_SPRINT];
 	}
 	else {
@@ -287,7 +288,7 @@ DECL_HOOK(uint32_t, CPad_GetSprint, uintptr_t _this, uint32_t unk)
 
 DECL_HOOK(uint32_t, CPad_GetAutoClimb, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_JUMP];
 	}
 	else {
@@ -298,7 +299,7 @@ DECL_HOOK(uint32_t, CPad_GetAutoClimb, uintptr_t _this)
 
 DECL_HOOK(uint32_t, CPad_GetAbortClimb, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_SECONDARY_ATTACK];
 	}
 	else {
@@ -309,7 +310,7 @@ DECL_HOOK(uint32_t, CPad_GetAbortClimb, uintptr_t _this)
 
 DECL_HOOK(uint32_t, CPad_DiveJustDown, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_FIRE];
 	}
 	else {
@@ -320,7 +321,7 @@ DECL_HOOK(uint32_t, CPad_DiveJustDown, uintptr_t _this)
 
 DECL_HOOK(uint32_t, CPad_SwimJumpJustDown, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_JUMP];
 	}
 	else {
@@ -336,7 +337,7 @@ DECL_HOOK(uint32_t, CPad_SwimJumpJustDown, uintptr_t _this)
 // never drops mid-hold.
 DECL_HOOK(void, CTaskSimplePlayerOnFoot_PlayerControlFighter, uintptr_t _this, sa::CPed* pPed)
 {
-	if (!*pbyteCurrentPlayer && _this && pPed && pPed == GamePool_FindPlayerPed()
+	if (!CurrentPlayerSlot() && _this && pPed && pPed == GamePool_FindPlayerPed()
 		&& g_touchCombat.blockDown) {
 		*reinterpret_cast<uint32_t*>(_this + kTaskPlayerOnFootTimerOffset) = 0;
 	}
@@ -345,7 +346,7 @@ DECL_HOOK(void, CTaskSimplePlayerOnFoot_PlayerControlFighter, uintptr_t _this, s
 
 DECL_HOOK(uint32_t, CPad_GetBlock, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return (RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_JUMP] && RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_HANDBRAKE]);
 	}
 	if (!_this || *reinterpret_cast<uint16_t*>(_this + 272) != 0) {
@@ -359,7 +360,7 @@ DECL_HOOK(uint32_t, CPad_GetBlock, uintptr_t _this)
 
 DECL_HOOK(int16_t, CPad_GetSteeringLeftRight, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return (int16_t) RemotePlayerKeys[byteCurPlayer].wKeyLR;
 	}
 	else {
@@ -370,7 +371,7 @@ DECL_HOOK(int16_t, CPad_GetSteeringLeftRight, uintptr_t _this)
 
 DECL_HOOK(uint16_t, CPad_GetSteeringUpDown, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].wKeyUD;
 	}
 	else {
@@ -381,7 +382,7 @@ DECL_HOOK(uint16_t, CPad_GetSteeringUpDown, uintptr_t _this)
 
 DECL_HOOK(uint16_t, CPad_GetAccelerate, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_SPRINT] ? 0xFF : 0x00;
 	}
 	else {
@@ -399,7 +400,7 @@ DECL_HOOK(uint16_t, CPad_GetAccelerate, uintptr_t _this)
 
 DECL_HOOK(uint16_t, CPad_GetBrake, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_JUMP] ? 0xFF : 0x00;
 	}
 	else {
@@ -418,7 +419,7 @@ DECL_HOOK(uint16_t, CPad_GetBrake, uintptr_t _this)
 
 DECL_HOOK(uint32_t, CPad_GetHandBrake, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_HANDBRAKE] ? 0xFF : 0x00;
 	}
 	else {
@@ -437,7 +438,7 @@ DECL_HOOK(uint32_t, CPad_GetHandBrake, uintptr_t _this)
 
 DECL_HOOK(uint32_t, CPad_GetHorn, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_CROUCH];
 	}
 	else {
@@ -474,7 +475,7 @@ DECL_HOOK(uint32_t, CPad_ExitVehicleJustDown, uintptr_t _this, int a2, uintptr_t
 		uintptr_t* widgets = GetTouchWidgets();
 		uint32_t t0 = (widgets && widgets[0])
 			? eng::fn::CTouchInterface_IsTouched(
-				0, 0, 0) : 0;
+				0, static_cast<void*>(nullptr), 0) : 0;
 		uint32_t d = (*reinterpret_cast<uint16_t*>(_this + 272) ? 8u : 0u)
 			| (*reinterpret_cast<uint8_t*>(_this + 301) ? 4u : 0u)
 			| (*reinterpret_cast<uint8_t*>(_this + 280) ? 2u : 0u)
@@ -492,7 +493,7 @@ DECL_HOOK(uint32_t, CPad_ExitVehicleJustDown, uintptr_t _this, int a2, uintptr_t
 
 DECL_HOOK(int, CPad_GetTurretLeft, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_LOOK_LEFT];
 	}
 	else {
@@ -503,7 +504,7 @@ DECL_HOOK(int, CPad_GetTurretLeft, uintptr_t _this)
 
 DECL_HOOK(int, CPad_GetTurretRight, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_LOOK_RIGHT];
 	}
 	else {
@@ -514,7 +515,7 @@ DECL_HOOK(int, CPad_GetTurretRight, uintptr_t _this)
 
 DECL_HOOK(int, CPad_GetNitroFired, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_FIRE];
 	}
 	else {
@@ -525,7 +526,7 @@ DECL_HOOK(int, CPad_GetNitroFired, uintptr_t _this)
 
 DECL_HOOK(int, CPad_GetHydraulicJump, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_CROUCH];
 	}
 	else {
@@ -557,13 +558,18 @@ static inline void ApplyVehicleTyreBurstFix(sa::CVehicle* pVehicle)
 template <bool CallAudioService, typename OrigFn>
 static void ProcessRemoteVehicleControl(OrigFn orig, sa::CVehicle* pVehicle)
 {
-	byteInternalPlayer = *pbyteCurrentPlayer;
+	const uint8_t prevCurPlayer = byteCurPlayer;
+	byteInternalPlayer = CurrentPlayerSlot();
 
-	if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0
-		&& pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0) {
-		byteCurPlayer = FindPlayerNumFromPedPtr(pVehicle->pDriver);
+	const uint8_t curPlayer = (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0
+		&& pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0)
+		? FindPlayerNumFromPedPtr(pVehicle->pDriver)
+		: 0;
 
-		ScopedPlayerContext camAimCtx(byteCurPlayer, ScopedPlayerContext::kVehicleCamAim);
+	if (curPlayer != 0) {
+		byteCurPlayer = curPlayer;
+
+		ScopedPlayerContext camAimCtx(curPlayer, ScopedPlayerContext::kVehicleCamAim);
 
 		// Tyre burst fix
 		ApplyVehicleTyreBurstFix(pVehicle);
@@ -580,7 +586,7 @@ static void ProcessRemoteVehicleControl(OrigFn orig, sa::CVehicle* pVehicle)
 		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
 
 		{
-			ScopedPlayerContext focusCtx(byteCurPlayer, ScopedPlayerContext::kFocusOnly);
+			ScopedPlayerContext focusCtx(curPlayer, ScopedPlayerContext::kFocusOnly);
 			orig(pVehicle);
 		}
 	}
@@ -596,6 +602,8 @@ static void ProcessRemoteVehicleControl(OrigFn orig, sa::CVehicle* pVehicle)
 
 		orig(pVehicle);
 	}
+
+	byteCurPlayer = prevCurPlayer;
 }
 
 DECL_HOOK(void, CAutomobile_ProcessControl, sa::CVehicle* _this)   { ProcessRemoteVehicleControl<true>(CAutomobile_ProcessControl, _this); }
@@ -697,13 +705,17 @@ DECL_HOOK(void, CTaskComplexLeaveCar, uintptr_t** _this, sa::CVehicle* pVehicle,
 
 DECL_HOOK(uint32_t, CTaskSimpleUseGun_SetPedPosition, uintptr_t _this, sa::CPed* ped)
 {
-	dwCurPlayerActor = ped;
-	byteInternalPlayer = *pbyteCurrentPlayer;
-	byteCurPlayer = FindPlayerNumFromPedPtr(ped);
+	sa::CPed* prevCurActor = dwCurPlayerActor;
+	const uint8_t prevCurPlayer = byteCurPlayer;
 
-	if (dwCurPlayerActor && (byteCurPlayer != 0) && byteInternalPlayer == 0) // remote player
+	byteInternalPlayer = CurrentPlayerSlot();
+	const uint8_t curPlayer = ped ? FindPlayerNumFromPedPtr(ped) : 0;
+
+	if (ped && (curPlayer != 0) && byteInternalPlayer == 0) // remote player
 	{
-		ScopedPlayerContext ctx(byteCurPlayer, ScopedPlayerContext::kFull);
+		dwCurPlayerActor = ped;
+		byteCurPlayer = curPlayer;
+		ScopedPlayerContext ctx(curPlayer, ScopedPlayerContext::kFull);
 		CTaskSimpleUseGun_SetPedPosition(_this, ped);
 	}
 	else // localplayer
@@ -711,6 +723,8 @@ DECL_HOOK(uint32_t, CTaskSimpleUseGun_SetPedPosition, uintptr_t _this, sa::CPed*
 		CTaskSimpleUseGun_SetPedPosition(_this, ped);
 	}
 
+	dwCurPlayerActor = prevCurActor;
+	byteCurPlayer = prevCurPlayer;
 	return 0;
 }
 
@@ -791,7 +805,7 @@ static bool EvaluateLocalTouchFireLevel(uint8_t weaponType)
 
 DECL_HOOK(uint32_t, CPad_GetWeapon, uintptr_t _this, sa::CPed* pPed, bool bShoulderPossible)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_FIRE] ? 0xFF : 0x00;
 	}
 
@@ -834,7 +848,7 @@ DECL_HOOK(void, CPlayerInfo_Process, uintptr_t _this, int playerNumber)
 
 DECL_HOOK(uint32_t, CTaskSimplePlayerOnFoot_MakeAbortable, uintptr_t _this, sa::CPed* pPed, int priority, uintptr_t pEvent)
 {
-	if (s_bInPlayerInfoProcess && !*pbyteCurrentPlayer && priority == 1 && pEvent == 0
+	if (s_bInPlayerInfoProcess && !CurrentPlayerSlot() && priority == 1 && pEvent == 0
 		&& pPed && pPed == GamePool_FindPlayerPed() && pPed->m_pIntelligence) {
 		uintptr_t useGun = eng::fn::CPedIntelligence_GetTaskUseGun( pPed->m_pIntelligence);
 		if (useGun) {
@@ -843,9 +857,9 @@ DECL_HOOK(uint32_t, CTaskSimplePlayerOnFoot_MakeAbortable, uintptr_t _this, sa::
 			if (widgets && widgets[sa::WidgetIDs::WIDGET_ENTER_CAR]) {
 				bEnterCarInput =
 					eng::fn::CTouchInterface_IsTouched(
-						sa::WidgetIDs::WIDGET_ENTER_CAR, 0, 0) != 0
+						sa::WidgetIDs::WIDGET_ENTER_CAR, static_cast<void*>(nullptr), 0) != 0
 					|| eng::fn::CTouchInterface_IsReleased(
-						sa::WidgetIDs::WIDGET_ENTER_CAR, 0, 0) != 0;
+						sa::WidgetIDs::WIDGET_ENTER_CAR, static_cast<void*>(nullptr), 0) != 0;
 			}
 			if (!bEnterCarInput) {
 				bool bAiming = (pPed->m_pPlayerData && pPed->m_pPlayerData->m_bFreeAiming)
@@ -862,7 +876,7 @@ DECL_HOOK(uint32_t, CTaskSimplePlayerOnFoot_MakeAbortable, uintptr_t _this, sa::
 
 DECL_HOOK(uint32_t, CPad_WeaponJustDown, uintptr_t _this, sa::CPed* pPed, bool bCheckControl, bool bCheckVehicle)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return CPad_WeaponJustDown(_this, pPed, bCheckControl, bCheckVehicle);
 	}
 
@@ -879,7 +893,7 @@ DECL_HOOK(uint32_t, CPad_WeaponJustDown, uintptr_t _this, sa::CPed* pPed, bool b
 
 DECL_HOOK(bool, CPad_CycleWeaponLeftJustDown, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return false;
 	}
 	else {
@@ -893,7 +907,7 @@ DECL_HOOK(bool, CPad_CycleWeaponLeftJustDown, uintptr_t _this)
 
 DECL_HOOK(uint32_t, CPad_CycleWeaponRightJustDown, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return 0;
 	}
 	else {
@@ -974,7 +988,7 @@ static bool EngineIsAiming(CPlayerPed* pPed)
 static uint32_t PollTouchRelease(int32_t widgetID)
 {
 	return eng::fn::CTouchInterface_IsReleased(
-		widgetID, 0, 1);
+		widgetID, static_cast<void*>(nullptr), 1);
 }
 
 extern void FixTouchWidgetLayout();
@@ -989,7 +1003,7 @@ static bool PollTouchDown(int32_t widgetID)
 	uintptr_t* widgets = GetTouchWidgets();
 	if (!widgets || !widgets[widgetID]) return false;
 	return eng::fn::CTouchInterface_IsTouched(
-		widgetID, 0, 1) != 0;
+		widgetID, static_cast<void*>(nullptr), 1) != 0;
 }
 
 // Render-phase helper (called from Render2dStuff): keeps layout and button
@@ -1127,7 +1141,7 @@ DECL_HOOK(void, CTouchInterface_Clear)
 
 DECL_HOOK(uint32_t, CPad_GetEnterTargeting, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return 0;
 	}
 	if (!_this || *reinterpret_cast<uint16_t*>(_this + 272) != 0) {
@@ -1139,7 +1153,7 @@ DECL_HOOK(uint32_t, CPad_GetEnterTargeting, uintptr_t _this)
 
 DECL_HOOK(uint32_t, CPad_GetExitTargeting, uintptr_t _this)
 {
-	if (*pbyteCurrentPlayer) {
+	if (CurrentPlayerSlot()) {
 		return 0;
 	}
 	CPlayerPed* pPed = GetAimableLocalPed();

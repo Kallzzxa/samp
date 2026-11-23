@@ -2913,6 +2913,22 @@ bool RakPeer::HandleRPCPacket(const char* data, int length, PlayerID playerId)
 
 	if (rpcIndex == UNDEFINED_RPC_INDEX)
 	{
+		// Capture unregistered inbound RPCs too when /netcap is active so parity debugging sees them
+		if (auto capFn = g_rakNetCapHook.load(std::memory_order_acquire))
+		{
+			const int rpcId = (int)((uintptr_t)uniqueIdentifier & 0xFF);
+			if (rpcParms.numberOfBitsOfData == 0)
+			{
+				capFn(0, 0, rpcId, 0, 0);
+			}
+			else if (incomingBitStream.GetNumberOfUnreadBits() >= (int)rpcParms.numberOfBitsOfData)
+			{
+				unsigned char* capBuf = new unsigned char[BITS_TO_BYTES(rpcParms.numberOfBitsOfData)];
+				if (incomingBitStream.ReadBits(capBuf, rpcParms.numberOfBitsOfData, false))
+					capFn(0, 0, rpcId, capBuf, rpcParms.numberOfBitsOfData);
+				delete[] capBuf;
+			}
+		}
 		// Unregistered function
 		RakAssert(0);
 		return false;
@@ -2930,8 +2946,7 @@ bool RakPeer::HandleRPCPacket(const char* data, int length, PlayerID playerId)
 	// Call the function
 	if (rpcParms.numberOfBitsOfData == 0)
 	{
-		if (g_rakNetCapHook)
-			g_rakNetCapHook(0, 0, (int)((uintptr_t)uniqueIdentifier & 0xFF), rpcParms.input, rpcParms.numberOfBitsOfData);
+		invokeRakNetCapHook(0, 0, (int)((uintptr_t)uniqueIdentifier & 0xFF), rpcParms.input, rpcParms.numberOfBitsOfData);
 		node->staticFunctionPointer(&rpcParms);
 	}
 	else
@@ -2974,8 +2989,7 @@ bool RakPeer::HandleRPCPacket(const char* data, int length, PlayerID playerId)
 
 		// Call the function callback
 		rpcParms.input = userData;
-		if (g_rakNetCapHook)
-			g_rakNetCapHook(0, 0, (int)((uintptr_t)uniqueIdentifier & 0xFF), rpcParms.input, rpcParms.numberOfBitsOfData);
+		invokeRakNetCapHook(0, 0, (int)((uintptr_t)uniqueIdentifier & 0xFF), rpcParms.input, rpcParms.numberOfBitsOfData);
 		node->staticFunctionPointer(&rpcParms);
 
 		if (usedAlloca == false)

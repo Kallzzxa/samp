@@ -108,7 +108,3 @@ namespace fn {
 } // namespace fn
 
 } // namespace eng
-
-// Hook a symbol declared in Symbols.def using its pre-resolved address.
-#define HOOK_SYM(_symId, _name) \
-	Memory::hookSym(eng::ptr(eng::Sym::_symId), (void*)(&_name##_hook), (void**)(&_name), eng::name(eng::Sym::_symId))

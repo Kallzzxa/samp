@@ -119,7 +119,7 @@ namespace live {
 
 uintptr_t* touchWidgets()
 {
-	if (!g_saSym) return nullptr;
+	if (!g_saSym || g_saSym->GetLibAddr() == 0) return nullptr;
 	// Read live GOT slot so AML plugins (e.g. libSAUtils64.so -> pNewWidgets)
 	// that redirect CTouchInterface::m_pWidgets after Client::initialize() are respected.
 	uintptr_t** pGotSlot = g_saSym->Abs<uintptr_t**>(addr::GOT_CTouchInterface_m_pWidgets);
@@ -128,7 +128,7 @@ uintptr_t* touchWidgets()
 
 void* mobileSettings()
 {
-	if (!g_saSym) return nullptr;
+	if (!g_saSym || g_saSym->GetLibAddr() == 0) return nullptr;
 	// Read live GOT slot so AML plugins (e.g. libSAUtils64.so -> pNewSettings)
 	// that redirect MobileSettings::settings after Client::initialize() are respected.
 	void** pGotSlot = g_saSym->Abs<void**>(addr::GOT_MobileSettings_settings);

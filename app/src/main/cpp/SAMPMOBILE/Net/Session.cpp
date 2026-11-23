@@ -37,10 +37,10 @@ void SessionState::reset(ResetReason reason)
 
 	// Restart / Disconnect (Packet_ConnectionLost -> ShutdownForGameModeRestart):
 	// Preserve exact existing field-reset set; fields omitted below (spawnsAvailable,
-	// instagib, friendlyFire, allowWeapons, showNameTags, showPlayerMarkers,
-	// manualVehicleEngineAndLight, vehicleFriendlyFire, limitGlobalChatRadius,
-	// globalChatRadius, worldBounds, send rates, lagComp, hostName, lanMode) are
-	// overwritten by the next InitGame. Disconnection/Ban paths remain untouched (T02).
+	// instagib, allowWeapons, showNameTags, showPlayerMarkers, manualVehicleEngineAndLight,
+	// vehicleFriendlyFire, limitGlobalChatRadius, globalChatRadius, worldBounds,
+	// send rates, lagComp, hostName, lanMode) are overwritten by the next InitGame.
+	// friendlyFire stays true (no InitGame field); Disconnection/Ban paths untouched (T02).
 	settings.disableInteriorEnterExits = false;
 	settings.nameTagDrawDistance = 60.0f;
 	settings.worldTime_Hour = 12;

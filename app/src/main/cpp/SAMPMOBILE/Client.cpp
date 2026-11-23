@@ -62,24 +62,27 @@ bool Client::setLogLevelDebug(bool debug, bool persist)
 	if (auto logger = spdlog::default_logger()) {
 		logger->set_level(debug ? spdlog::level::debug : spdlog::level::info);
 	}
+	bool persisted = true;
 	if (persist && !game_dir.empty()) {
 		const std::string flag = logLevelFlagPath(game_dir);
 		if (debug) {
 			FILE* f = fopen(flag.c_str(), "wb");
 			if (!f) {
-				return false;
+				persisted = false;
 			}
-			fclose(f);
+			else {
+				fclose(f);
+			}
 		}
 		else {
 			unlink(flag.c_str());
 		}
 	}
-	spdlog::info("[LOGLEVEL] set to {}", debug ? "debug" : "info");
+	spdlog::info("[LOGLEVEL] set to {} (persisted={})", debug ? "debug" : "info", persisted ? 1 : 0);
 	if (auto logger = spdlog::default_logger()) {
 		logger->flush();
 	}
-	return true;
+	return persisted;
 }
 
 void init_logger(const std::string& gameDir)

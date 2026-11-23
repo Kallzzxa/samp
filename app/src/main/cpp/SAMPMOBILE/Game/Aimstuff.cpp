@@ -30,7 +30,7 @@ CAMERA_AIM* GameGetInternalAim()
  */
 uint8_t GameGetLocalPlayerCameraMode()
 {
-	return *pbyteCameraMode;
+	return pbyteCameraMode ? *pbyteCameraMode : 4;
 }
 
 /**
@@ -39,17 +39,17 @@ uint8_t GameGetLocalPlayerCameraMode()
  */
 uint8_t GameGetPlayerCameraMode(uint8_t bytePlayerNumber)
 {
-	return byteCameraMode[bytePlayerNumber];
+	return bytePlayerNumber < PLAYER_PED_SLOTS ? byteCameraMode[bytePlayerNumber] : 4;
 }
 
 float GameGetLocalPlayerCameraExtZoom()
 {
-	return (*pfCameraExtZoom - 35.0) * 0.028571429;
+	return pfCameraExtZoom ? ((*pfCameraExtZoom - 35.0f) * 0.028571429f) : 0.0f;
 }
 
 float GameGetAspectRatio()
 {
-	return *pfAspectRatio;
+	return pfAspectRatio ? *pfAspectRatio : 0.0f;
 }
 
 void GameAimSyncInit()
@@ -77,39 +77,45 @@ void GameAimSyncInit()
 
 CAMERA_AIM* GameGetRemotePlayerAim(uint8_t bytePlayerNumber)
 {
-	return &caRemotePlayerAim[bytePlayerNumber];
+	return bytePlayerNumber < PLAYER_PED_SLOTS ? &caRemotePlayerAim[bytePlayerNumber] : &caRemotePlayerAim[0];
 }
 
 void GameStoreLocalPlayerCameraExtZoomAndAspect()
 {
+	if (!pfCameraExtZoom || !pfAspectRatio) return;
 	fLocalCameraExtZoom = *pfCameraExtZoom;
 	fLocalAspectRatio = *pfAspectRatio;
 }
 
 void GameSetRemotePlayerCameraExtZoomAndAspect(uint8_t bytePlayerNumber)
 {
+	if (!pfCameraExtZoom || !pfAspectRatio || bytePlayerNumber >= PLAYER_PED_SLOTS) return;
 	*pfCameraExtZoom = fCameraExtZoom[bytePlayerNumber] * 35.0f + 35.0f;
 	*pfAspectRatio = fCameraAspectRatio[bytePlayerNumber] + 1.0f;
 }
 
 void GameStoreLocalPlayerAim()
 {
+	if (!pcaInternalAim) return;
 	memcpy(&caLocalPlayerAim, pcaInternalAim, sizeof(CAMERA_AIM));
 }
 
 void GameSetRemotePlayerAim(uint8_t bytePlayerNumber)
 {
+	if (!pcaInternalAim || bytePlayerNumber >= PLAYER_PED_SLOTS) return;
 	memcpy(pcaInternalAim, &caRemotePlayerAim[bytePlayerNumber], sizeof(CAMERA_AIM));
 }
 
 void GameSetLocalPlayerCameraExtZoomAndAspect()
 {
+	if (!pfCameraExtZoom || !pfAspectRatio) return;
 	*pfCameraExtZoom = fLocalCameraExtZoom;
 	*pfAspectRatio = fLocalAspectRatio;
 }
 
 void GameSetLocalPlayerAim()
 {
+	if (!pcaInternalAim) return;
 	memcpy(pcaInternalAim, &caLocalPlayerAim, sizeof(CAMERA_AIM));
 }
 
@@ -119,6 +125,7 @@ void GameSetLocalPlayerAim()
  */
 void GameSetPlayerCameraMode(uint8_t byteMode, uint8_t bytePlayerNumber)
 {
+	if (bytePlayerNumber >= PLAYER_PED_SLOTS) return;
 	byteCameraMode[bytePlayerNumber] = byteMode;
 }
 
@@ -144,6 +151,7 @@ void calculateAimVector(sa::CVector* vec1, sa::CVector* vec2)
  */
 void GameStoreRemotePlayerAim(uint8_t bytePlayerNumber, CAMERA_AIM* pAim)
 {
+	if (!pAim || bytePlayerNumber >= PLAYER_PED_SLOTS) return;
 	memcpy(&caRemotePlayerAim[bytePlayerNumber], pAim, sizeof(CAMERA_AIM));
 }
 
@@ -154,6 +162,7 @@ void GameStoreRemotePlayerAim(uint8_t bytePlayerNumber, CAMERA_AIM* pAim)
  */
 void GameSetPlayerCameraExtZoomAndAspect(uint8_t bytePlayerNumber, float fExtZoom, float fAspectRatio)
 {
+	if (bytePlayerNumber >= PLAYER_PED_SLOTS) return;
 	fCameraExtZoom[bytePlayerNumber] = fExtZoom;
 	fCameraAspectRatio[bytePlayerNumber] = fAspectRatio;
 }

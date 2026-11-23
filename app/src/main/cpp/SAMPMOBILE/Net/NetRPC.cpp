@@ -75,9 +75,7 @@ void RpcHandlers::OnInitGame(const proto::InitGame& p)
 	pPlayerPool->SetLocalPlayerID(p.myPlayerId);
 	pGame->EnableStuntBonus(p.stuntBonus);
 
-	if (p.lanMode) {
-		sess.lanMode = true;
-	}
+	sess.lanMode = p.lanMode;
 
 	pNetGame->InitGameLogic();
 	pGame->SetGravity(sess.settings.gravity);

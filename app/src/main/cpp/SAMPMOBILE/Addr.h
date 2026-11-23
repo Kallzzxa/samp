@@ -13,8 +13,6 @@ public:
 	static constexpr uintptr_t ms_pedModelStore = !VER_x32 ? 0xB5CB80 : 0x915FC8;
 	static constexpr uintptr_t CPed_ProcessControl = !VER_x32 ? 0x598730 : 0x4A2540;
 	static constexpr uintptr_t CPed_UpdatePosition_BranchBL1 = !VER_x32 ? CPed_ProcessControl + 0x5EC : CPed_ProcessControl + 0x552;
-	static constexpr uintptr_t CWidget_setEnabled = !VER_x32 ? 0x3730B0 : 0x2B3CAC;
-	static constexpr uintptr_t pedRots = !VER_x32 ? 0x655A38 : 0x539C16;
 	static constexpr uintptr_t CTaskComplexEnterCarAsDriver_Branch1 = !VER_x32 ? 0x4EF504 : 0x40AC80;
 	static constexpr uintptr_t CTaskComplexLeaveCar_Branch1 = !VER_x32 ? 0x4EE3C0 : 0x409A8E;
 	static constexpr uintptr_t CTaskComplexLeaveCar_Branch2 = !VER_x32 ? 0x4EEE00 : 0x40A864;

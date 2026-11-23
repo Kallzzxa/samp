@@ -338,7 +338,7 @@ void cmdSession(const std::string& params)
 	const SessionState& s = pNetGame->session();
 	s.dumpToLog();
 	pUI->chat()->addInfoMessage("-> Session: %s (%s, lan=%d, lagComp=%d)",
-		s.hostName,
+		Encoding::cp2utf(s.hostName).c_str(),
 		s.protoVersion == proto::ProtoVersion::V03DL ? "0.3.DL" : "0.3.7",
 		s.lanMode ? 1 : 0, s.lagCompensationMode);
 	pUI->chat()->addInfoMessage("   rates=%d/%d/%d(x%d) time=%02d:%02d weather=%d grav=%.4f cj=%d tagLOS=%d",
@@ -352,8 +352,10 @@ void cmdLogLevel(const std::string& params)
 {
 	if (!pUI) return;
 	if (params == "debug") {
-		Client::setLogLevelDebug(true, true);
-		pUI->chat()->addInfoMessage("-> LogLevel: DEBUG (saved across restarts)");
+		const bool saved = Client::setLogLevelDebug(true, true);
+		pUI->chat()->addInfoMessage(saved
+			? "-> LogLevel: DEBUG (saved across restarts)"
+			: "-> LogLevel: DEBUG (runtime only; failed to write flag)");
 	}
 	else if (params == "info") {
 		Client::setLogLevelDebug(false, true);

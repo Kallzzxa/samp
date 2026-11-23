@@ -1,3 +1,3 @@
 #include "NetCapHook.h"
 
-RakNetCapHook g_rakNetCapHook = nullptr;
+std::atomic<RakNetCapHook> g_rakNetCapHook{nullptr};

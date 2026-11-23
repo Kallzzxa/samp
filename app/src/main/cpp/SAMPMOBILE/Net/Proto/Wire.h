@@ -4,6 +4,7 @@
 #include <RakNet/StringCompressor.h>
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -45,12 +46,12 @@ public:
 	explicit Reader(RakNet::BitStream& bs) : bs_(&bs) {}
 
 	Reader(const uint8_t* data, uint32_t bitLength)
-		: owned_(bitLength > 0 && data
+		: owned_(bitLength > 0 && bitLength <= static_cast<uint32_t>(INT_MAX - 7) && data
 					 ? RakNet::BitStream(const_cast<unsigned char*>(data), BITS_TO_BYTES(bitLength), false)
 					 : RakNet::BitStream()),
 		  bs_(&owned_)
 	{
-		if (bitLength > 0 && !data) {
+		if (bitLength > static_cast<uint32_t>(INT_MAX - 7) || (bitLength > 0 && !data)) {
 			ok_ = false;
 			return;
 		}
@@ -64,6 +65,11 @@ public:
 
 	bool ok() const { return ok_; }
 	int unreadBits() const { return bs_->GetNumberOfUnreadBits(); }
+	size_t unreadBytes() const
+	{
+		const int u = bs_->GetNumberOfUnreadBits();
+		return u > 0 ? static_cast<size_t>(u / 8) : 0;
+	}
 	int readOffset() const { return bs_->GetReadOffset(); }
 
 	bool u8(uint8_t& v) { return readScalar(v); }
@@ -103,7 +109,7 @@ public:
 	{
 		if (!ok_) return false;
 		if (n == 0) return true;
-		if (!buf || n > static_cast<size_t>(bs_->GetNumberOfUnreadBits() / 8)) return fail();
+		if (!buf || n > unreadBytes()) return fail();
 		if (!bs_->Read(reinterpret_cast<char*>(buf), static_cast<int>(n))) return fail();
 		return true;
 	}
@@ -133,7 +139,7 @@ public:
 			s.clear();
 			return true;
 		}
-		if (len > static_cast<uint32_t>(bs_->GetNumberOfUnreadBits() / 8)) return fail();
+		if (len > unreadBytes()) return fail();
 		std::string tmp(len, '\0');
 		if (!bs_->Read(tmp.data(), static_cast<int>(len))) return fail();
 		s = std::move(tmp);
@@ -150,7 +156,7 @@ public:
 			s.clear();
 			return true;
 		}
-		if (len > static_cast<uint32_t>(bs_->GetNumberOfUnreadBits() / 8)) return fail();
+		if (len > unreadBytes()) return fail();
 		std::string tmp(len, '\0');
 		if (!bs_->Read(tmp.data(), static_cast<int>(len))) return fail();
 		s = std::move(tmp);
@@ -164,7 +170,7 @@ public:
 			s.clear();
 			return true;
 		}
-		if (len > static_cast<size_t>(bs_->GetNumberOfUnreadBits() / 8)) return fail();
+		if (len > unreadBytes()) return fail();
 		std::string tmp(len, '\0');
 		if (!bs_->Read(tmp.data(), static_cast<int>(len))) return fail();
 		s = std::move(tmp);

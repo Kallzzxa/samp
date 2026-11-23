@@ -38,28 +38,37 @@ uintptr_t normalizeTarget(Kind kind, uintptr_t addr)
 {
 	if (!addr) return 0;
 #if !defined(__aarch64__)
-	if (kind == Kind::Ret || kind == Kind::Ret0) {
+	if (kind != Kind::Data) {
 		return addr & ~uintptr_t(1);
 	}
 #endif
 	return addr;
 }
 
-bool addEntryLocked(Entry&& e)
+bool checkConflictLocked(const char* name, Kind kind, uintptr_t targetAddr)
 {
-	if (g_byName.count(e.name)) {
-		spdlog::error("PatchRegistry: DUPLICATE entry name '{}'", e.name);
-		return false;
+	if (name && g_byName.count(name)) {
+		spdlog::error("PatchRegistry: DUPLICATE entry name '{}'", name);
+		return true;
 	}
-	const uintptr_t norm = normalizeTarget(e.kind, e.targetAddr);
+	const uintptr_t norm = normalizeTarget(kind, targetAddr);
 	if (norm != 0) {
 		auto it = g_byAddr.find(norm);
 		if (it != g_byAddr.end()) {
 			spdlog::error("PatchRegistry: DUPLICATE target 0x{:X} for '{}' (already owned by '{}')",
-				norm, e.name, g_entries[it->second].name);
-			return false;
+				norm, name ? name : "?", g_entries[it->second].name);
+			return true;
 		}
 	}
+	return false;
+}
+
+bool addEntryLocked(Entry&& e)
+{
+	if (checkConflictLocked(e.name.c_str(), e.kind, e.targetAddr)) {
+		return false;
+	}
+	const uintptr_t norm = normalizeTarget(e.kind, e.targetAddr);
 	const size_t idx = g_entries.size();
 	g_byName.emplace(e.name, idx);
 	if (norm != 0) {
@@ -301,6 +310,10 @@ bool set(const char* name, bool enabled)
 	}
 	Entry& e = g_entries[it->second];
 	if (e.kind == Kind::Hook || e.kind == Kind::HookBL) {
+		if (e.failed) {
+			spdlog::error("PatchRegistry: hook '{}' failed to install; cannot toggle", e.name);
+			return false;
+		}
 		if (!e.gate) {
 			spdlog::warn("PatchRegistry: hook '{}' has no runtime gate", e.name);
 			return false;
@@ -312,7 +325,8 @@ bool set(const char* name, bool enabled)
 	return enabled ? applyEntryLocked(e) : revertEntryLocked(e);
 }
 
-bool updateBytes(const char* name, const char* purpose, uintptr_t targetAddr, const void* bytes, size_t len)
+bool updateBytes(const char* name, const char* purpose, uintptr_t targetAddr, const void* bytes, size_t len,
+                 Scope scope, bool reversible)
 {
 	if (!name || !targetAddr || !bytes || len == 0) return false;
 	std::lock_guard<std::mutex> lock(g_mutex);
@@ -322,15 +336,20 @@ bool updateBytes(const char* name, const char* purpose, uintptr_t targetAddr, co
 		e.name = name;
 		e.purpose = purpose ? purpose : "";
 		e.kind = Kind::Bytes;
-		e.scope = Scope::Session;
+		e.scope = scope;
 		e.targetAddr = targetAddr;
-		e.reversible = true;
+		e.reversible = reversible;
 		e.patchBytes.resize(len);
 		memcpy(e.patchBytes.data(), bytes, len);
 		if (!addEntryLocked(std::move(e))) return false;
 		it = g_byName.find(name);
 	}
 	Entry& e = g_entries[it->second];
+	if (e.kind != Kind::Bytes || normalizeTarget(e.kind, e.targetAddr) != normalizeTarget(Kind::Bytes, targetAddr)
+		|| (!e.origBytes.empty() && e.origBytes.size() != len)) {
+		spdlog::error("PatchRegistry: updateBytes '{}' mismatch (kind/addr/len)", e.name);
+		return false;
+	}
 	if (e.origBytes.empty()) {
 		e.origBytes.resize(len);
 		Memory::readMemory(e.targetAddr, reinterpret_cast<uintptr_t>(e.origBytes.data()), len);
@@ -346,21 +365,28 @@ bool updateBytes(const char* name, const char* purpose, uintptr_t targetAddr, co
 void* installHook(const char* name, const char* purpose, Scope scope, eng::Sym sym,
                   void* hookFn, void** origFn, std::atomic<bool>* gate)
 {
+	const char* entryName = name ? name : eng::name(sym);
 	void* target = eng::ptr(sym);
-	void* handle = Memory::hookSym(target, hookFn, origFn, name ? name : eng::name(sym));
+	const uintptr_t targetAddr = reinterpret_cast<uintptr_t>(target);
+
+	std::lock_guard<std::mutex> lock(g_mutex);
+	if (checkConflictLocked(entryName, Kind::Hook, targetAddr)) {
+		return nullptr;
+	}
+
+	void* handle = Memory::hookSym(target, hookFn, origFn, entryName);
 
 	Entry e{};
-	e.name = name ? name : eng::name(sym);
+	e.name = entryName;
 	e.purpose = purpose ? purpose : "";
 	e.kind = Kind::Hook;
 	e.scope = scope;
-	e.targetAddr = reinterpret_cast<uintptr_t>(target);
+	e.targetAddr = targetAddr;
 	e.reversible = (gate != nullptr);
 	e.gate = gate;
 	e.failed = (handle == nullptr);
 	e.active = !e.failed && (!gate || gate->load(std::memory_order_acquire));
 
-	std::lock_guard<std::mutex> lock(g_mutex);
 	addEntryLocked(std::move(e));
 	return handle;
 }
@@ -368,30 +394,37 @@ void* installHook(const char* name, const char* purpose, Scope scope, eng::Sym s
 void* installHookAddr(const char* name, const char* purpose, Scope scope, uintptr_t fileOffset,
                       void* hookFn, void** origFn, bool isShortFunc, std::atomic<bool>* gate)
 {
+	const char* entryName = name ? name : "";
 	void* target = g_saSym ? g_saSym->Abs<void*>(fileOffset) : nullptr;
+	const uintptr_t targetAddr = reinterpret_cast<uintptr_t>(target);
+
+	std::lock_guard<std::mutex> lock(g_mutex);
+	if (checkConflictLocked(entryName, Kind::Hook, targetAddr)) {
+		return nullptr;
+	}
+
 	void* handle = nullptr;
 	if (target) {
 		handle = Memory::hook(target, hookFn, origFn, isShortFunc);
 		if (!handle) {
-			spdlog::error("HOOK_ADDR FAILED: {} target=0x{:X}", name ? name : "?", reinterpret_cast<uintptr_t>(target));
+			spdlog::error("HOOK_ADDR FAILED: {} target=0x{:X}", entryName, targetAddr);
 		}
 	}
 	else {
-		spdlog::error("HOOK_ADDR FAILED (null target): {}", name ? name : "?");
+		spdlog::error("HOOK_ADDR FAILED (null target): {}", entryName);
 	}
 
 	Entry e{};
-	e.name = name ? name : "";
+	e.name = entryName;
 	e.purpose = purpose ? purpose : "";
 	e.kind = Kind::Hook;
 	e.scope = scope;
-	e.targetAddr = reinterpret_cast<uintptr_t>(target);
+	e.targetAddr = targetAddr;
 	e.reversible = (gate != nullptr);
 	e.gate = gate;
 	e.failed = (handle == nullptr);
 	e.active = !e.failed && (!gate || gate->load(std::memory_order_acquire));
 
-	std::lock_guard<std::mutex> lock(g_mutex);
 	addEntryLocked(std::move(e));
 	return handle;
 }
@@ -399,30 +432,37 @@ void* installHookAddr(const char* name, const char* purpose, Scope scope, uintpt
 void* installHookBL(const char* name, const char* purpose, Scope scope, uintptr_t fileOffset,
                     void* hookFn, void** origFn, std::atomic<bool>* gate)
 {
+	const char* entryName = name ? name : "";
 	void* target = g_saSym ? g_saSym->Abs<void*>(fileOffset) : nullptr;
+	const uintptr_t targetAddr = reinterpret_cast<uintptr_t>(target);
+
+	std::lock_guard<std::mutex> lock(g_mutex);
+	if (checkConflictLocked(entryName, Kind::HookBL, targetAddr)) {
+		return nullptr;
+	}
+
 	void* handle = nullptr;
 	if (target) {
 		handle = Memory::hookBL(target, hookFn, origFn);
 		if (!handle) {
-			spdlog::error("HOOK_BL FAILED: {} target=0x{:X}", name ? name : "?", reinterpret_cast<uintptr_t>(target));
+			spdlog::error("HOOK_BL FAILED: {} target=0x{:X}", entryName, targetAddr);
 		}
 	}
 	else {
-		spdlog::error("HOOK_BL FAILED (null target): {}", name ? name : "?");
+		spdlog::error("HOOK_BL FAILED (null target): {}", entryName);
 	}
 
 	Entry e{};
-	e.name = name ? name : "";
+	e.name = entryName;
 	e.purpose = purpose ? purpose : "";
 	e.kind = Kind::HookBL;
 	e.scope = scope;
-	e.targetAddr = reinterpret_cast<uintptr_t>(target);
+	e.targetAddr = targetAddr;
 	e.reversible = (gate != nullptr);
 	e.gate = gate;
 	e.failed = (handle == nullptr);
 	e.active = !e.failed && (!gate || gate->load(std::memory_order_acquire));
 
-	std::lock_guard<std::mutex> lock(g_mutex);
 	addEntryLocked(std::move(e));
 	return handle;
 }

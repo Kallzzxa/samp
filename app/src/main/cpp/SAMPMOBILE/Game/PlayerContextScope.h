@@ -1,14 +1,16 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include "Aimstuff.h"
 
 // RAII scope that temporarily switches the engine's global local-player state
 // (camera mode, weapon camera mode, zoom/aspect, aim vectors, PlayerInFocus)
-// to a remote player slot, and restores the saved local state on scope exit.
+// to a remote player slot, and restores the saved state on scope exit.
 //
-// Saved camera modes and previous PlayerInFocus live on the scope instance
-// rather than globals, preventing accidental leakage on early returns.
+// All saved values (camera modes, FOV/aspect, aim vectors, PlayerInFocus) live
+// on the scope instance rather than globals, so nested scopes cannot clobber
+// an outer scope's local-player snapshot.
 class ScopedPlayerContext {
 public:
 	enum Flags : uint32_t {
@@ -39,28 +41,34 @@ public:
 			if (pbyteCameraMode) {
 				savedCameraMode_ = *pbyteCameraMode;
 				*pbyteCameraMode = remoteMode;
+				savedCamMode1_ = true;
 			}
 			if (wCameraMode2) {
 				savedCameraMode2_ = *wCameraMode2;
 				*wCameraMode2 = (remoteMode == 4) ? 0 : remoteMode;
+				savedCamMode2_ = true;
 			}
 		}
 
 		if (flags_ & kZoomAspect) {
-			GameStoreLocalPlayerCameraExtZoomAndAspect();
-			GameSetRemotePlayerCameraExtZoomAndAspect(playerNum);
+			if (pfCameraExtZoom && pfAspectRatio) {
+				savedExtZoom_ = *pfCameraExtZoom;
+				savedAspectRatio_ = *pfAspectRatio;
+				savedZoomAspect_ = true;
+				GameSetRemotePlayerCameraExtZoomAndAspect(playerNum);
+			}
 		}
 
 		if (flags_ & kAim) {
-			GameStoreLocalPlayerAim();
-			GameSetRemotePlayerAim(playerNum);
+			if (CAMERA_AIM* internalAim = GameGetInternalAim()) {
+				std::memcpy(&savedAim_, internalAim, sizeof(CAMERA_AIM));
+				savedAimValid_ = true;
+				GameSetRemotePlayerAim(playerNum);
+			}
 		}
 
-		// 保留：T08 — weapon skill switching
-		// if (flags_ & kSkills) {
-		//     GameStoreLocalPlayerSkills();
-		//     GameSetRemotePlayerSkills(playerNum);
-		// }
+		// 保留：T08 — weapon skill switching (store previous skills on instance)
+		// if (flags_ & kSkills) { ... }
 
 		if (flags_ & kFocus) {
 			if (pbyteCurrentPlayer) {
@@ -82,25 +90,24 @@ public:
 		}
 
 		// 保留：T08 — weapon skill restoration
-		// if (flags_ & kSkills) {
-		//     GameSetLocalPlayerSkills();
-		// }
+		// if (flags_ & kSkills) { ... }
 
-		if (flags_ & kCamMode) {
-			if (pbyteCameraMode) {
-				*pbyteCameraMode = savedCameraMode_;
-			}
-			if (wCameraMode2) {
-				*wCameraMode2 = savedCameraMode2_;
-			}
+		if (savedCamMode1_ && pbyteCameraMode) {
+			*pbyteCameraMode = savedCameraMode_;
+		}
+		if (savedCamMode2_ && wCameraMode2) {
+			*wCameraMode2 = savedCameraMode2_;
 		}
 
-		if (flags_ & kZoomAspect) {
-			GameSetLocalPlayerCameraExtZoomAndAspect();
+		if (savedZoomAspect_ && pfCameraExtZoom && pfAspectRatio) {
+			*pfCameraExtZoom = savedExtZoom_;
+			*pfAspectRatio = savedAspectRatio_;
 		}
 
-		if (flags_ & kAim) {
-			GameSetLocalPlayerAim();
+		if (savedAimValid_) {
+			if (CAMERA_AIM* internalAim = GameGetInternalAim()) {
+				std::memcpy(internalAim, &savedAim_, sizeof(CAMERA_AIM));
+			}
 		}
 	}
 
@@ -114,5 +121,12 @@ private:
 	uint8_t savedCameraMode_ = 0;
 	uint16_t savedCameraMode2_ = 0;
 	uint8_t savedCurrentPlayer_ = 0;
+	float savedExtZoom_ = 0.0f;
+	float savedAspectRatio_ = 0.0f;
+	CAMERA_AIM savedAim_{};
+	bool savedCamMode1_ = false;
+	bool savedCamMode2_ = false;
+	bool savedZoomAspect_ = false;
+	bool savedAimValid_ = false;
 	bool switchedFocus_ = false;
 };

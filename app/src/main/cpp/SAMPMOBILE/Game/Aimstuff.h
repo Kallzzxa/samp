@@ -2,6 +2,7 @@
 
 extern uint8_t* pbyteCameraMode;
 extern float* pfCameraExtZoom;
+extern float* pfAspectRatio;
 extern uint8_t* pbyteCurrentPlayer;
 extern uint16_t* wCameraMode2;
 

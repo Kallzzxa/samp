@@ -125,6 +125,7 @@ NetGame::~NetGame()
 	m_rakClient->Disconnect(0);
 	RpcTable::unregisterAll(m_rakClient, m_session.protoVersion);
 	RakNetworkFactory::DestroyRakClientInterface(m_rakClient);
+	m_rakClient = nullptr;
 
 	UninitializePools();
 
@@ -234,8 +235,11 @@ void NetGame::UpdateNetwork()
 	Packet* pkt = nullptr;
 	unsigned char packetIdentifier;
 	while ((pkt = m_rakClient->Receive())) {
-		if (g_rakNetCapHook && pkt->data && pkt->length > 0) {
-			g_rakNetCapHook(0, 1, pkt->data[0], pkt->data, pkt->length * 8);
+		if (pkt->data && pkt->length > 0) {
+			const unsigned int bits = (pkt->bitSize > 0 && pkt->bitSize <= pkt->length * 8)
+				? pkt->bitSize
+				: pkt->length * 8;
+			invokeRakNetCapHook(0, 1, pkt->data[0], pkt->data, bits);
 		}
 		packetIdentifier = GetPacketID(pkt);
 
