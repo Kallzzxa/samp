@@ -238,8 +238,8 @@ void CPlaceable::FreeStaticMatrix()
 
 void CPlaceable::Initialize()
 {
-	Memory::hook("_ZN10CPlaceable15InitMatrixArrayEv", (void*) &CPlaceable::InitMatrixArray, (void**) &CPlaceable_InitMatrixArray);
-	Memory::hook("_ZN10CPlaceable19ShutdownMatrixArrayEv", (void*) &CPlaceable::ShutdownMatrixArray, (void**) &CPlaceable_ShutdownMatrixArray);
+	Memory::hookSym(eng::ptr(eng::Sym::CPlaceable_InitMatrixArray), (void*) &CPlaceable::InitMatrixArray, (void**) &CPlaceable_InitMatrixArray, eng::name(eng::Sym::CPlaceable_InitMatrixArray));
+	Memory::hookSym(eng::ptr(eng::Sym::CPlaceable_ShutdownMatrixArray), (void*) &CPlaceable::ShutdownMatrixArray, (void**) &CPlaceable_ShutdownMatrixArray, eng::name(eng::Sym::CPlaceable_ShutdownMatrixArray));
 }
 
 CPlaceable::CPlaceable()
@@ -250,6 +250,6 @@ CPlaceable::CPlaceable()
 
 CPlaceable::~CPlaceable()
 {
-	Memory::callFunction("_ZN10CPlaceableD2Ev", this);
+	eng::fn::CPlaceable_Dtor_CPlaceable( this);
 }
 }

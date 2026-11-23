@@ -6,17 +6,17 @@ class CCheat {
 public:
 	static void WeaponSkillsCheat()
 	{
-		Memory::callFunction("_ZN6CCheat17WeaponSkillsCheatEv");
+		eng::fn::CCheat_WeaponSkillsCheat();
 	}
 
 	static void VehicleSkillsCheat()
 	{
-		Memory::callFunction("_ZN6CCheat18VehicleSkillsCheatEv");
+		eng::fn::CCheat_VehicleSkillsCheat();
 	}
 
 	static void StaminaCheat()
 	{
-		Memory::callFunction("_ZN6CCheat12StaminaCheatEv");
+		eng::fn::CCheat_StaminaCheat();
 	}
 };
 }

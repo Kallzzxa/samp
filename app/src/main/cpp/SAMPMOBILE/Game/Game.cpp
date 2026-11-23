@@ -65,7 +65,7 @@ void Game::StartGame()
 	//spdlog::info("Game::StartGame");
 
 	// StartGameScreen::OnNewGameCheck
-	Memory::callFunction("_ZN15StartGameScreen14OnNewGameCheckEv");
+	eng::fn::StartGameScreen_OnNewGameCheck();
 
 	GameAimSyncInit();
 }
@@ -106,7 +106,7 @@ void Game::RemoveModel(int iModel, bool bFromStreaming)
 		if (bFromStreaming) {
 			if (ScriptCommand(&is_model_available, iModel)) {
 				// CStreaming::RemoveModel
-				Memory::callFunction("_ZN10CStreaming11RemoveModelEi", iModel);
+				eng::fn::CStreaming_RemoveModel( iModel);
 			}
 		}
 		else {
@@ -123,11 +123,11 @@ void Game::ToggleThePassingOfTime(bool bOnOff)
 
 	if (bOnOff) {
 		// CClock::Update(void)
-		Memory::restoreRet((uintptr_t) g_saSym->GetSymbol("_ZN6CClock6UpdateEv"));
+		Memory::restoreRet((uintptr_t) eng::ptr(eng::Sym::CClock_Update));
 		m_clockEnabled = true;
 	}
 	else {
-		Memory::ret((uintptr_t) g_saSym->GetSymbol("_ZN6CClock6UpdateEv"));
+		Memory::ret((uintptr_t) eng::ptr(eng::Sym::CClock_Update));
 		m_clockEnabled = false;
 	}
 }
@@ -379,7 +379,7 @@ void Game::DisplayGameText(const char* szStr, int iTime, int iSize)
 	CFont::AsciiToGxtCharU8(m_szAscii, (uint16_t*) szGameTextMessage);
 
 	// CMessages::AddBigMesssage
-	Memory::callFunction("_ZN9CMessages13AddBigMessageEPtjt", szGameTextMessage, iTime, iSize);
+	eng::fn::CMessages_AddBigMessage( szGameTextMessage, iTime, iSize);
 }
 
 void Game::DrawImGuiGameText(ImGuiRenderer* renderer)
@@ -406,7 +406,7 @@ void Game::DrawImGuiGameText(ImGuiRenderer* renderer)
 uint8_t Game::GetActiveInterior()
 {
 	//spdlog::info("Game::GetActiveInterior");
-	auto* pCurrArea = g_saSym->GetSymbol<uint8_t*>("_ZN5CGame8currAreaE");
+	auto* pCurrArea = eng::as<uint8_t*>(eng::Sym::CGame_currArea);
 	return pCurrArea ? *pCurrArea : 0;
 }
 
@@ -451,10 +451,10 @@ void Game::SetWorldTime(int iHour, int iMinute)
 {
 	//spdlog::info("Game::SetWorldTime: {}, {}", iHour, iMinute);
 
-	if (auto* pMin = g_saSym->GetSymbol<uint8_t*>("_ZN6CClock20ms_nGameClockMinutesE")) {
+	if (auto* pMin = eng::as<uint8_t*>(eng::Sym::CClock_ms_nGameClockMinutes)) {
 		*pMin = static_cast<uint8_t>(iMinute);
 	}
-	if (auto* pHr = g_saSym->GetSymbol<uint8_t*>("_ZN6CClock18ms_nGameClockHoursE")) {
+	if (auto* pHr = eng::as<uint8_t*>(eng::Sym::CClock_ms_nGameClockHours)) {
 		*pHr = static_cast<uint8_t>(iHour);
 	}
 	ScriptCommand(&set_current_time, iHour, iMinute);
@@ -469,11 +469,11 @@ void Game::GetWorldTime(int* iHour, int* iMinute)
 	//spdlog::info("Game::GetWorldTime");
 
 	if (iMinute) {
-		auto* pMin = g_saSym->GetSymbol<uint8_t*>("_ZN6CClock20ms_nGameClockMinutesE");
+		auto* pMin = eng::as<uint8_t*>(eng::Sym::CClock_ms_nGameClockMinutes);
 		*iMinute = pMin ? static_cast<int>(*pMin) : 0;
 	}
 	if (iHour) {
-		auto* pHr = g_saSym->GetSymbol<uint8_t*>("_ZN6CClock18ms_nGameClockHoursE");
+		auto* pHr = eng::as<uint8_t*>(eng::Sym::CClock_ms_nGameClockHours);
 		*iHour = pHr ? static_cast<int>(*pHr) : 0;
 	}
 }
@@ -486,7 +486,7 @@ void Game::UpdateGlobalTimer(uint32_t dwTimer)
 	//spdlog::info("Game::UpdateGlobalTimer: {}", dwTimer);
 
 	if (!m_clockEnabled) {
-		*g_saSym->GetSymbol<uint32_t*>("_ZN6CTimer22m_snTimeInMillisecondsE") = dwTimer & 0x3FFFFFFF;
+		*eng::as<uint32_t*>(eng::Sym::CTimer_m_snTimeInMilliseconds) = dwTimer & 0x3FFFFFFF;
 	}
 }
 
@@ -497,10 +497,10 @@ void Game::SetWorldWeather(int byteWeatherID)
 {
 	//spdlog::info("Game::SetWorldWeather: {}", byteWeatherID);
 
-	*g_saSym->GetSymbol<uint8_t*>("_ZN8CWeather17ForcedWeatherTypeE") = byteWeatherID;
+	*eng::as<uint8_t*>(eng::Sym::CWeather_ForcedWeatherType) = byteWeatherID;
 	if (!m_clockEnabled) {
-		*g_saSym->GetSymbol<uint8_t*>("_ZN8CWeather14NewWeatherTypeE") = byteWeatherID;
-		*g_saSym->GetSymbol<uint8_t*>("_ZN8CWeather14OldWeatherTypeE") = byteWeatherID;
+		*eng::as<uint8_t*>(eng::Sym::CWeather_NewWeatherType) = byteWeatherID;
+		*eng::as<uint8_t*>(eng::Sym::CWeather_OldWeatherType) = byteWeatherID;
 	}
 }
 
@@ -588,9 +588,9 @@ void Game::PreloadObjectsAnims()
 void Game::DisableAutoAim()
 {
 	//spdlog::info("Game::DisableAutoAim");
-	Memory::ret(g_saSym->GetSymbol<uintptr_t>("_ZN10CPlayerPed22FindWeaponLockOnTargetEv")); // CPed::FindWeaponLockOnTarget
-	Memory::ret(g_saSym->GetSymbol<uintptr_t>("_ZN10CPlayerPed26FindNextWeaponLockOnTargetEP7CEntityb")); // CPed::FindNextWeaponLockOnTarget
-	Memory::ret(g_saSym->GetSymbol<uintptr_t>("_ZN4CPed21SetWeaponLockOnTargetEP7CEntity")); // CPed::SetWeaponLockOnTarget
+	Memory::ret(eng::addr(eng::Sym::CPlayerPed_FindWeaponLockOnTarget)); // CPed::FindWeaponLockOnTarget
+	Memory::ret(eng::addr(eng::Sym::CPlayerPed_FindNextWeaponLockOnTarget)); // CPed::FindNextWeaponLockOnTarget
+	Memory::ret(eng::addr(eng::Sym::CPed_SetWeaponLockOnTarget)); // CPed::SetWeaponLockOnTarget
 }
 
 void Game::SetWantedLevel(uint8_t level)
@@ -629,7 +629,7 @@ void Game::DrawGangZone(float fPos[], uint32_t dwColor, bool bFullMap)
 	//spdlog::info("Game::DrawGangZone: {}, {}, {}", fPos[0], fPos[1], fPos[2]);
 
 	// CRadar::DrawAreaOnRadar
-	Memory::callFunction("_ZN6CRadar15DrawAreaOnRadarERK5CRectRK5CRGBAb", fPos, &dwColor, bFullMap);
+	eng::fn::CRadar_DrawAreaOnRadar( fPos, &dwColor, bFullMap);
 }
 
 // Disable scene entry and exit
@@ -638,7 +638,7 @@ void Game::DisableEnterExits()
 	//spdlog::info("Game::DisableEnterExits");
 
 	typedef sa::CPool<sa::CEntryExit, sa::CEntryExit> CEntryExitPool;
-	auto ppPool = g_saSym->GetSymbol<CEntryExitPool**>("_ZN17CEntryExitManager17mp_poolEntryExitsE");
+	auto ppPool = eng::as<CEntryExitPool**>(eng::Sym::CEntryExitManager_mp_poolEntryExits);
 	if (!ppPool || !*ppPool) return;
 	auto poolEntryExit = *ppPool;
 
@@ -657,7 +657,7 @@ bool Game::IsAnimationLoaded(const char* szAnimLib)
 	//spdlog::info("Game::IsAnimationLoaded: {}", szAnimLib);
 
 	// CAnimManager::GetAnimationBlock
-	auto pAnimBlock = Memory::callFunction<CAnimBlock*>("_ZN12CAnimManager17GetAnimationBlockEPKc", szAnimLib);
+	auto pAnimBlock = eng::fn::CAnimManager_GetAnimationBlock<CAnimBlock*>( szAnimLib);
 	if (pAnimBlock == nullptr) return false;
 	return pAnimBlock->m_loaded;
 
@@ -687,7 +687,7 @@ void Game::PlaySound(int iSound, float fX, float fY, float fZ)
  */
 bool Game::IsGamePaused()
 {
-	auto* pPaused = g_saSym->GetSymbol<bool*>("_ZN6CTimer11m_UserPauseE");
+	auto* pPaused = eng::as<bool*>(eng::Sym::CTimer_m_UserPause);
 	return pPaused ? *pPaused : false;
 }
 

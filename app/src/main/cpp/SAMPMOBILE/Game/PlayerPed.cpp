@@ -237,7 +237,7 @@ void CPlayerPed::RemoveWeaponWhenEnteringVehicle()
 {
 	if (m_ped) {
 		// CPed::RemoveWeaponWhenEnteringVehicle
-		Memory::callFunction("_ZN4CPed31RemoveWeaponWhenEnteringVehicleEi", m_ped, 0);
+		eng::fn::CPed_RemoveWeaponWhenEnteringVehicle( m_ped, 0);
 	}
 }
 
@@ -627,7 +627,7 @@ void CPlayerPed::ApplyCrouch()
 	if (!IsCrouching()) {
 		if (m_ped->m_pIntelligence) {
 			// CPedIntelligence::SetTaskDuckSecondary
-			Memory::callFunction("_ZN16CPedIntelligence20SetTaskDuckSecondaryEt", m_ped->m_pIntelligence, 0);
+			eng::fn::CPedIntelligence_SetTaskDuckSecondary( m_ped->m_pIntelligence, 0);
 		}
 	}
 }
@@ -644,7 +644,7 @@ void CPlayerPed::ResetCrouch()
 
 	if (m_ped->m_pIntelligence) {
 		// CPedIntelligence::ClearTaskDuckSecondary
-		Memory::callFunction("_ZN16CPedIntelligence22ClearTaskDuckSecondaryEv", m_ped->m_pIntelligence);
+		eng::fn::CPedIntelligence_ClearTaskDuckSecondary( m_ped->m_pIntelligence);
 	}
 }
 
@@ -714,7 +714,7 @@ void CPlayerPed::StopJetpack()
 	if (IsInJetpack()) {
 		sa::CTask* dwJetPackTask = m_ped->m_pIntelligence->m_TaskMgr.m_aPrimaryTasks[sa::TASK_PRIMARY_PRIMARY];
 		// CTaskSimpleJetPack::~CTaskSimpleJetPack(CTaskSimpleJetPack *this)
-		Memory::callFunction("_ZN18CTaskSimpleJetPackD0Ev", dwJetPackTask);
+		eng::fn::CTaskSimpleJetPack_Dtor_CTaskSimpleJetPack( dwJetPackTask);
 		m_ped->m_pIntelligence->m_TaskMgr.m_aPrimaryTasks[sa::TASK_PRIMARY_PRIMARY] = nullptr;
 	}
 }
@@ -836,7 +836,7 @@ void CPlayerPed::StopPassengerDriveByMode()
 
 	if (IsInPassengerDriveByMode()) {
 		sa::CTask* dwJetPackTask = m_ped->m_pIntelligence->m_TaskMgr.m_aSecondaryTasks[sa::TASK_PRIMARY_PRIMARY];
-		Memory::callFunction("_ZN22CTaskSimpleGangDriveByD0Ev", dwJetPackTask); // CTaskSimpleGangDriveBy::~CTaskSimpleGangDriveBy
+		eng::fn::CTaskSimpleGangDriveBy_Dtor_CTaskSimpleGangDriveBy( dwJetPackTask); // CTaskSimpleGangDriveBy::~CTaskSimpleGangDriveBy
 		m_ped->m_pIntelligence->m_TaskMgr.m_aSecondaryTasks[sa::TASK_PRIMARY_PRIMARY] = nullptr;
 	}
 }
@@ -844,7 +844,7 @@ void CPlayerPed::StopPassengerDriveByMode()
 bool IsTaskRunNamedOrSlideToCoord(sa::CTask* pTask)
 {
 	uintptr_t vtable = *(uintptr_t*) pTask;
-	if (vtable == g_saSym->GetVmtFunction<uintptr_t>("_ZTV23CTaskSimpleSlideToCoord", 1, true) || vtable == g_saSym->GetVmtFunction<uintptr_t>("_ZTV23CTaskSimpleRunNamedAnim", 2, true)) // CTaskSimpleSlideToCoord CTaskSimpleRunNamedAnim
+	if (vtable == eng::vmtSlot(eng::Sym::vtable_CTaskSimpleSlideToCoord, 1) || vtable == eng::vmtSlot(eng::Sym::vtable_CTaskSimpleRunNamedAnim, 2)) // CTaskSimpleSlideToCoord CTaskSimpleRunNamedAnim
 	{
 		return true;
 	}
@@ -1491,14 +1491,14 @@ void CPlayerPed::SetModelIndex(uint uiModel)
 	}
 
 	// CClothes::RebuildPlayer
-	Memory::ret(g_saSym->GetSymbol<uintptr_t>("_ZN8CClothes13RebuildPlayerEP10CPlayerPedb"));
+	Memory::ret(eng::addr(eng::Sym::CClothes_RebuildPlayer));
 
 	DestroyFollowPedTask();
 
 	CEntity::SetModelIndex(uiModel);
 
 	// CAEPedSpeechAudioEntity::Initialise
-	Memory::callFunction("_ZN23CAEPedSpeechAudioEntity10InitialiseEP7CEntity", &m_ped->m_PedSpeechAudioEntity, m_ped);
+	eng::fn::CAEPedSpeechAudioEntity_Initialise( &m_ped->m_PedSpeechAudioEntity, m_ped);
 }
 
 void CPlayerPed::DestroyFollowPedTask()
@@ -1510,7 +1510,7 @@ void CPlayerPed::DestroyFollowPedTask()
 	sa::CTask* dwIK = m_ped->m_pIntelligence->m_TaskMgr.m_aSecondaryTasks[sa::TASK_SECONDARY_IK];
 	if (dwIK) {
 		// CTaskSimpleIKManager::~CTaskSimpleIKManager
-		Memory::callFunction("_ZN20CTaskSimpleIKManagerD0Ev", dwIK);
+		eng::fn::CTaskSimpleIKManager_Dtor_CTaskSimpleIKManager( dwIK);
 		m_ped->m_pIntelligence->m_TaskMgr.m_aSecondaryTasks[sa::TASK_SECONDARY_IK] = nullptr;
 	}
 }
@@ -1549,7 +1549,7 @@ void CPlayerPed::GiveWeapon(int iWeaponId, int iAmmo)
 
 			if (pbyteCurrentPlayer) *pbyteCurrentPlayer = m_bytePlayerNumber;
 			// CPed::GiveWeapon
-			Memory::callFunction("_ZN4CPed10GiveWeaponE11eWeaponTypejb", m_ped, iWeaponId, iAmmo, true);
+			eng::fn::CPed_GiveWeapon( m_ped, iWeaponId, iAmmo, true);
 			SetArmedWeapon(iWeaponId);
 			if (pbyteCurrentPlayer) *pbyteCurrentPlayer = 0;
 		}
@@ -1597,7 +1597,7 @@ void CPlayerPed::ApplyCommandTask(const char* szTaskName, void* p1, int p2, int 
 	}
 
 	// IKChainManager_c::LookAt
-	Memory::callFunction("_ZN16IKChainManager_c6LookAtEPcP4CPedP7CEntityiiP5RwV3dhfiih", g_saSym->GetSymbol("g_ikChainMan"), szTaskName, (uintptr_t) m_ped, p1, p2, p3, p4, p5, p6, p7, p8, p9);
+	eng::fn::IKChainManager_c_LookAt( eng::ptr(eng::Sym::g_ikChainMan), szTaskName, (uintptr_t) m_ped, p1, p2, p3, p4, p5, p6, p7, p8, p9);
 }
 
 void CPlayerPed::ProcessParachuteSkydiving()
@@ -1792,7 +1792,7 @@ bool CPlayerPed::IsPlayingAnim(int idx)
 	}
 	const char* pNameAnim = pColon + 1;
 
-	auto blendAssoc = Memory::callFunction<uintptr_t>("_Z30RpAnimBlendClumpGetAssociationP7RpClumpPKc", m_ped->m_pRwObject, pNameAnim);
+	auto blendAssoc = eng::fn::RpAnimBlendClumpGetAssociation( m_ped->m_pRwObject, pNameAnim);
 
 	return blendAssoc != 0;
 }
@@ -1938,7 +1938,7 @@ void CPlayerPed::RemoveAllAttachedObjects()
 
 sa::CAnimBlendClumpData** GetClumpData(RpClump* clump)
 {
-	RwInt32 ClumpOffset = *g_saSym->GetSymbol<RwInt32*>("ClumpOffset");
+	RwInt32 ClumpOffset = *eng::as<RwInt32*>(eng::Sym::ClumpOffset);
 	return RWPLUGINOFFSET(sa::CAnimBlendClumpData*, clump, ClumpOffset);
 }
 
@@ -1946,13 +1946,13 @@ void UpdateElementRpHAnim(sa::CEntity* ent)
 {
 	if (ent) {
 		// CEntity::UpdateRpHAnim
-		Memory::callFunction("_ZN7CEntity13UpdateRpHAnimEv", ent);
+		eng::fn::CEntity_UpdateRpHAnim( ent);
 
 		if (ent->m_nModelIndex == 0) { // CJ skin
 			RpClump* clump = ent->m_pRpClump;
 			if (clump) {
 				// CPed::ShoulderBoneRotation
-				Memory::callFunction("_ZN4CPed20ShoulderBoneRotationEP7RpClump", clump);
+				eng::fn::CPed_ShoulderBoneRotation( clump);
 			}
 			else {
 				spdlog::error("UpdateElementRpHAnim: clump is null");
@@ -1997,7 +1997,7 @@ void CPlayerPed::ProcessCuff()
 			RtQuat* boneOrientation = &frameData->GetFrameOrientation();
 			RwV3d angles = {rotations[i][0], rotations[i][2], rotations[i][1]};
 			// BoneNode_c::EulerToQuat(RwV3d_0 *euler, RtQuat_0 *quat)
-			Memory::callFunction("_ZN10BoneNode_c11EulerToQuatEP5RwV3dP6RtQuat", &angles, boneOrientation);
+			eng::fn::BoneNode_c_EulerToQuat( &angles, boneOrientation);
 			m_ped->m_bDontUpdateHierarchy = false;
 		}
 	}
@@ -2148,11 +2148,11 @@ bool CPlayerPed::GetBoneMatrix(RwMatrix* matOut, int iBoneID)
 	if (!matOut || !m_ped || IsEntityPlaceable(m_ped) || !m_ped->m_pRpClump) {
 		return false;
 	}
-	auto pAnimHierarchy = Memory::callFunction<RpHAnimHierarchy*>("_Z29GetAnimHierarchyFromSkinClumpP7RpClump", m_ped->m_pRpClump); // GetAnimHierarchyFromSkinClump
+	auto pAnimHierarchy = eng::fn::GetAnimHierarchyFromSkinClump<RpHAnimHierarchy*>( m_ped->m_pRpClump); // GetAnimHierarchyFromSkinClump
 	if (!pAnimHierarchy || !pAnimHierarchy->pMatrixArray) {
 		return false;
 	}
-	int iAnimIndex = Memory::callFunction<int>("_Z17RpHAnimIDGetIndexP16RpHAnimHierarchyi", pAnimHierarchy, iBoneID); // RpHAnimIDGetIndex
+	int iAnimIndex = eng::fn::RpHAnimIDGetIndex( pAnimHierarchy, iBoneID); // RpHAnimIDGetIndex
 	if (iAnimIndex < 0 || iAnimIndex >= pAnimHierarchy->numNodes) {
 		return false;
 	}
@@ -2522,7 +2522,7 @@ void CPlayerPed::GetWeaponInfoForFire(bool bLeftWrist, sa::CVector* vecBonePos, 
 uintptr_t GetWeaponInfo(int iWeapon, int iSkill)
 {
 	// CWeaponInfo::GetWeaponInfo
-	return Memory::callFunction<uintptr_t>("_ZN11CWeaponInfo13GetWeaponInfoE11eWeaponTypea", iWeapon, iSkill);
+	return eng::fn::CWeaponInfo_GetWeaponInfo( iWeapon, iSkill);
 }
 
 sa::CVector* CPlayerPed::GetCurrentWeaponFireOffset()
@@ -2548,7 +2548,7 @@ void CPlayerPed::GetTransformedBonePosition(int iBoneID, sa::CVector* vecOut)
 	}
 
 	// CPed::GetTransformedBonePosition
-	Memory::callFunction("_ZN4CPed26GetTransformedBonePositionER5RwV3djb", m_ped, vecOut, iBoneID, false);
+	eng::fn::CPed_GetTransformedBonePosition( m_ped, vecOut, iBoneID, false);
 }
 
 void CPlayerPed::SetCameraZoomAndAspect(float fExtZoom, float fAspectRatio)

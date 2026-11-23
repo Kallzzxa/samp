@@ -382,6 +382,6 @@ VALIDATE_SIZE(CCamera, (VER_x32 ? 0xD00 : 0xDB0));
 
 inline CCamera& getTheCamera()
 {
-	return *g_saSym->GetSymbol<CCamera*>("TheCamera");
+	return *eng::as<CCamera*>(eng::Sym::TheCamera);
 }
 }

@@ -10,27 +10,27 @@ class TextureDatabaseRuntime {
 public:
 	static void Register(TextureDatabaseRuntime* toRegister)
 	{
-		Memory::callFunction("_ZN22TextureDatabaseRuntime8RegisterEPS_", toRegister);
+		eng::fn::TextureDatabaseRuntime_Register( toRegister);
 	}
 
 	static void Unregister(TextureDatabaseRuntime* toUnregister)
 	{
-		Memory::callFunction("_ZN22TextureDatabaseRuntime10UnregisterEPS_", toUnregister);
+		eng::fn::TextureDatabaseRuntime_Unregister( toUnregister);
 	}
 
 	static RwTexture* GetTexture(const char* name)
 	{
-		return Memory::callFunction<RwTexture*>("_ZN22TextureDatabaseRuntime10GetTextureEPKc", name);
+		return eng::fn::TextureDatabaseRuntime_GetTexture<RwTexture*>( name);
 	}
 
 	static TextureDatabaseRuntime* Load(const char* withName, bool fullyLoad, TextureDatabaseFormat forcedFormat)
 	{
-		return Memory::callFunction<TextureDatabaseRuntime*>("_ZN22TextureDatabaseRuntime4LoadEPKcb21TextureDatabaseFormat", withName, fullyLoad, forcedFormat);
+		return eng::fn::TextureDatabaseRuntime_Load<TextureDatabaseRuntime*>( withName, fullyLoad, forcedFormat);
 	}
 
 	static TextureDatabaseRuntime* GetDatabase(const char* withName)
 	{
-		return Memory::callFunction<TextureDatabaseRuntime*>("_ZN22TextureDatabaseRuntime11GetDatabaseEPKc", withName);
+		return eng::fn::TextureDatabaseRuntime_GetDatabase<TextureDatabaseRuntime*>( withName);
 	}
 
 	static TDBArray<TextureDatabaseRuntime*>& registered() { return *g_saSym->GetSymbol<TDBArray<TextureDatabaseRuntime*>*>("_ZN22TextureDatabaseRuntime10registeredE"); }

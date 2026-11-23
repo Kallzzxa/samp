@@ -18,11 +18,11 @@ void MaterialTextGenerator::SetUpScene()
 	m_frame = RwFrameCreate();
 	if (!m_camera || !m_frame) {
 		if (m_camera) {
-			Memory::callFunction("_Z15RwCameraDestroyP8RwCamera", m_camera);
+			eng::fn::RwCameraDestroy( m_camera);
 			m_camera = nullptr;
 		}
 		if (m_frame) {
-			Memory::callFunction("_Z14RwFrameDestroyP7RwFrame", m_frame);
+			eng::fn::RwFrameDestroy( m_frame);
 			m_frame = nullptr;
 		}
 		return;

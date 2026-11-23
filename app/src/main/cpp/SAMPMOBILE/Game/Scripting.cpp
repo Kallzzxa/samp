@@ -21,20 +21,10 @@ void InitScripting()
 	}
 }
 
-std::string dec2hex(int dec)
-{
-	std::stringstream ss;
-	ss << std::hex << std::uppercase << std::setfill('0') << std::setw(4) << dec;
-	return ss.str();
-}
-
-std::string g_lastScriptCommand;
 std::atomic<uint16_t> g_lastScriptOpcode{0};
 
 int ScriptCommand(const SCRIPT_COMMAND* pScriptCommand, ...)
 {
-//	spdlog::info("ScriptCommand: 0x{}", dec2hex(pScriptCommand->OpCode));
-
 	// join-time script calls (e.g. spawn weapon setup 0x087E) can run
 	// before InitScripting — lazy-init instead of dereferencing null gst
 	if (!gst) {
@@ -42,7 +32,6 @@ int ScriptCommand(const SCRIPT_COMMAND* pScriptCommand, ...)
 	}
 
 	g_lastScriptOpcode.store(pScriptCommand->OpCode, std::memory_order_relaxed);
-	g_lastScriptCommand = "0x" + dec2hex(pScriptCommand->OpCode);
 
 	va_list ap;
 	const char* p = pScriptCommand->Params;

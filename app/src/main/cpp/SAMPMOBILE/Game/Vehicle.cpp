@@ -334,7 +334,7 @@ void CVehicle::SetDamageStatus(uint32_t dwPanelDamageStatus, uint32_t dwDoorDama
 					// The ingame car is damaged in some way although the update
 					// says the car should be repaired. So repair it and exit.
 					// CAutoMobile::Fix
-					Memory::callFunction("_ZN11CAutomobile3FixEv", m_pVehicle);
+					eng::fn::CAutomobile_Fix( m_pVehicle);
 					return;
 				}
 			}
@@ -352,7 +352,7 @@ void CVehicle::SetDamageStatus(uint32_t dwPanelDamageStatus, uint32_t dwDoorDama
 			((sa::CAutomobile*) m_pVehicle)->Damage.m_Lights = (uint32_t) byteLightDamageStatus;
 
 			// CAutomobile::SetupDamageAfterLoad
-			Memory::callFunction("_ZN11CAutomobile20SetupDamageAfterLoadEv", m_pVehicle);
+			eng::fn::CAutomobile_SetupDamageAfterLoad( m_pVehicle);
 
 		}
 	}
@@ -438,11 +438,11 @@ void CVehicle::AddComponent(int iComponentID)
 	ScriptCommand(&add_car_component, m_gtaId, iComponentID, &dwRet);*/
 
 	// CStreaming::HasVehicleUpgradeLoaded
-	bool HasVehicleUpgradeLoaded = Memory::callFunction<bool>("_ZN10CStreaming23HasVehicleUpgradeLoadedEi", iComponentID);
+	bool HasVehicleUpgradeLoaded = eng::fn::CStreaming_HasVehicleUpgradeLoaded( iComponentID);
 
 	if (!HasVehicleUpgradeLoaded) {
 		// CStreaming::RequestVehicleUpgrade
-		Memory::callFunction<void>("_ZN10CStreaming21RequestVehicleUpgradeEii", iComponentID, 10);
+		eng::fn::CStreaming_RequestVehicleUpgrade( iComponentID, 10);
 		pGame->LoadRequestedModels();
 
 		int waitPreloaded = 0;
@@ -452,7 +452,7 @@ void CVehicle::AddComponent(int iComponentID)
 				spdlog::error("CVehicle::AddComponent: component {} wouldn't load in time", iComponentID);
 				return;
 			}
-			HasVehicleUpgradeLoaded = Memory::callFunction<bool>("_ZN10CStreaming23HasVehicleUpgradeLoadedEi", iComponentID);
+			HasVehicleUpgradeLoaded = eng::fn::CStreaming_HasVehicleUpgradeLoaded( iComponentID);
 		}
 	}
 

@@ -67,7 +67,7 @@ struct ScopedJoystickScale {
 		float scale = Settings::joystickScale();
 		if (!widget || scale == 1.0f || scale < 0.4f || scale > 2.0f) return;
 		if (ensureBaseRectInit) {
-			Memory::callFunction("_ZN7CWidget6UpdateEv", widget);
+			eng::fn::CWidget_Update( widget);
 		}
 		w = widget;
 		origSx = *reinterpret_cast<float*>(w + kWidgetPosOffset + 8);
@@ -78,7 +78,7 @@ struct ScopedJoystickScale {
 	{
 		if (w) {
 			*reinterpret_cast<float*>(w + kWidgetPosOffset + 8) = origSx;
-			Memory::callFunction("_ZN7CWidget6UpdateEv", w);
+			eng::fn::CWidget_Update( w);
 		}
 	}
 };
@@ -484,8 +484,7 @@ DECL_HOOK(uint32_t, CPad_ExitVehicleJustDown, uintptr_t _this, int a2, uintptr_t
 	{
 		uintptr_t* widgets = GetTouchWidgets();
 		uint32_t t0 = (widgets && widgets[0])
-			? Memory::callFunction<uint32_t>(
-				"_ZN15CTouchInterface9IsTouchedENS_9WidgetIDsEP9CVector2Di",
+			? eng::fn::CTouchInterface_IsTouched(
 				0, 0, 0) : 0;
 		uint32_t d = (*reinterpret_cast<uint16_t*>(_this + 272) ? 8u : 0u)
 			| (*reinterpret_cast<uint8_t*>(_this + 301) ? 4u : 0u)
@@ -590,7 +589,7 @@ DECL_HOOK(void, CAutomobile_ProcessControl, sa::CVehicle* _this)
 		pVehicle->nControlFlags = 26;
 
 		// CAEVehicleAudioEntity::Service
-		Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
+		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
 
 		pVehicle->nControlFlags = savedControlFlags;
 		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
@@ -628,7 +627,7 @@ DECL_HOOK(void, CAutomobile_ProcessControl, sa::CVehicle* _this)
 		}
 
 		// CAEVehicleAudioEntity::Service
-		Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
+		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
 
 		CAutomobile_ProcessControl(pVehicle);
 	}
@@ -676,7 +675,7 @@ DECL_HOOK(void, CBoat_ProcessControl, sa::CVehicle* _this)
 		pVehicle->nControlFlags = 26;
 
 		// CAEVehicleAudioEntity::Service
-		Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
+		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
 
 		pVehicle->nControlFlags = savedControlFlags;
 		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
@@ -714,7 +713,7 @@ DECL_HOOK(void, CBoat_ProcessControl, sa::CVehicle* _this)
 		}
 
 		// CAEVehicleAudioEntity::Service
-		Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
+		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
 
 		CBoat_ProcessControl(pVehicle);
 	}
@@ -762,7 +761,7 @@ DECL_HOOK(void, CBike_ProcessControl, sa::CVehicle* _this)
 		pVehicle->nControlFlags = 26;
 
 		// CAEVehicleAudioEntity::Service
-		Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
+		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
 
 		pVehicle->nControlFlags = savedControlFlags;
 		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
@@ -800,7 +799,7 @@ DECL_HOOK(void, CBike_ProcessControl, sa::CVehicle* _this)
 		}
 
 		// CAEVehicleAudioEntity::Service
-		Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
+		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
 
 		CBike_ProcessControl(pVehicle);
 	}
@@ -1278,7 +1277,7 @@ DECL_HOOK(void, CTrain_ProcessControl, sa::CVehicle* _this)
 		pVehicle->nControlFlags = 26;
 
 		// CAEVehicleAudioEntity::Service
-		Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
+		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
 
 		pVehicle->nControlFlags = savedControlFlags;
 		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
@@ -1316,7 +1315,7 @@ DECL_HOOK(void, CTrain_ProcessControl, sa::CVehicle* _this)
 		}
 
 		// CAEVehicleAudioEntity::Service
-		Memory::callFunction<void>("_ZN21CAEVehicleAudioEntity7ServiceEv", &pVehicle->m_VehicleAudioEntity);
+		eng::fn::CAEVehicleAudioEntity_Service( &pVehicle->m_VehicleAudioEntity);
 
 		CTrain_ProcessControl(pVehicle);
 	}
@@ -1569,8 +1568,8 @@ static bool CanLocalPedUseOnFootFire(uintptr_t pad, sa::CPed* pPed)
 
 	if (pPed->m_pIntelligence) {
 		void* pTaskMgr = &pPed->m_pIntelligence->m_TaskMgr;
-		if (Memory::callFunction<void*>("_ZNK12CTaskManager20FindActiveTaskByTypeEi", pTaskMgr, 700)
-			|| Memory::callFunction<void*>("_ZNK12CTaskManager20FindActiveTaskByTypeEi", pTaskMgr, 701)) {
+		if (eng::fn::CTaskManager_FindActiveTaskByType( pTaskMgr, 700)
+			|| eng::fn::CTaskManager_FindActiveTaskByType( pTaskMgr, 701)) {
 			return false;
 		}
 	}
@@ -1674,18 +1673,15 @@ DECL_HOOK(uint32_t, CTaskSimplePlayerOnFoot_MakeAbortable, uintptr_t _this, sa::
 {
 	if (s_bInPlayerInfoProcess && !*pbyteCurrentPlayer && priority == 1 && pEvent == 0
 		&& pPed && pPed == GamePool_FindPlayerPed() && pPed->m_pIntelligence) {
-		uintptr_t useGun = Memory::callFunction<uintptr_t>(
-			"_ZNK16CPedIntelligence13GetTaskUseGunEv", pPed->m_pIntelligence);
+		uintptr_t useGun = eng::fn::CPedIntelligence_GetTaskUseGun( pPed->m_pIntelligence);
 		if (useGun) {
 			bool bEnterCarInput = false;
 			uintptr_t* widgets = GetTouchWidgets();
 			if (widgets && widgets[sa::WidgetIDs::WIDGET_ENTER_CAR]) {
 				bEnterCarInput =
-					Memory::callFunction<uint32_t>(
-						"_ZN15CTouchInterface9IsTouchedENS_9WidgetIDsEP9CVector2Di",
+					eng::fn::CTouchInterface_IsTouched(
 						sa::WidgetIDs::WIDGET_ENTER_CAR, 0, 0) != 0
-					|| Memory::callFunction<uint32_t>(
-						"_ZN15CTouchInterface10IsReleasedENS_9WidgetIDsEP9CVector2Di",
+					|| eng::fn::CTouchInterface_IsReleased(
 						sa::WidgetIDs::WIDGET_ENTER_CAR, 0, 0) != 0;
 			}
 			if (!bEnterCarInput) {
@@ -1797,7 +1793,7 @@ static int ScopedAimCamMode(uint8_t type)
 
 static bool Using1stPersonWeaponCam()
 {
-	return Memory::callFunction<bool>("_ZN7CCamera24Using1stPersonWeaponModeEv",
+	return eng::fn::CCamera_Using1stPersonWeaponMode(
 		&sa::getTheCamera());
 }
 
@@ -1814,8 +1810,7 @@ static bool EngineIsAiming(CPlayerPed* pPed)
 
 static uint32_t PollTouchRelease(int32_t widgetID)
 {
-	return Memory::callFunction<uint32_t>(
-		"_ZN15CTouchInterface10IsReleasedENS_9WidgetIDsEP9CVector2Di",
+	return eng::fn::CTouchInterface_IsReleased(
 		widgetID, 0, 1);
 }
 
@@ -1830,8 +1825,7 @@ static bool PollTouchDown(int32_t widgetID)
 {
 	uintptr_t* widgets = GetTouchWidgets();
 	if (!widgets || !widgets[widgetID]) return false;
-	return Memory::callFunction<uint32_t>(
-		"_ZN15CTouchInterface9IsTouchedENS_9WidgetIDsEP9CVector2Di",
+	return eng::fn::CTouchInterface_IsTouched(
 		widgetID, 0, 1) != 0;
 }
 
@@ -1946,18 +1940,18 @@ static void TickTouchCombatInput()
 	int scopedMode = ScopedAimCamMode(pAimPed->GetCurrentWeapon());
 	if (scopedMode) {
 		if (g_touchCombat.aimLatch && !Using1stPersonWeaponCam()) {
-			Memory::callFunction("_ZN7CCamera22SetNewPlayerWeaponModeEsss",
+			eng::fn::CCamera_SetNewPlayerWeaponMode(
 				&sa::getTheCamera(), scopedMode, 0, 0);
-			Memory::callFunction("_ZN4CPed11SetPedStateE9ePedState",
+			eng::fn::CPed_SetPedState(
 				pAimPed->m_ped, sa::ePedState::PED_SNIPER_MODE);
 		}
 		else if (!g_touchCombat.aimLatch && Using1stPersonWeaponCam()) {
-			Memory::callFunction("_ZN7CCamera21ClearPlayerWeaponModeEv",
+			eng::fn::CCamera_ClearPlayerWeaponMode(
 				&sa::getTheCamera());
 			if (pAimPed->m_ped->m_pPlayerData) {
 				pAimPed->m_ped->m_pPlayerData->m_bFreeAiming = false;
 			}
-			Memory::callFunction("_ZN10CPlayerPed17ClearWeaponTargetEv", pAimPed->m_ped);
+			eng::fn::CPlayerPed_ClearWeaponTarget( pAimPed->m_ped);
 		}
 	}
 }
@@ -1987,7 +1981,7 @@ DECL_HOOK(uint32_t, CPad_GetExitTargeting, uintptr_t _this)
 	}
 	CPlayerPed* pPed = GetAimableLocalPed();
 	if (pPed && !g_touchCombat.aimLatch && EngineIsAiming(pPed)) {
-		Memory::callFunction("_ZN10CPlayerPed17ClearWeaponTargetEv", pPed->m_ped);
+		eng::fn::CPlayerPed_ClearWeaponTarget( pPed->m_ped);
 		if (pPed->m_ped->m_pPlayerData) {
 			pPed->m_ped->m_pPlayerData->m_bFreeAiming = false;
 		}
@@ -2005,7 +1999,7 @@ DECL_HOOK(uint32_t, CCamera_IsTargetingActive, uintptr_t _this, sa::CPed* pPed)
 	else {
 		/* CCamera::IsTargetingActive */
 		sa::CCamera* TheCamera = &sa::getTheCamera();
-		bool bIsTargeting = Memory::callFunction<bool>("_ZN7CCamera17IsTargetingActiveEv", TheCamera);
+		bool bIsTargeting = eng::fn::CCamera_IsTargetingActive( TheCamera);
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_HANDBRAKE] = bIsTargeting;
 		return bIsTargeting;
 	}
@@ -2013,7 +2007,7 @@ DECL_HOOK(uint32_t, CCamera_IsTargetingActive, uintptr_t _this, sa::CPed* pPed)
 
 RwMatrix* RwMatrixOrthoNormalize(RwMatrix* matrixOut, const RwMatrix* matrixIn)
 {
-	return Memory::callFunction<RwMatrix*>("_Z22RwMatrixOrthoNormalizeP11RwMatrixTagPKS_", matrixOut, matrixIn);
+	return eng::fn::RwMatrixOrthoNormalize<RwMatrix*>( matrixOut, matrixIn);
 }
 
 void SendBulletSync(sa::CVector* vecOrigin, sa::CVector* vecPos, sa::CEntity** ppEntity)
@@ -2250,7 +2244,7 @@ bool ComputeDamageResponse(CPedDamageResponseCalculator* calculator, sa::CPed* p
 	}
 
 	sa::CPed* pDamager = calculator->m_pInflictor;
-	if (pDamager != pGamePed && (pPed && *(uintptr_t*) pPed == g_saSym->Abs<uintptr_t>(VER_x32 ? 0x668A94 : 0x831BA8))) { /* CCivilianPed */
+	if (pDamager != pGamePed && (pPed && *(uintptr_t*) pPed == g_saSym->Abs<uintptr_t>(addr::vptr$CCivilianPed))) { /* CCivilianPed */
 		return true;
 	}
 
@@ -2344,7 +2338,7 @@ DECL_HOOK(uint32_t, CBulletInfo_AddBullet, sa::CEntity* creator, int weaponType,
 	CBulletInfo_AddBullet(creator, weaponType, pos, velocity);
 
 	// CBulletInfo::Update
-	Memory::callFunction("_ZN11CBulletInfo6UpdateEv");
+	eng::fn::CBulletInfo_Update();
 	return true;
 }
 
@@ -2355,95 +2349,95 @@ void Hooks::installPadHooks()
 	memset(&LocalPlayerKeys, 0, sizeof(PAD_KEYS));
 
 	// playerped
-	HOOK("_ZN10CPlayerPed14ProcessControlEv", CPed_ProcessControl);
+	HOOK_SYM(CPlayerPed_ProcessControl, CPed_ProcessControl);
 
 	// vehicles
-	HOOK("_ZN11CAutomobile14ProcessControlEv", CAutomobile_ProcessControl);
-	HOOK("_ZN5CBoat14ProcessControlEv", CBoat_ProcessControl);
-	HOOK("_ZN5CBike14ProcessControlEv", CBike_ProcessControl);
-	HOOK("_ZN6CPlane14ProcessControlEv", CPlane_ProcessControl);
-	HOOK("_ZN5CHeli14ProcessControlEv", CHeli_ProcessControl);
-	HOOK("_ZN4CBmx14ProcessControlEv", CBmx_ProcessControl);
-	HOOK("_ZN13CMonsterTruck14ProcessControlEv", CMonsterTruck_ProcessControl);
-	HOOK("_ZN9CQuadBike14ProcessControlEv", CQuadBike_ProcessControl);
-	HOOK("_ZN6CTrain14ProcessControlEv", CTrain_ProcessControl);
-	HOOK("_ZN8CTrailer14ProcessControlEv", CTrailer_ProcessControl);
+	HOOK_SYM(CAutomobile_ProcessControl, CAutomobile_ProcessControl);
+	HOOK_SYM(CBoat_ProcessControl, CBoat_ProcessControl);
+	HOOK_SYM(CBike_ProcessControl, CBike_ProcessControl);
+	HOOK_SYM(CPlane_ProcessControl, CPlane_ProcessControl);
+	HOOK_SYM(CHeli_ProcessControl, CHeli_ProcessControl);
+	HOOK_SYM(CBmx_ProcessControl, CBmx_ProcessControl);
+	HOOK_SYM(CMonsterTruck_ProcessControl, CMonsterTruck_ProcessControl);
+	HOOK_SYM(CQuadBike_ProcessControl, CQuadBike_ProcessControl);
+	HOOK_SYM(CTrain_ProcessControl, CTrain_ProcessControl);
+	HOOK_SYM(CTrailer_ProcessControl, CTrailer_ProcessControl);
 
-	HOOK("_ZN4CPad19GetPedWalkLeftRightEv", CPad_GetPedWalkLeftRight);
-	HOOK("_ZN4CPad16GetPedWalkUpDownEv", CPad_GetPedWalkUpDown);
+	HOOK_SYM(CPad_GetPedWalkLeftRight, CPad_GetPedWalkLeftRight);
+	HOOK_SYM(CPad_GetPedWalkUpDown, CPad_GetPedWalkUpDown);
 
-	HOOK("_ZN4CPad9GetSprintEi", CPad_GetSprint);
+	HOOK_SYM(CPad_GetSprint, CPad_GetSprint);
 
-	HOOK("_ZN4CPad7GetJumpEv", CPad_GetJump);
-	HOOK("_ZN4CPad12JumpJustDownEv", CPad_JumpJustDown);
+	HOOK_SYM(CPad_GetJump, CPad_GetJump);
+	HOOK_SYM(CPad_JumpJustDown, CPad_JumpJustDown);
 
-	HOOK("_ZN4CPad7GetDuckEv", CPad_GetDuck);
-	HOOK("_ZN4CPad12DuckJustDownEP4CPed", CPad_DuckJustDown);
+	HOOK_SYM(CPad_GetDuck, CPad_GetDuck);
+	HOOK_SYM(CPad_DuckJustDown, CPad_DuckJustDown);
 
-	HOOK("_ZN4CPad19MeleeAttackJustDownEv", CPad_MeleeAttackJustDown);
-	HOOK("_ZN4CPad8GetBlockEv", CPad_GetBlock);
-	HOOK("_ZN23CTaskSimplePlayerOnFoot20PlayerControlFighterEP10CPlayerPed", CTaskSimplePlayerOnFoot_PlayerControlFighter);
-	HOOK("_ZN15CTouchInterface5ClearEv", CTouchInterface_Clear);
+	HOOK_SYM(CPad_MeleeAttackJustDown, CPad_MeleeAttackJustDown);
+	HOOK_SYM(CPad_GetBlock, CPad_GetBlock);
+	HOOK_SYM(CTaskSimplePlayerOnFoot_PlayerControlFighter, CTaskSimplePlayerOnFoot_PlayerControlFighter);
+	HOOK_SYM(CTouchInterface_Clear, CTouchInterface_Clear);
 
-	HOOK("_ZN17CWidgetRegionMove6UpdateEv", CWidgetRegionMove_Update);
-	HOOK("_ZN17CWidgetRegionMove24ClampInternalTouchAnchorEv", CWidgetRegionMove_ClampInternalTouchAnchor);
-	HOOK("_ZN17CWidgetRegionMove4DrawEv", CWidgetRegionMove_Draw);
-	HOOK("_ZN17CWidgetRegionMove9IsTouchedEP9CVector2D", CWidgetRegionMove_IsTouched);
+	HOOK_SYM(CWidgetRegionMove_Update, CWidgetRegionMove_Update);
+	HOOK_SYM(CWidgetRegionMove_ClampInternalTouchAnchor, CWidgetRegionMove_ClampInternalTouchAnchor);
+	HOOK_SYM(CWidgetRegionMove_Draw, CWidgetRegionMove_Draw);
+	HOOK_SYM(CWidgetRegionMove_IsTouched, CWidgetRegionMove_IsTouched);
 
 #if VER_x32
-	HOOK_ADDR(g_saSym->Abs(0x3FBBB8), CPad_GetAbortClimb, true);
+	HOOK_ADDR(g_saSym->Abs(addr::CPad_GetAbortClimb_arm32), CPad_GetAbortClimb, true);
 #else
-	HOOK("_ZN4CPad13GetAbortClimbEv", CPad_GetAbortClimb);
+	HOOK_SYM(CPad_GetAbortClimb, CPad_GetAbortClimb);
 #endif
-	HOOK("_ZN4CPad12GetAutoClimbEv", CPad_GetAutoClimb);
+	HOOK_SYM(CPad_GetAutoClimb, CPad_GetAutoClimb);
 
-	HOOK("_ZN4CPad16SwimJumpJustDownEv", CPad_SwimJumpJustDown);
-	HOOK("_ZN4CPad12DiveJustDownEv", CPad_DiveJustDown);
+	HOOK_SYM(CPad_SwimJumpJustDown, CPad_SwimJumpJustDown);
+	HOOK_SYM(CPad_DiveJustDown, CPad_DiveJustDown);
 
-	HOOK("_ZN4CPad17GetSteeringUpDownEv", CPad_GetSteeringUpDown);
-	HOOK("_ZN4CPad20GetSteeringLeftRightEv", CPad_GetSteeringLeftRight);
+	HOOK_SYM(CPad_GetSteeringUpDown, CPad_GetSteeringUpDown);
+	HOOK_SYM(CPad_GetSteeringLeftRight, CPad_GetSteeringLeftRight);
 
-	HOOK("_ZN4CPad12GetHandBrakeEv", CPad_GetHandBrake);
-	HOOK("_ZN4CPad8GetBrakeEv", CPad_GetBrake);
-	HOOK("_ZN4CPad13GetAccelerateEv", CPad_GetAccelerate);
-	HOOK("_ZN4CPad7GetHornEb", CPad_GetHorn);
+	HOOK_SYM(CPad_GetHandBrake, CPad_GetHandBrake);
+	HOOK_SYM(CPad_GetBrake, CPad_GetBrake);
+	HOOK_SYM(CPad_GetAccelerate, CPad_GetAccelerate);
+	HOOK_SYM(CPad_GetHorn, CPad_GetHorn);
 
-	HOOK("_ZN4CPad19ExitVehicleJustDownEbP8CVehiclebRK7CVector", CPad_ExitVehicleJustDown);
+	HOOK_SYM(CPad_ExitVehicleJustDown, CPad_ExitVehicleJustDown);
 
-	HOOK("_ZN4CPad14GetTurretRightEv", CPad_GetTurretRight);
-	HOOK("_ZN4CPad13GetTurretLeftEv", CPad_GetTurretLeft);
+	HOOK_SYM(CPad_GetTurretRight, CPad_GetTurretRight);
+	HOOK_SYM(CPad_GetTurretLeft, CPad_GetTurretLeft);
 
-	HOOK("_ZN4CPad16GetHydraulicJumpEv", CPad_GetHydraulicJump);
-	HOOK("_ZN4CPad13GetNitroFiredEv", CPad_GetNitroFired);
+	HOOK_SYM(CPad_GetHydraulicJump, CPad_GetHydraulicJump);
+	HOOK_SYM(CPad_GetNitroFired, CPad_GetNitroFired);
 
 	Memory::hookBL(g_saSym->Abs(addr::CTaskComplexEnterCarAsDriver_Branch1), (void*) &CTaskComplexEnterCarAsDriver_hook, (void**) &CTaskComplexEnterCarAsDriver);
 	Memory::hookBL(g_saSym->Abs(addr::CTaskComplexLeaveCar_Branch1), (void*) &CTaskComplexLeaveCar_hook, (void**) &CTaskComplexLeaveCar);
 	Memory::hookBL(g_saSym->Abs(addr::CTaskComplexLeaveCar_Branch2), (void*) &CTaskComplexLeaveCar_hook, (void**) &CTaskComplexLeaveCar);
 
-	HOOK("_ZN17CTaskSimpleUseGun14SetPedPositionEP4CPed", CTaskSimpleUseGun_SetPedPosition);
-	HOOK("_ZN11CPlayerInfo7ProcessEi", CPlayerInfo_Process);
-	HOOK("_ZN23CTaskSimplePlayerOnFoot13MakeAbortableEP4CPediPK6CEvent", CTaskSimplePlayerOnFoot_MakeAbortable);
+	HOOK_SYM(CTaskSimpleUseGun_SetPedPosition, CTaskSimpleUseGun_SetPedPosition);
+	HOOK_SYM(CPlayerInfo_Process, CPlayerInfo_Process);
+	HOOK_SYM(CTaskSimplePlayerOnFoot_MakeAbortable, CTaskSimplePlayerOnFoot_MakeAbortable);
 
-	HOOK("_ZN4CPad24CycleWeaponRightJustDownEv", CPad_CycleWeaponRightJustDown);
-	HOOK("_ZN4CPad23CycleWeaponLeftJustDownEv", CPad_CycleWeaponLeftJustDown);
-	HOOK("_ZN4CPad9GetWeaponEP4CPedb", CPad_GetWeapon);
-	HOOK("_ZN4CPad14WeaponJustDownEP4CPedbb", CPad_WeaponJustDown);
-	HOOK("_ZN7CCamera17IsTargetingActiveEP10CPlayerPed", CCamera_IsTargetingActive);
-	HOOK("_ZN4CPad17GetEnterTargetingEv", CPad_GetEnterTargeting);
-	HOOK("_ZN4CPad16GetExitTargetingEv", CPad_GetExitTargeting);
+	HOOK_SYM(CPad_CycleWeaponRightJustDown, CPad_CycleWeaponRightJustDown);
+	HOOK_SYM(CPad_CycleWeaponLeftJustDown, CPad_CycleWeaponLeftJustDown);
+	HOOK_SYM(CPad_GetWeapon, CPad_GetWeapon);
+	HOOK_SYM(CPad_WeaponJustDown, CPad_WeaponJustDown);
+	HOOK_SYM(CCamera_IsTargetingActivePed, CCamera_IsTargetingActive);
+	HOOK_SYM(CPad_GetEnterTargeting, CPad_GetEnterTargeting);
+	HOOK_SYM(CPad_GetExitTargeting, CPad_GetExitTargeting);
 
 	Memory::hookBL(g_saSym->Abs(addr::CWeapon_FireInstantHit_branch1), (void*) &CWeapon_FireInstantHit_hook, (void**) &CWeapon_FireInstantHit);
 	Memory::hookBL(g_saSym->Abs(addr::CWeapon_FireInstantHit_branch2), (void*) &CWeapon_FireInstantHit_hook, (void**) &CWeapon_FireInstantHit);
 
-	HOOK("_ZN7CWeapon14FireInstantHitEP7CEntityP7CVectorS3_S1_S3_S3_bb", CWeapon_FireInstantHit_full);
-	HOOK("_ZN7CWeapon10FireSniperEP4CPedP7CEntityP7CVector", CWeapon_FireSniper);
+	HOOK_SYM(CWeapon_FireInstantHit, CWeapon_FireInstantHit_full);
+	HOOK_SYM(CWeapon_FireSniper, CWeapon_FireSniper);
 
-	ghook_CWorld_ProcessLineOfSight = HOOK("_ZN6CWorld18ProcessLineOfSightERK7CVectorS2_R9CColPointRP7CEntitybbbbbbbb", CWorld_ProcessLineOfSight);
+	ghook_CWorld_ProcessLineOfSight = HOOK_SYM(CWorld_ProcessLineOfSight, CWorld_ProcessLineOfSight);
 	// Kept permanently enabled; gated by g_bEnableLineOfSightHook inside the hook
 	// instead of runtime GlossHookEnable/Disable self-modifying code.
 
-	HOOK("_ZN11CBulletInfo6UpdateEv", CBulletInfo_Update);
-	HOOK("_ZN28CPedDamageResponseCalculator21ComputeDamageResponseEP4CPedR18CPedDamageResponseb", CPedDamageResponseCalculator_ComputeDamageResponse);
-	HOOK("_ZN11CBulletInfo9AddBulletEP7CEntity11eWeaponType7CVectorS3_", CBulletInfo_AddBullet);
+	HOOK_SYM(CBulletInfo_Update, CBulletInfo_Update);
+	HOOK_SYM(CPedDamageResponseCalculator_ComputeDamageResponse, CPedDamageResponseCalculator_ComputeDamageResponse);
+	HOOK_SYM(CBulletInfo_AddBullet, CBulletInfo_AddBullet);
 
 }

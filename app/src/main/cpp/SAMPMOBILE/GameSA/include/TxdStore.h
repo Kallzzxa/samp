@@ -7,37 +7,37 @@ class CTxdStore {
 public:
 	static void PushCurrentTxd()
 	{
-		Memory::callFunction("_ZN9CTxdStore14PushCurrentTxdEv");
+		eng::fn::CTxdStore_PushCurrentTxd();
 	}
 
 	static void PopCurrentTxd()
 	{
-		Memory::callFunction("_ZN9CTxdStore13PopCurrentTxdEv");
+		eng::fn::CTxdStore_PopCurrentTxd();
 	}
 
 	static int32_t FindTxdSlot(char const* pName)
 	{
-		return Memory::callFunction<int32_t>("_ZN9CTxdStore11FindTxdSlotEPKc", pName);
+		return eng::fn::CTxdStore_FindTxdSlot( pName);
 	}
 
 	static void SetCurrentTxd(int index, const char* dbOverride = 0)
 	{
-		Memory::callFunction("_ZN9CTxdStore13SetCurrentTxdEiPKc", index, dbOverride);
+		eng::fn::CTxdStore_SetCurrentTxd( index, dbOverride);
 	}
 
 	static int32_t AddTxdSlot(const char* pName, const char* dbName, bool keepCPU = false)
 	{
-		return Memory::callFunction<int32_t>("_ZN9CTxdStore10AddTxdSlotEPKcS1_b", pName, dbName, keepCPU);
+		return eng::fn::CTxdStore_AddTxdSlot( pName, dbName, keepCPU);
 	}
 
 	static void AddRef(int index)
 	{
-		Memory::callFunction("_ZN9CTxdStore6AddRefEi", index);
+		eng::fn::CTxdStore_AddRef( index);
 	}
 
 	static RwTexDictionary* GetTxdParent(RwTexDictionary* pTxd)
 	{
-		return Memory::callFunction<RwTexDictionary*>("_ZN9CTxdStore12GetTxdParentEP15RwTexDictionary", pTxd);
+		return eng::fn::CTxdStore_GetTxdParent<RwTexDictionary*>( pTxd);
 	}
 };
 }

@@ -223,19 +223,19 @@ std::string ReplaceKey(const std::string& input)
 uint32_t GamePool_Vehicle_GetIndex(sa::CVehicle* pVehicle)
 {
 	//spdlog::info("GamePool_Vehicle_GetIndex: 0x{:X}", reinterpret_cast<uintptr_t>(pVehicle));
-	return Memory::callFunction<uint32_t>("_Z18GettPoolVehicleRefP8CVehicle", pVehicle);
+	return eng::fn::GettPoolVehicleRef( pVehicle);
 }
 
 sa::CPed* GamePool_Ped_GetAt(int slot)
 {
 	//spdlog::info("GamePool_Ped_GetAt: {}", slot);
-	return Memory::callFunction<sa::CPed*>("_Z10GetPoolPedi", slot);
+	return eng::fn::GetPoolPed<sa::CPed*>( slot);
 }
 
 sa::CObject* GamePool_Object_GetAt(int iID)
 {
 	//spdlog::info("GamePool_Object_GetAt: {}", iID);
-	return Memory::callFunction<sa::CObject*>("_Z10GetPoolObji", iID);
+	return eng::fn::GetPoolObj<sa::CObject*>( iID);
 }
 
 /**
@@ -317,7 +317,7 @@ float subAngle(float a1, float a2)
 
 void DefinedState()
 {
-	Memory::callFunction("_Z12DefinedStatev");
+	eng::fn::DefinedState();
 }
 
 /**
@@ -367,7 +367,7 @@ int GetVehicleSubtype(sa::CVehicle* pGtaVehicle)
 void SetRenderWareCamera(RwCamera* camera)
 {
 	// CVisibilityPlugins::SetRenderWareCamera
-	Memory::callFunction("_ZN18CVisibilityPlugins19SetRenderWareCameraEP8RwCamera", camera);
+	eng::fn::CVisibilityPlugins_SetRenderWareCamera( camera);
 }
 
 void rpWorldAddCamera(RwCamera* camera)
@@ -456,7 +456,7 @@ sa::CBaseModelInfo* GetModelInfoByID(int iModelID)
 		return nullptr;
 	}
 
-	auto modelInfoPtrs = g_saSym->GetSymbol<sa::CBaseModelInfo**>("_ZN10CModelInfo16ms_modelInfoPtrsE");
+	auto modelInfoPtrs = eng::as<sa::CBaseModelInfo**>(eng::Sym::CModelInfo_ms_modelInfoPtrs);
 
 	if (!modelInfoPtrs) {
 		spdlog::error("Failed to retrieve model info pointers.");
@@ -561,7 +561,7 @@ int GetModelRefCounts(int iModel)
 int GamePool_Ped_GetIndex(sa::CPed* pActor)
 {
 	//spdlog::info("GamePool_Ped_GetIndex: 0x{:X}", reinterpret_cast<uintptr_t>(pActor));
-	return Memory::callFunction<int>("_Z14GettPoolPedRefP4CPed", pActor);
+	return eng::fn::GettPoolPedRef( pActor);
 }
 
 /**
@@ -571,7 +571,7 @@ int GamePool_Ped_GetIndex(sa::CPed* pActor)
 sa::CVehicle* GamePool_Vehicle_GetAt(int iID)
 {
 	//spdlog::info("GamePool_Vehicle_GetAt: {}", iID);
-	return Memory::callFunction<sa::CVehicle*>("_Z14GetPoolVehiclei", iID);
+	return eng::fn::GetPoolVehicle<sa::CVehicle*>( iID);
 }
 
 /**
@@ -620,16 +620,16 @@ void DestroyAtomicOrClump(RwObject* rwObject)
 		if (type == 1) {
 			void* parent = rwObject->parent;
 			// RpAtomicDestroy
-			Memory::callFunction("_Z15RpAtomicDestroyP8RpAtomic", rwObject);
+			eng::fn::RpAtomicDestroy( rwObject);
 
 			if (parent) {
 				// RwFrameDestroy
-				Memory::callFunction("_Z14RwFrameDestroyP7RwFrame", parent);
+				eng::fn::RwFrameDestroy( parent);
 			}
 		}
 		else if (type == 2) {
 			// RpClumpDestroy
-			Memory::callFunction("_Z14RpClumpDestroyP7RpClump", rwObject);
+			eng::fn::RpClumpDestroy( rwObject);
 		}
 	}
 }
@@ -662,7 +662,7 @@ static sa::CVector g_axis[3] = {
 
 int RwMatrixRotate(RwMatrix* mat, int axis, float angle)
 {
-	return Memory::callFunction<int>("_Z14RwMatrixRotateP11RwMatrixTagPK5RwV3df15RwOpCombineType", mat, &g_axis[axis], angle, rwCOMBINEPRECONCAT);
+	return eng::fn::RwMatrixRotate( mat, &g_axis[axis], angle, rwCOMBINEPRECONCAT);
 }
 
 void RwMatrixScale(RwMatrix* mat, sa::CVector* vecScale)
@@ -770,7 +770,7 @@ bool IsEntityPlaceable(sa::CEntity* pEntity)
 void CalcScreenCoors(const RwV3d* In, RwV3d* pResult, float pScaleX, float pScaleY, bool ClipFarPlane, bool ClipNearPlane)
 {
 	// CSprite::CalcScreenCoors(RwV3d const&,RwV3d*,float *,float *,bool,bool)
-	Memory::callFunction("_ZN7CSprite15CalcScreenCoorsERK5RwV3dPS0_PfS4_bb", In, pResult, &pScaleX, &pScaleY, ClipFarPlane, ClipNearPlane);
+	eng::fn::CSprite_CalcScreenCoors( In, pResult, &pScaleX, &pScaleY, ClipFarPlane, ClipNearPlane);
 }
 
 // widget fix
@@ -778,11 +778,8 @@ uintptr_t* g_pWidgets;
 
 uintptr_t* GetTouchWidgets()
 {
-	if (g_saSym) {
-		uintptr_t** pGotSlot = g_saSym->Abs<uintptr_t**>(VER_x32 ? 0x679474 : 0x850910);
-		if (pGotSlot && *pGotSlot) {
-			g_pWidgets = *pGotSlot;
-		}
+	if (uintptr_t* liveWidgets = eng::live::touchWidgets()) {
+		g_pWidgets = liveWidgets;
 	}
 	return g_pWidgets;
 }
@@ -996,12 +993,12 @@ void EnsureTouchWidgetsCreated()
 	if (!widgets) return;
 	if (!widgets[sa::WidgetIDs::WIDGET_ATTACK]) {
 		spdlog::info("Touch widgets missing, forcing CreateAll");
-		Memory::callFunction("_ZN15CTouchInterface9CreateAllEv");
+		eng::fn::CTouchInterface_CreateAll();
 		widgets = GetTouchWidgets();
 		if (!widgets) return;
 	}
 	// resolve hit-test rects (Adjustable.cfg is absent on fresh installs)
-	Memory::callFunction("_ZN15CTouchInterface27RepositionAdjustableWidgetsEv");
+	eng::fn::CTouchInterface_RepositionAdjustableWidgets();
 	FixTouchWidgetLayout();
 
 	// widget 0x20 (crouch) is never instantiated by the engine —
@@ -1021,10 +1018,10 @@ void EnsureTouchWidgetsCreated()
 		void* mem = ::operator new(200);
 		if (mem) {
 			memset(mem, 0, 200);
-			Memory::callFunction("_ZN13CWidgetButtonC1EPKcRK14WidgetPositionjj10HIDMapping",
+			eng::fn::CWidgetButton_CWidgetButton(
 				mem, "hud_crouch", pos, 1u, 0x40u, 4u);
 			widgets[sa::WidgetIDs::WIDGET_BUTTON_CROUCH] = reinterpret_cast<uintptr_t>(mem);
-			Memory::callFunction("_ZN7CWidget6UpdateEv", reinterpret_cast<uintptr_t>(mem));
+			eng::fn::CWidget_Update( reinterpret_cast<uintptr_t>(mem));
 			spdlog::info("crouch button widget created pos=({},{},{},{})",
 				pos[0], pos[1], pos[2], pos[3]);
 		}
@@ -1044,10 +1041,10 @@ void EnsureTouchWidgetsCreated()
 		void* mem = ::operator new(200);
 		if (mem) {
 			memset(mem, 0, 200);
-			Memory::callFunction("_ZN13CWidgetButtonC1EPKcRK14WidgetPositionjj10HIDMapping",
+			eng::fn::CWidgetButton_CWidgetButton(
 				mem, "hud_lockon", pos, 1u, 0u, 36u);
 			widgets[sa::WidgetIDs::WIDGET_CAR_CHEATS] = reinterpret_cast<uintptr_t>(mem);
-			Memory::callFunction("_ZN7CWidget6UpdateEv", reinterpret_cast<uintptr_t>(mem));
+			eng::fn::CWidget_Update( reinterpret_cast<uintptr_t>(mem));
 			spdlog::info("aim button widget created pos=({},{},{},{})",
 				pos[0], pos[1], pos[2], pos[3]);
 		}
@@ -1067,10 +1064,10 @@ void EnsureTouchWidgetsCreated()
 		void* mem = ::operator new(200);
 		if (mem) {
 			memset(mem, 0, 200);
-			Memory::callFunction("_ZN13CWidgetButtonC1EPKcRK14WidgetPositionjj10HIDMapping",
+			eng::fn::CWidgetButton_CWidgetButton(
 				mem, "punch", pos, 1u, 0u, 4u);
 			widgets[sa::WidgetIDs::WIDGET_MISSION_SKIP] = reinterpret_cast<uintptr_t>(mem);
-			Memory::callFunction("_ZN7CWidget6UpdateEv", reinterpret_cast<uintptr_t>(mem));
+			eng::fn::CWidget_Update( reinterpret_cast<uintptr_t>(mem));
 			spdlog::info("block button widget created pos=({},{},{},{})",
 				pos[0], pos[1], pos[2], pos[3]);
 		}
@@ -1172,12 +1169,12 @@ void RenderClumpOrAtomic(uintptr_t rwObject)
 		if (*(uint8_t*) rwObject == 1) {
 			// Atomic
 			spdlog::info("Render Atomic!");
-			Memory::callFunction("_Z27AtomicDefaultRenderCallBackP8RpAtomic", rwObject);
+			eng::fn::AtomicDefaultRenderCallBack( rwObject);
 		}
 		else if (*(uint8_t*) rwObject == 2) {
 			spdlog::info("Render Clump!");
 			// rpClumpRender
-			Memory::callFunction("_Z13RpClumpRenderP7RpClump", rwObject);
+			eng::fn::RpClumpRender( rwObject);
 		}
 	}
 }
@@ -1186,5 +1183,5 @@ void ProcessLineOfSight(sa::CVector* vecStart, sa::CVector* vecEnd, sa::CColPoin
 		bool bCheckBuildings, bool bCheckVehicles, int bCheckPeds, bool bCheckObjects, bool bCheckDummies, bool bSeeThroughStuff, bool bIgnoreSomeObjectsForCamera, bool bShootThroughStuff)
 {
 	// CWorld::ProcessLineOfSight(CVector const&,CVector const&,CColPoint &,CEntity *&,bool,bool,bool,bool,bool,bool,bool,bool)
-	Memory::callFunction("_ZN6CWorld18ProcessLineOfSightERK7CVectorS2_R9CColPointRP7CEntitybbbbbbbb", vecStart, vecEnd, colPoint, refEntityPtr, bCheckBuildings, bCheckVehicles, bCheckPeds, bCheckObjects, bCheckDummies, bSeeThroughStuff, bIgnoreSomeObjectsForCamera, bShootThroughStuff);
+	eng::fn::CWorld_ProcessLineOfSight( vecStart, vecEnd, colPoint, refEntityPtr, bCheckBuildings, bCheckVehicles, bCheckPeds, bCheckObjects, bCheckDummies, bSeeThroughStuff, bIgnoreSomeObjectsForCamera, bShootThroughStuff);
 }

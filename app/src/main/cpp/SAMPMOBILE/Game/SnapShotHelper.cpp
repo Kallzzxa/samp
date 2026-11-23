@@ -105,7 +105,7 @@ RwTexture* SnapShotHelper::CreatePedSnapShot(int iModel, uint32_t dwColor, sa::C
 	if (pPed->m_actor) {
 		if (pPed->m_actor->m_pRpClump) {
 			// RpAnimBlendClumpUpdateAnimations
-			Memory::callFunction("_Z32RpAnimBlendClumpUpdateAnimationsP7RpClumpfb", pPed->m_actor->m_pRpClump, 100.0f, true);
+			eng::fn::RpAnimBlendClumpUpdateAnimations( pPed->m_actor->m_pRpClump, 100.0f, true);
 		}
 	}
 

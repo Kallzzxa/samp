@@ -28,7 +28,7 @@ void CEntity::Add()
 		m_entity->SetTurnSpeed(vec);
 
 		// CWorld::add
-		Memory::callFunction<void>("_ZN6CWorld3AddEP7CEntity", m_entity);
+		eng::fn::CWorld_Add( m_entity);
 
 		RwMatrix mat = m_entity->GetMatrix().ToRwMatrix();
 		TeleportTo(mat.pos.x, mat.pos.y, mat.pos.z);
@@ -46,7 +46,7 @@ void CEntity::Remove()
 
 	if (m_entity->m_pMovingList) {
 		// CWorld::Remove
-		Memory::callFunction<void>("_ZN6CWorld6RemoveEP7CEntity", m_entity);
+		eng::fn::CWorld_Remove( m_entity);
 	}
 }
 
@@ -280,10 +280,10 @@ void CEntity::UpdateRwMatrixAndFrame()
 				RwMatrix* pRwMatrix = RwFrameGetMatrix(RwFrameGetParent(m_entity->m_pRwObject));
 
 				// CMatrix::UpdateRwMatrix(const CMatrix *this, RwMatrix *pRwMatrix)
-				Memory::callFunction<void>("_ZNK7CMatrix14UpdateRwMatrixEP11RwMatrixTag", m_entity->m_matrix, pRwMatrix);
+				eng::fn::CMatrix_UpdateRwMatrix( m_entity->m_matrix, pRwMatrix);
 
 				// CEntity::UpdateRwFrame(CEntity *this)
-				Memory::callFunction<void>("_ZN7CEntity13UpdateRwFrameEv", m_entity);
+				eng::fn::CEntity_UpdateRwFrame( m_entity);
 			}
 		}
 	}
@@ -301,7 +301,7 @@ void CEntity::Render()
 	int iModel = m_entity->m_nModelIndex;
 	if (iModel >= 400 && iModel <= 611 && m_entity->m_pRwObject) {
 		// CVisibilityPlugins::SetupVehicleVariables
-		Memory::callFunction("_ZN18CVisibilityPlugins21SetupVehicleVariablesEP7RpClump", m_entity->m_pRwObject);
+		eng::fn::CVisibilityPlugins_SetupVehicleVariables( m_entity->m_pRwObject);
 	}
 
 	// CEntity::PreRender
@@ -309,7 +309,7 @@ void CEntity::Render()
 
 	if (m_entity->m_pRwObject) {
 		// CRenderer::RenderOneNonRoad
-		Memory::callFunction("_ZN9CRenderer16RenderOneNonRoadEP7CEntity", m_entity);
+		eng::fn::CRenderer_RenderOneNonRoad( m_entity);
 	}
 }
 

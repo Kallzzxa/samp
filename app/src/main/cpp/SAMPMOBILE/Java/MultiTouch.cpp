@@ -223,36 +223,36 @@ void MultiTouch::initialize()
 
 	// Points
 	memset(g_points, 0, 999 * sizeof(int));
-	Memory::protectAddr(g_saSym->Abs(VER_x32 ? 0x679E90 : 0x851D38));
-	*g_saSym->Abs<int**>(VER_x32 ? 0x679E90 : 0x851D38) = &g_points[0];
+	Memory::protectAddr(g_saSym->Abs(addr::GOT_MultiTouch_points));
+	*g_saSym->Abs<int**>(addr::GOT_MultiTouch_points) = &g_points[0];
 
 	// pointers
 	memset(g_pointers, 0, 999 * sizeof(int));
-	Memory::protectAddr(g_saSym->Abs(VER_x32 ? 0x6D7178 : 0x8B5028));
-	*g_saSym->Abs<int**>(VER_x32 ? 0x6D7178 : 0x8B5028) = &g_pointers[0];
+	Memory::protectAddr(g_saSym->Abs(addr::GOT_MultiTouch_pointers));
+	*g_saSym->Abs<int**>(addr::GOT_MultiTouch_pointers) = &g_pointers[0];
 
 #if VER_x32
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x26B03C), (uintptr_t) "\x04\x20", 2); // OS_PointerGetNumber
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x26B046), (uintptr_t) "\x04\x28", 2); // OS_PointerGetType
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x2700AC), (uintptr_t) "\x03\x28", 2); // LIB_PointerGetCoordinates
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x270118), (uintptr_t) "\x03\x28", 2); // LIB_PointerGetWheel
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x270164), (uintptr_t) "\x03\x28", 2); // LIB_PointerDoubleClicked
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x2700F2), (uintptr_t) "\x03\x2A", 2); // LIB_PointerGetButton
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::OS_PointerGetNumber_patch), (uintptr_t) "\x04\x20", 2);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::OS_PointerGetType_patch), (uintptr_t) "\x04\x28", 2);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetCoordinates_patch), (uintptr_t) "\x03\x28", 2);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetWheel_patch), (uintptr_t) "\x03\x28", 2);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerDoubleClicked_patch), (uintptr_t) "\x03\x28", 2);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetButton_patch), (uintptr_t) "\x03\x2A", 2);
 #else
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x320844), (uintptr_t) "\x80\x00\x80\x52", 4); // OS_PointerGetNumber
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x320850), (uintptr_t) "\x1F\x10\x00\x71", 4); // OS_PointerGetType
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x326FEC), (uintptr_t) "\x1F\x0C\x00\x71", 4); // LIB_PointerGetCoordinates
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x32706C), (uintptr_t) "\x1F\x0C\x00\x71", 4); // LIB_PointerGetWheel
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x3270AC), (uintptr_t) "\x1F\x0C\x00\x71", 4); // LIB_PointerDoubleClicked
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x327040), (uintptr_t) "\x1F\x0D\x00\x71", 4); // LIB_PointerGetButton
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::OS_PointerGetNumber_patch), (uintptr_t) "\x80\x00\x80\x52", 4);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::OS_PointerGetType_patch), (uintptr_t) "\x1F\x10\x00\x71", 4);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetCoordinates_patch), (uintptr_t) "\x1F\x0C\x00\x71", 4);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetWheel_patch), (uintptr_t) "\x1F\x0C\x00\x71", 4);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerDoubleClicked_patch), (uintptr_t) "\x1F\x0C\x00\x71", 4);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetButton_patch), (uintptr_t) "\x1F\x0D\x00\x71", 4);
 #endif
 
 	// Resolve live _Z14AND_TouchEventiiii entry point so touches flow through
 	// AML plugins hooked after Hooks::install() (e.g. libFPP64.so) and chain into AND_TouchEvent_hook.
-	g_fnAndTouchEvent = g_saSym->GetSymbol<FnAndTouchEvent>("_Z14AND_TouchEventiiii");
+	g_fnAndTouchEvent = eng::as<FnAndTouchEvent>(eng::Sym::AND_TouchEvent);
 
 	// NVEventGetNextEvent
-	HOOK("_Z19NVEventGetNextEventP7NVEventi", NVEventGetNextEvent);
+	HOOK_SYM(NVEventGetNextEvent, NVEventGetNextEvent);
 }
 
 extern "C"

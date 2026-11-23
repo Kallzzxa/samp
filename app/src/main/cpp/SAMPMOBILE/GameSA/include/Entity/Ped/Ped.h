@@ -489,22 +489,22 @@ public:
 
 	void ClearWeapons()
 	{
-		Memory::callFunction("_ZN4CPed12ClearWeaponsEv", this);
+		eng::fn::CPed_ClearWeapons( this);
 	}
 
 	void SetInitialState(bool bReplay)
 	{
-		Memory::callFunction("_ZN10CPlayerPed15SetInitialStateEb", this, bReplay);
+		eng::fn::CPlayerPed_SetInitialState( this, bReplay);
 	}
 
 	void SetCurrentWeapon(uint8 type)
 	{
-		Memory::callFunction("_ZN4CPed16SetCurrentWeaponE11eWeaponType", this, type);
+		eng::fn::CPed_SetCurrentWeapon( this, type);
 	}
 
 	void GetBonePosition(RwV3d* posn, uint32 boneTag, bool bCalledFromCamera)
 	{
-		Memory::callFunction("_ZN4CPed15GetBonePositionER5RwV3djb", this, posn, boneTag, bCalledFromCamera);
+		eng::fn::CPed_GetBonePosition( this, posn, boneTag, bCalledFromCamera);
 	}
 };
 VALIDATE_SIZE(CPed, (VER_x32 ? 0x7A4 : 0x988));

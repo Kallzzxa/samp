@@ -87,6 +87,19 @@ inline static void* hook(const char* symbol, void* hook_func, void** orig_func)
 	return h;
 }
 
+inline static void* hookSym(void* sym, void* hook_func, void** orig_func, const char* label)
+{
+	if (!sym) {
+		spdlog::error("HOOK FAILED (symbol missing): {}", label ? label : "?");
+		return nullptr;
+	}
+	void* h = GlossHook(sym, hook_func, orig_func);
+	if (!h) {
+		spdlog::error("HOOK FAILED: {} sym={} handle=0x0", label ? label : "?", fmt::ptr(sym));
+	}
+	return h;
+}
+
 inline static void hook(void* addr, void* hook_func, void** orig_func, bool isShortFunc = false)
 {
 #ifdef __aarch64__

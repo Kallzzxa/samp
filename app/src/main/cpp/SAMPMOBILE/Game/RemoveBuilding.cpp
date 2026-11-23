@@ -31,10 +31,10 @@ void RemoveBuilding::removeObjectInRange(uint32_t model, sa::CVector pos, float 
 
 	typedef sa::CPool<uint8_t, uint8_t> RawPool;
 
-	auto scanPool = [&](const char* sym, size_t elemStride) {
-		auto** ppPool = g_saSym->GetSymbol<RawPool**>(sym);
+	auto scanPool = [&](eng::Sym sym, size_t elemStride) {
+		auto** ppPool = eng::as<RawPool**>(sym);
 		if (!ppPool || !*ppPool) {
-			spdlog::error("RemoveBuilding::removeObjectInRange: {} is null", sym);
+			spdlog::error("RemoveBuilding::removeObjectInRange: {} is null", eng::name(sym));
 			return;
 		}
 		RawPool* pool = *ppPool;
@@ -48,7 +48,7 @@ void RemoveBuilding::removeObjectInRange(uint32_t model, sa::CVector pos, float 
 			if (model == static_cast<uint32_t>(-1) || pEntity->m_nModelIndex == model) {
 				float fDistance = sa::DistanceBetweenPoints(pEntity->GetPosition(), pos);
 				if (fDistance <= radius) {
-					Memory::callFunction<void>("_ZN9CPlantMgr22_ColEntityCache_RemoveEP7CEntity", pEntity);
+					eng::fn::CPlantMgr_ColEntityCache_Remove( pEntity);
 					if (pEntity->m_matrix) {
 						pEntity->m_matrix->m_pos.z -= 2000.0f;
 					}
@@ -64,9 +64,9 @@ void RemoveBuilding::removeObjectInRange(uint32_t model, sa::CVector pos, float 
 	constexpr size_t kDummyStride    = VER_x32 ? 60 : 96;
 	constexpr size_t kObjectStride   = VER_x32 ? 420 : 544;
 
-	scanPool("_ZN6CPools16ms_pBuildingPoolE", kBuildingStride);
-	scanPool("_ZN6CPools13ms_pDummyPoolE",    kDummyStride);
-	scanPool("_ZN6CPools14ms_pObjectPoolE",   kObjectStride);
+	scanPool(eng::Sym::CPools_ms_pBuildingPool, kBuildingStride);
+	scanPool(eng::Sym::CPools_ms_pDummyPool,    kDummyStride);
+	scanPool(eng::Sym::CPools_ms_pObjectPool,   kObjectStride);
 }
 
 class COccluder {
@@ -149,8 +149,8 @@ void RemoveBuilding::installHooks()
 {
 	spdlog::info("Installing remove building hooks...");
 
-	aOccluders = g_saSym->GetSymbol<COccluder*>("_ZN10COcclusion10aOccludersE");
-	pNumOccludersOnMap = g_saSym->GetSymbol<int32_t*>("_ZN10COcclusion17NumOccludersOnMapE");
+	aOccluders = eng::as<COccluder*>(eng::Sym::COcclusion_aOccluders);
+	pNumOccludersOnMap = eng::as<int32_t*>(eng::Sym::COcclusion_NumOccludersOnMap);
 
-	HOOK("_ZN11CFileLoader18LoadObjectInstanceEP19CFileObjectInstancePKc", CFileLoader_LoadObjectInstance);
+	HOOK_SYM(CFileLoader_LoadObjectInstance, CFileLoader_LoadObjectInstance);
 }

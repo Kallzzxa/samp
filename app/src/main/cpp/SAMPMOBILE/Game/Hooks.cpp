@@ -320,7 +320,7 @@ DECL_HOOK(sa::CPedModelInfo *, CModelInfo_AddPedModel, int id)
 {
 	if (id < 0 || id >= 25000) return nullptr;
 	auto model = new sa::CPedModelInfo{};
-	model->vtable = g_saSym->GetVmtFunction<uintptr_t>("_ZTV13CPedModelInfo", 1, true); // CPedModelInfo::~CPedModelInfo
+	model->vtable = eng::vmtSlot(eng::Sym::vtable_CPedModelInfo, 1); // CPedModelInfo::~CPedModelInfo
 
 	typedef sa::CStore<sa::CPedModelInfo, 278> PedModelStore;
 	auto ms_pedModelStore = g_saSym->Abs<PedModelStore *>(addr::ms_pedModelStore);
@@ -338,7 +338,7 @@ DECL_HOOK(sa::CAtomicModelInfo *, CModelInfo_AddAtomicModel, int id)
 {
 	if (id < 0 || id >= 25000) return nullptr;
 	auto model = new sa::CAtomicModelInfo{};
-	model->vtable = g_saSym->GetVmtFunction<uintptr_t>("_ZTV16CAtomicModelInfo", 1, true); // CAtomicModelInfo::~CAtomicModelInfo
+	model->vtable = eng::vmtSlot(eng::Sym::vtable_CAtomicModelInfo, 1); // CAtomicModelInfo::~CAtomicModelInfo
 
 	typedef sa::CStore<sa::CAtomicModelInfo, 14000> AtomicModelStore;
 	auto ms_atomicModelStore = g_saSym->Abs<AtomicModelStore *>(addr::ms_atomicModelStore);
@@ -496,10 +496,10 @@ DECL_HOOK(RwTexture *, CTxdStore_TxdStoreFindCB, const char *texture_name)
 		}
 	}
 
-	RwTexDictionary *current = Memory::callFunction<RwTexDictionary *>("_Z25RwTexDictionaryGetCurrentv");
+	RwTexDictionary *current = eng::fn::RwTexDictionaryGetCurrent<RwTexDictionary *>();
 	while (current)
 	{
-		RwTexture *texture = Memory::callFunction<RwTexture *>("_Z31RwTexDictionaryFindNamedTextureP15RwTexDictionaryPKc", current, texture_name);
+		RwTexture *texture = eng::fn::RwTexDictionaryFindNamedTexture<RwTexture *>( current, texture_name);
 		if (texture)
 		{
 			return texture;
@@ -555,7 +555,7 @@ DECL_HOOK(void, CStreaming_InitImageList)
 {
 	spdlog::info("Initializing image list...");
 
-	CStreaming_ms_files = g_saSym->GetSymbol<CStreamingFile *>("_ZN10CStreaming8ms_filesE");
+	CStreaming_ms_files = eng::as<CStreamingFile *>(eng::Sym::CStreaming_ms_files);
 
 	if (CStreaming_ms_files)
 	{
@@ -572,13 +572,13 @@ DECL_HOOK(void, CStreaming_InitImageList)
 		if (ModLoader::isEnabled() && ModLoader::hasVirtualModelsImg())
 		{
 			spdlog::info("ModLoader: registering virtual IMG '{}'", ModLoader::virtualModelsImgRelPath());
-			Memory::callFunction<void>("_ZN10CStreaming14AddImageToListEPKcb", ModLoader::virtualModelsImgRelPath(), true);
+			eng::fn::CStreaming_AddImageToList( ModLoader::virtualModelsImgRelPath(), true);
 		}
 
-		Memory::callFunction<void>("_ZN10CStreaming14AddImageToListEPKcb", "TEXDB\\SAMPCOL.IMG", true);
-		Memory::callFunction<void>("_ZN10CStreaming14AddImageToListEPKcb", "TEXDB\\GTA3.IMG", true);
-		Memory::callFunction<void>("_ZN10CStreaming14AddImageToListEPKcb", "TEXDB\\GTA_INT.IMG", true);
-		Memory::callFunction<void>("_ZN10CStreaming14AddImageToListEPKcb", "TEXDB\\SAMP.IMG", true);
+		eng::fn::CStreaming_AddImageToList( "TEXDB\\SAMPCOL.IMG", true);
+		eng::fn::CStreaming_AddImageToList( "TEXDB\\GTA3.IMG", true);
+		eng::fn::CStreaming_AddImageToList( "TEXDB\\GTA_INT.IMG", true);
+		eng::fn::CStreaming_AddImageToList( "TEXDB\\SAMP.IMG", true);
 		// PLAYER.IMG is registered lazily by the clothes system and CUTSCENE.IMG by
 		// gta.dat's IMG line; registering them here too overflows the 8-slot ms_files
 		// table and hangs CdStream during level load.
@@ -596,7 +596,7 @@ DECL_HOOK(void, CStreaming_InitImageList)
 DECL_HOOK(void, CModelInfoAccelerator_GetEntry, void *self, void **outInfo, int32_t *outId, char *name)
 {
 	using FnGetModelInfo = void *(*)(const char *, int32_t *);
-	static FnGetModelInfo s_fnGetModelInfo = g_saSym->GetSymbol<FnGetModelInfo>("_ZN10CModelInfo12GetModelInfoEPKcPi");
+	static FnGetModelInfo s_fnGetModelInfo = eng::as<FnGetModelInfo>(eng::Sym::CModelInfo_GetModelInfo);
 	if (s_fnGetModelInfo && outInfo)
 	{
 		*outInfo = s_fnGetModelInfo(name, outId);
@@ -610,7 +610,7 @@ DECL_HOOK(void, CStreaming_Init2)
 	CStreaming_Init2();
 
 	// CStreaming::ms_memoryAvailable (GetSymbol returns 0 on failure)
-	if (auto* memAvailable = g_saSym->GetSymbol<uint32_t *>("_ZN10CStreaming18ms_memoryAvailableE"))
+	if (auto* memAvailable = eng::as<uint32_t *>(eng::Sym::CStreaming_ms_memoryAvailable))
 	{
 		*memAvailable *= 3;
 	}
@@ -628,7 +628,7 @@ DECL_HOOK(void, CTimer_StartUserPause)
 		g_java->setPauseState(true);
 	}
 
-	if (auto* userPause = g_saSym->GetSymbol<bool *>("_ZN6CTimer11m_UserPauseE"))
+	if (auto* userPause = eng::as<bool *>(eng::Sym::CTimer_m_UserPause))
 	{
 		*userPause = true;
 	}
@@ -646,7 +646,7 @@ DECL_HOOK(void, CTimer_EndUserPause)
 		g_java->setPauseState(false);
 	}
 
-	if (auto* userPause = g_saSym->GetSymbol<bool *>("_ZN6CTimer11m_UserPauseE"))
+	if (auto* userPause = eng::as<bool *>(eng::Sym::CTimer_m_UserPause))
 	{
 		*userPause = false;
 	}
@@ -715,7 +715,7 @@ static void CaptureCurrentFramebufferToPng(int mode)
 	using EmuGlReadPixelsFn = void(*)(int, int, int, int, uint32_t, uint32_t, void*);
 	static EmuGlReadPixelsFn s_emuReadPixels = nullptr;
 	if (!s_emuReadPixels && g_saSym) {
-		s_emuReadPixels = g_saSym->GetSymbol<EmuGlReadPixelsFn>("_Z16emu_glReadPixelsiiiijjPv");
+		s_emuReadPixels = eng::as<EmuGlReadPixelsFn>(eng::Sym::emu_glReadPixels);
 	}
 	if (s_emuReadPixels) {
 		s_emuReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
@@ -815,10 +815,10 @@ DECL_HOOK(void, FrontendIdle)
 	FrontendIdle();
 
 	if (s_bWatchingAdjustableHudExit) {
-		auto* pAdjInst = g_saSym->GetSymbol<uintptr_t*>("_ZN14CAdjustableHUD11m_pInstanceE");
+		auto* pAdjInst = eng::as<uintptr_t*>(eng::Sym::CAdjustableHUD_m_pInstance);
 		if (pAdjInst && *pAdjInst == 0) {
 			s_bWatchingAdjustableHudExit = false;
-			Memory::callFunction("_Z20Menu_SwitchOffToGamev");
+			eng::fn::Menu_SwitchOffToGame();
 			EnsureTouchWidgetsCreated();
 		}
 	}
@@ -859,7 +859,7 @@ DECL_HOOK(void, Render2dStuff)
 				FixTouchWidgetLayout();
 				if (!widgets[sa::WidgetIDs::WIDGET_ATTACK]) {
 					spdlog::info("touch widgets wiped, re-creating");
-					Memory::callFunction("_Z20Menu_SwitchOffToGamev");
+					eng::fn::Menu_SwitchOffToGame();
 					EnsureTouchWidgetsCreated();
 				}
 				else if (!widgets[sa::WidgetIDs::WIDGET_BUTTON_CROUCH]
@@ -910,9 +910,9 @@ DECL_HOOK(void, Render2dStuff)
 					float py1 = *reinterpret_cast<float*>(w + 28);
 					spdlog::info("WIDGET-DIAG [{}] flags=0x{:08x} map=0x{:08x} pos=({:.0f},{:.0f})-({:.0f},{:.0f})", i, flags, mapping, px0, py0, px1, py1);
 				}
-				uint8_t* pPhoto = *g_saSym->Abs<uint8_t**>(0x84ea70);
-				int* pCurInst = *g_saSym->Abs<int**>(0x851340);
-				uintptr_t mobileMenu = *g_saSym->Abs<uintptr_t*>(0x8519b0);
+				uint8_t* pPhoto = *g_saSym->Abs<uint8_t**>(addr::GOT_TakePhoto_arm64);
+				int* pCurInst = *g_saSym->Abs<int**>(addr::GOT_CurInputInst_arm64);
+				uintptr_t mobileMenu = *g_saSym->Abs<uintptr_t*>(addr::GOT_MobileMenu_arm64);
 				uint32_t mm36 = mobileMenu ? *reinterpret_cast<uint32_t*>(mobileMenu + 36) : 0;
 				uintptr_t mm48 = mobileMenu ? *reinterpret_cast<uintptr_t*>(mobileMenu + 48) : 0;
 				spdlog::info("WIDGET-DIAG takePhoto={} curInst={} mobileMenu36={} mobileMenu48=0x{:x}",
@@ -920,12 +920,12 @@ DECL_HOOK(void, Render2dStuff)
 				// aim-mode gates: targeting button (0x13) is only polled when
 				// GetEnterTargeting reaches IsTouched/IsReleased(19) — needs
 				// IsLockOnMode or (free-aim && InputType==2)
-				uintptr_t ms = *g_saSym->Abs<uintptr_t*>(0x851498);
+				uintptr_t ms = reinterpret_cast<uintptr_t>(eng::live::mobileSettings());
 				spdlog::info("WIDGET-DIAG MobileSettings=0x{:x} aimModeField={} lockon={} freeaim={} inptype={}",
 					ms, ms ? *reinterpret_cast<int*>(ms + 256) : -9,
-					Memory::callFunction<int>("_ZN14MobileSettings12IsLockOnModeEv"),
-					Memory::callFunction<int>("_ZN14MobileSettings13IsFreeAimModeEv"),
-					Memory::callFunction<int>("_ZN4CHID12GetInputTypeEv"));
+					eng::fn::MobileSettings_IsLockOnMode(),
+					eng::fn::MobileSettings_IsFreeAimMode(),
+					eng::fn::CHID_GetInputType());
 				for (int id : {0x1, 0x12, 0x13, 0x14, 0x20, 0xa5, 0xaa, 0x16, 0x1f, 0x15, 0x98, 0x99}) {
 					uintptr_t w = widgets ? widgets[id] : 0;
 					spdlog::info("WIDGET-DIAG id=0x{:x} ptr=0x{:x} en={} fl=0x{:03x}", id, w,
@@ -947,7 +947,7 @@ DECL_HOOK(void, Render2dStuff)
 	if (Settings::displayfps() && msCollected)
 	{
 		// fps
-		msCollected[curMS++ % 0x28] = Memory::callFunction<unsigned int>("_Z9OS_TimeMSv");
+		msCollected[curMS++ % 0x28] = eng::fn::OS_TimeMS();
 
 		RGBA bgColor = {0, 0, 0, 0};
 		RGBA color = {255, 255, 255, 255};
@@ -1148,28 +1148,28 @@ static void DumpTouchState(int widgetID, uintptr_t w)
 	uint32_t fl = w ? *reinterpret_cast<uint32_t*>(w + 140) : 0;
 	int impl = -9, pressed = -9;
 	if (mapping >= 0) {
-		impl = Memory::callFunction<int>("_ZN4CHID10ImplementsE10HIDMapping", mapping);
-		pressed = Memory::callFunction<int>("_ZN4CHID9IsPressedE10HIDMappingPf", mapping, (float*)nullptr);
+		impl = eng::fn::CHID_Implements( mapping);
+		pressed = eng::fn::CHID_IsPressed( mapping, (float*)nullptr);
 	}
 	int curInst = -9; uintptr_t devVtbl = 0;
-	if (int** pp = g_saSym->Abs<int**>(0x851340); pp && *pp) {
+	if (int** pp = g_saSym->Abs<int**>(addr::GOT_CurInputInst_arm64); pp && *pp) {
 		curInst = **pp;
-		if (uintptr_t* da = *g_saSym->Abs<uintptr_t**>(0x84b1e8); da && curInst >= 0 && curInst < 8) {
+		if (uintptr_t* da = *g_saSym->Abs<uintptr_t**>(addr::GOT_InputDeviceArray_arm64); da && curInst >= 0 && curInst < 8) {
 			uintptr_t d = da[curInst];
 			devVtbl = d ? *reinterpret_cast<uintptr_t*>(d) : 0;
 		}
 	}
 	spdlog::info("TDIAG w=0x{:x} id=0x{:x} map={} f={} b84={} hold={} fl=0x{:03x} | cur={} vtbl=0x{:x} impl={} press={}",
 		w, widgetID, mapping, finger, b84, hold, fl, curInst, devVtbl, impl, pressed);
-	uintptr_t* init = *g_saSym->Abs<uintptr_t**>(0x84ab30);
-	uintptr_t* rel = *g_saSym->Abs<uintptr_t**>(0x84f5b8);
-	uint8_t* act = *g_saSym->Abs<uint8_t**>(0x8506d0);
-	float* pos = *g_saSym->Abs<float**>(0x84c868);
-	float* down = *g_saSym->Abs<float**>(0x84f8c8);
+	uintptr_t* init = *g_saSym->Abs<uintptr_t**>(addr::GOT_TouchInitOwner_arm64);
+	uintptr_t* rel = *g_saSym->Abs<uintptr_t**>(addr::GOT_TouchRelOwner_arm64);
+	uint8_t* act = *g_saSym->Abs<uint8_t**>(addr::GOT_TouchActive_arm64);
+	float* pos = *g_saSym->Abs<float**>(addr::GOT_TouchPos_arm64);
+	float* down = *g_saSym->Abs<float**>(addr::GOT_TouchDownPos_arm64);
 	for (int i = 0; i < 4; ++i) {
 		uintptr_t ow = init ? init[i] : 0;
 		uintptr_t rw = rel ? rel[i] : 0;
-		int isDown = Memory::callFunction<int>("_ZN15CTouchInterface11IsTouchDownEi", i);
+		int isDown = eng::fn::CTouchInterface_IsTouchDown( i);
 		spdlog::info("  f{} down={} act={} owner=0x{:x}({}) rel=0x{:x}({}) pos=({:.0f},{:.0f}) downPos=({:.0f},{:.0f})",
 			i, isDown, act ? (int)act[i] : -9,
 			ow, (int)GetWidgetTypeFromWidget(ow), rw, (int)GetWidgetTypeFromWidget(rw),
@@ -1375,7 +1375,7 @@ extern RwMatrix* FindAtomicUVAnimMatrix(RpAtomic* atomic, bool* outHasDualUV = n
 static void SaveAndForceUVWrap(void*& savedAddr)
 {
 	savedAddr = (void*) (uintptr_t) rwTEXTUREADDRESSWRAP;
-	Memory::callFunction<RwBool>("_Z16RwRenderStateGet13RwRenderStatePv", rwRENDERSTATETEXTUREADDRESS, &savedAddr);
+	eng::fn::RwRenderStateGet<RwBool>( rwRENDERSTATETEXTUREADDRESS, &savedAddr);
 	if (savedAddr != (void*) (uintptr_t) rwTEXTUREADDRESSWRAP) {
 		RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*) (uintptr_t) rwTEXTUREADDRESSWRAP);
 	}
@@ -1412,13 +1412,13 @@ DECL_HOOK(void, rpMatFXOpenGLAllInOneRenderCB, RwResEntry *resEntry, uintptr_t o
 		// Stock _rpMatFXOpenGLAllInOneRenderCB only switches on effects 1..5 and
 		// drops effect 6 (rpMATFXEFFECTDUALUVTRANSFORM) to default render.
 		if (bHasDualUV) {
-			Memory::callFunction("_Z27emu_SetTextureMatrixEnabledPfh", (float*) uvMat, (uint8_t) 1);
+			eng::fn::emu_SetTextureMatrixEnabled( (float*) uvMat, (uint8_t) 1);
 		}
 	}
 	rpMatFXOpenGLAllInOneRenderCB(resEntry, object, type, flags);
 	if (uvMat) {
 		if (bHasDualUV) {
-			Memory::callFunction("_Z27emu_SetTextureMatrixEnabledPfh", (float*) nullptr, (uint8_t) 0);
+			eng::fn::emu_SetTextureMatrixEnabled( (float*) nullptr, (uint8_t) 0);
 		}
 		RestoreUVWrap(savedAddr);
 	}
@@ -1436,11 +1436,11 @@ DECL_HOOK(int, CustomPipeRenderCB, RwResEntry *resEntry, uintptr_t object, uint8
 	void* savedAddr = nullptr;
 	if (uvMat) {
 		SaveAndForceUVWrap(savedAddr);
-		Memory::callFunction("_Z27emu_SetTextureMatrixEnabledPfh", (float*) uvMat, (uint8_t) 1);
+		eng::fn::emu_SetTextureMatrixEnabled( (float*) uvMat, (uint8_t) 1);
 	}
 	int ret = CustomPipeRenderCB(resEntry, object, type, flags);
 	if (uvMat) {
-		Memory::callFunction("_Z27emu_SetTextureMatrixEnabledPfh", (float*) nullptr, (uint8_t) 0);
+		eng::fn::emu_SetTextureMatrixEnabled( (float*) nullptr, (uint8_t) 0);
 		RestoreUVWrap(savedAddr);
 	}
 	return ret;
@@ -1457,11 +1457,11 @@ DECL_HOOK(int, CustomBuildingPipeRenderCB, RwResEntry *resEntry, uintptr_t objec
 	void* savedAddr = nullptr;
 	if (uvMat) {
 		SaveAndForceUVWrap(savedAddr);
-		Memory::callFunction("_Z27emu_SetTextureMatrixEnabledPfh", (float*) uvMat, (uint8_t) 1);
+		eng::fn::emu_SetTextureMatrixEnabled( (float*) uvMat, (uint8_t) 1);
 	}
 	int ret = CustomBuildingPipeRenderCB(resEntry, object, type, flags);
 	if (uvMat) {
-		Memory::callFunction("_Z27emu_SetTextureMatrixEnabledPfh", (float*) nullptr, (uint8_t) 0);
+		eng::fn::emu_SetTextureMatrixEnabled( (float*) nullptr, (uint8_t) 0);
 		RestoreUVWrap(savedAddr);
 	}
 	return ret;
@@ -1479,11 +1479,11 @@ DECL_HOOK(int, rxOpenGLDefaultAllInOneRenderCB, RwResEntry *resEntry, uintptr_t 
 	void* savedAddr = nullptr;
 	if (uvMat) {
 		SaveAndForceUVWrap(savedAddr);
-		Memory::callFunction("_Z27emu_SetTextureMatrixEnabledPfh", (float*) uvMat, (uint8_t) 1);
+		eng::fn::emu_SetTextureMatrixEnabled( (float*) uvMat, (uint8_t) 1);
 	}
 	int ret = rxOpenGLDefaultAllInOneRenderCB(resEntry, object, type, flags);
 	if (uvMat) {
-		Memory::callFunction("_Z27emu_SetTextureMatrixEnabledPfh", (float*) nullptr, (uint8_t) 0);
+		eng::fn::emu_SetTextureMatrixEnabled( (float*) nullptr, (uint8_t) 0);
 		RestoreUVWrap(savedAddr);
 	}
 	return ret;
@@ -1590,11 +1590,11 @@ static void SanitizeAlphaLinkList(void *listPtr, const char *name)
 
 static void SanitizeAllAlphaLinkLists()
 {
-	static void *s_alphaList = g_saSym->GetSymbol<void *>("_ZN18CVisibilityPlugins11m_alphaListE");
-	static void *s_boatList = g_saSym->GetSymbol<void *>("_ZN18CVisibilityPlugins21m_alphaBoatAtomicListE");
-	static void *s_entityList = g_saSym->GetSymbol<void *>("_ZN18CVisibilityPlugins17m_alphaEntityListE");
-	static void *s_underwaterList = g_saSym->GetSymbol<void *>("_ZN18CVisibilityPlugins27m_alphaUnderwaterEntityListE");
-	static void *s_lastList = g_saSym->GetSymbol<void *>("_ZN18CVisibilityPlugins25m_alphaReallyDrawLastListE");
+	static void *s_alphaList = eng::as<void *>(eng::Sym::CVisibilityPlugins_m_alphaList);
+	static void *s_boatList = eng::as<void *>(eng::Sym::CVisibilityPlugins_m_alphaBoatAtomicList);
+	static void *s_entityList = eng::as<void *>(eng::Sym::CVisibilityPlugins_m_alphaEntityList);
+	static void *s_underwaterList = eng::as<void *>(eng::Sym::CVisibilityPlugins_m_alphaUnderwaterEntityList);
+	static void *s_lastList = eng::as<void *>(eng::Sym::CVisibilityPlugins_m_alphaReallyDrawLastList);
 
 	SanitizeAlphaLinkList(s_alphaList, "m_alphaList");
 	SanitizeAlphaLinkList(s_boatList, "m_alphaBoatAtomicList");
@@ -1711,10 +1711,10 @@ DECL_HOOK(void, CGame_Process)
 
 	Settings::applyDynamicCameraAndFreeCam();
 
-	if (auto* pDrawHud = g_saSym->GetSymbol<bool*>("_ZN4CHud19m_Wants_To_Draw_HudE")) {
+	if (auto* pDrawHud = eng::as<bool*>(eng::Sym::CHud_m_Wants_To_Draw_Hud)) {
 		*pDrawHud = Settings::showGtaHud();
 	}
-	if (auto* pHideRadar = g_saSym->GetSymbol<bool*>("_ZN4CHud23bScriptDontDisplayRadarE")) {
+	if (auto* pHideRadar = eng::as<bool*>(eng::Sym::CHud_bScriptDontDisplayRadar)) {
 		*pHideRadar = (!Settings::showRadar() || !Settings::showGtaHud());
 	}
 
@@ -1728,11 +1728,11 @@ DECL_HOOK(void, CGame_Process)
 			}
 		}
 		if (s_bPendingAdjustableHud.exchange(false)) {
-			uintptr_t pMobileMenu = g_saSym->GetSymbol<uintptr_t>("gMobileMenu");
+			uintptr_t pMobileMenu = eng::addr(eng::Sym::gMobileMenu);
 			if (pMobileMenu) {
-				Memory::callFunction("_ZN10MobileMenu12InitForPauseEv", pMobileMenu);
-				Memory::callFunction("_ZN10MobileMenu14ProcessPendingEv", pMobileMenu);
-				Memory::callFunction("_ZN14CAdjustableHUD6ToggleEv");
+				eng::fn::MobileMenu_InitForPause( pMobileMenu);
+				eng::fn::MobileMenu_ProcessPending( pMobileMenu);
+				eng::fn::CAdjustableHUD_Toggle();
 				s_bWatchingAdjustableHudExit = true;
 			}
 		}
@@ -1767,7 +1767,7 @@ DECL_HOOK(void, CGame_Process)
 DECL_HOOK(int, CRadar_SetCoordBlip, uint32_t BlpType, sa::CVector vecPosition, uint32_t nColour, uint32_t DispFlag, char *pScriptName)
 {
 	// CWorld::FindGroundZForCoord
-	vecPosition.z = Memory::callFunction<float>("_ZN6CWorld19FindGroundZForCoordEff", vecPosition.x, vecPosition.y);
+	vecPosition.z = eng::fn::CWorld_FindGroundZForCoord( vecPosition.x, vecPosition.y);
 
 	if (Client::offlineMode() && pGame)
 	{
@@ -1988,7 +1988,7 @@ DECL_HOOK(float, CDraw_CalculateAspectRatio)
 		case 5: ar = 4.0f / 3.0f; break;
 		default: break;
 		}
-		if (auto* pAr = g_saSym->GetSymbol<float*>("_ZN5CDraw15ms_fAspectRatioE"))
+		if (auto* pAr = eng::as<float*>(eng::Sym::CDraw_ms_fAspectRatio))
 		{
 			*pAr = ar;
 		}
@@ -2003,18 +2003,18 @@ void Hooks::installWidgetFixHooks()
 	GetTouchWidgets();
 
 	// HOOK("_ZN7CWidgetC2EPKcRK14WidgetPositionj10HIDMapping", CWidget);
-	HOOK("_ZN7CWidget6UpdateEv", CWidget_Update);
-	HOOK("_ZN7CWidget10SetEnabledEb", CWidget_SetEnabled);
+	HOOK_SYM(CWidget_Update, CWidget_Update);
+	HOOK_SYM(CWidget_SetEnabled, CWidget_SetEnabled);
 }
 
 void Hooks::installCrosshairFixHooks()
 {
 	spdlog::info("Installing crosshair fix hooks...");
 
-	m_f3rdPersonCHairMultX = g_saSym->GetSymbol<float *>("_ZN7CCamera22m_f3rdPersonCHairMultXE");
-	m_f3rdPersonCHairMultY = g_saSym->GetSymbol<float *>("_ZN7CCamera22m_f3rdPersonCHairMultYE");
+	m_f3rdPersonCHairMultX = eng::as<float *>(eng::Sym::CCamera_m_f3rdPersonCHairMultX);
+	m_f3rdPersonCHairMultY = eng::as<float *>(eng::Sym::CCamera_m_f3rdPersonCHairMultY);
 
-	HOOK("_ZN4CHud14DrawCrossHairsEv", DrawCrosshair);
+	HOOK_SYM(CHud_DrawCrossHairs, DrawCrosshair);
 }
 
 DECL_HOOK(uint16_t*, CText_Get, void* _this, const char* key)
@@ -2036,7 +2036,7 @@ DECL_HOOK(int, CPlantMgr_AddLocTris, void* entry, const sa::CVector* camPos, int
 	auto* entity = *reinterpret_cast<sa::CEntity**>(entry);
 	if (!entity || IsEntityPlaceable(entity)) return 0;
 
-	auto* colModel = Memory::callFunction<sa::CColModel*>("_ZN7CEntity11GetColModelEv", entity);
+	auto* colModel = eng::fn::CEntity_GetColModel<sa::CColModel*>( entity);
 	if (!colModel || !colModel->m_pColData) return 0;
 
 	auto* colData = colModel->m_pColData;
@@ -2060,88 +2060,88 @@ void Hooks::install()
 {
 	spdlog::info("Installing hooks...");
 
-	msCollected = g_saSym->GetSymbol<unsigned int *>("msCollected");
-	if (auto* pCurMS = g_saSym->GetSymbol<unsigned int *>("curMS"))
+	msCollected = eng::as<unsigned int *>(eng::Sym::msCollected);
+	if (auto* pCurMS = eng::as<unsigned int *>(eng::Sym::curMS))
 	{
 		curMS = *pCurMS;
 	}
 
-	HOOK("_Z11OS_FileOpen14OSFileDataAreaPPvPKc16OSFileAccessType", OS_FileOpen);
-	HOOK("_ZN10CStreaming13InitImageListEv", CStreaming_InitImageList);
-	HOOK("_ZN21CModelInfoAccelerator8GetEntryEPP14CBaseModelInfoPiPc", CModelInfoAccelerator_GetEntry);
-	HOOK("_ZN22TextureDatabaseRuntime8RegisterEPS_", TextureDatabaseRuntime_Register);
-	HOOK("_ZN10CStreaming5Init2Ev", CStreaming_Init2);
-	HOOK("_ZN6CTimer14StartUserPauseEv", CTimer_StartUserPause);
-	HOOK("_ZN6CTimer12EndUserPauseEv", CTimer_EndUserPause);
-	HOOK("_ZN5CGame20InitialiseRenderWareEv", CGame_InitialiseRenderWare);
-	HOOK("_ZN10CModelInfo11AddPedModelEi", CModelInfo_AddPedModel);
-	HOOK("_ZN10CModelInfo14AddAtomicModelEi", CModelInfo_AddAtomicModel);
-	HOOK("_ZN6CPools10InitialiseEv", CPools_Initialise);
-	HOOK("_ZN22TextureDatabaseRuntime4LoadEPKcb21TextureDatabaseFormat", TextureDatabaseRuntime_Load);
-	HOOK("_ZN9CTxdStore14TxdStoreFindCBEPKc", CTxdStore_TxdStoreFindCB);
+	HOOK_SYM(OS_FileOpen, OS_FileOpen);
+	HOOK_SYM(CStreaming_InitImageList, CStreaming_InitImageList);
+	HOOK_SYM(CModelInfoAccelerator_GetEntry, CModelInfoAccelerator_GetEntry);
+	HOOK_SYM(TextureDatabaseRuntime_Register, TextureDatabaseRuntime_Register);
+	HOOK_SYM(CStreaming_Init2, CStreaming_Init2);
+	HOOK_SYM(CTimer_StartUserPause, CTimer_StartUserPause);
+	HOOK_SYM(CTimer_EndUserPause, CTimer_EndUserPause);
+	HOOK_SYM(CGame_InitialiseRenderWare, CGame_InitialiseRenderWare);
+	HOOK_SYM(CModelInfo_AddPedModel, CModelInfo_AddPedModel);
+	HOOK_SYM(CModelInfo_AddAtomicModel, CModelInfo_AddAtomicModel);
+	HOOK_SYM(CPools_Initialise, CPools_Initialise);
+	HOOK_SYM(TextureDatabaseRuntime_Load, TextureDatabaseRuntime_Load);
+	HOOK_SYM(CTxdStore_TxdStoreFindCB, CTxdStore_TxdStoreFindCB);
 
 	// SAMP hooks //
 
 	// UI
-	HOOK("_Z12ANDRunThreadPv", AND_RunThread);
-	HOOK("_Z12FrontendIdlev", FrontendIdle);
-	HOOK("_Z13Render2dStuffv", Render2dStuff);
-	HOOK("_Z4IdlePvb", Idle);
-	HOOK("_Z14AND_TouchEventiiii", AND_TouchEvent);
-	HOOK("_ZN14CLoadingScreen15DisplayPCScreenEv", DisplayScreen);
+	HOOK_SYM(ANDRunThread, AND_RunThread);
+	HOOK_SYM(FrontendIdle, FrontendIdle);
+	HOOK_SYM(Render2dStuff, Render2dStuff);
+	HOOK_SYM(Idle, Idle);
+	HOOK_SYM(AND_TouchEvent, AND_TouchEvent);
+	HOOK_SYM(CLoadingScreen_DisplayPCScreen, DisplayScreen);
 
 	// Game process
-	HOOK("_ZN5CGame7ProcessEv", CGame_Process);
-	HOOK("_ZN5CDraw20CalculateAspectRatioEv", CDraw_CalculateAspectRatio);
+	HOOK_SYM(CGame_Process, CGame_Process);
+	HOOK_SYM(CDraw_CalculateAspectRatio, CDraw_CalculateAspectRatio);
 	if (CleoEngine::isEnabled())
 	{
-		HOOK("_ZN5CText3GetEPKc", CText_Get);
+		HOOK_SYM(CText_Get, CText_Get);
 	}
 
 	// click map rpc
-	HOOK("_ZN6CRadar12SetCoordBlipE9eBlipType7CVectorj12eBlipDisplayPc", CRadar_SetCoordBlip);
+	HOOK_SYM(CRadar_SetCoordBlip, CRadar_SetCoordBlip);
 
 	// gangzone
-	HOOK("_ZN6CRadar20DrawRadarGangOverlayEb", CRadar_DrawRadarGangOverlay);
+	HOOK_SYM(CRadar_DrawRadarGangOverlay, CRadar_DrawRadarGangOverlay);
 
 	// radar color
-	HOOK("_ZN11CHudColours12GetIntColourEh", CHudColours_GetIntColour);
+	HOOK_SYM(CHudColours_GetIntColour, CHudColours_GetIntColour);
 
 	// vehicle collisions
-	HOOK("_ZN11CAutomobile22ProcessEntityCollisionEP7CEntityP9CColPoint", CAutoMobile_ProcessEntityCollision);
-	HOOK("_ZN5CBike22ProcessEntityCollisionEP7CEntityP9CColPoint", CBike_ProcessEntityCollision);
-	HOOK("_ZN13CMonsterTruck22ProcessEntityCollisionEP7CEntityP9CColPoint", CMonsterTruck_ProcessEntityCollision);
-	HOOK("_ZN8CTrailer22ProcessEntityCollisionEP7CEntityP9CColPoint", CTrailer_ProcessEntityCollision);
-	HOOK("_ZN8CTrailer12BreakTowLinkEv", CTrailer_BreakTowLink);
+	HOOK_SYM(CAutomobile_ProcessEntityCollision, CAutoMobile_ProcessEntityCollision);
+	HOOK_SYM(CBike_ProcessEntityCollision, CBike_ProcessEntityCollision);
+	HOOK_SYM(CMonsterTruck_ProcessEntityCollision, CMonsterTruck_ProcessEntityCollision);
+	HOOK_SYM(CTrailer_ProcessEntityCollision, CTrailer_ProcessEntityCollision);
+	HOOK_SYM(CTrailer_BreakTowLink, CTrailer_BreakTowLink);
 
 	// OOB entities: wrap bound rects so CPhysical::Add accepts them
-	HOOK("_ZNK9CPhysical12GetBoundRectEv", CPhysical_GetBoundRect);
+	HOOK_SYM(CPhysical_GetBoundRect, CPhysical_GetBoundRect);
 
 	// obj material
-	HOOK("_ZN7CObject6RenderEv", CObject_Render);
+	HOOK_SYM(CObject_Render, CObject_Render);
 
 	// render objects 3000+- pos
-	HOOK("_ZN9CRenderer24RenderEverythingBarRoadsEv", CRenderer_RenderEverythingBarRoads);
+	HOOK_SYM(CRenderer_RenderEverythingBarRoads, CRenderer_RenderEverythingBarRoads);
 
 	// attched objects
-	HOOK("_ZN6CWorld25ProcessPedsAfterPreRenderEv", CWorld_ProcessPedsAfterPreRender);
+	HOOK_SYM(CWorld_ProcessPedsAfterPreRender, CWorld_ProcessPedsAfterPreRender);
 
 	// crash fixes
-	HOOK("_ZN9CPlantMgr45_ProcessEntryCollisionDataSections_AddLocTrisEP17CPlantColEntEntryRK7CVectoriii", CPlantMgr_AddLocTris);
-	HOOK("_ZN6CRadar9ClearBlipEi", CRadar_ClearBlip);
-	HOOK("_ZN6CWorld28FindPlayerSlotWithPedPointerEPv", CWorld_FindPlayerSlotWithPedPointer);
-	HOOK("_Z22MaterialUpdateUVAnimCBP10RpMaterialPv", MaterialUpdateUVAnimCB);
-	HOOK("_Z30_rpMatFXOpenGLAllInOneRenderCBP10RwResEntryPvhj", rpMatFXOpenGLAllInOneRenderCB);
-	HOOK("_ZN25CCustomBuildingDNPipeline18CustomPipeRenderCBEP10RwResEntryPvhj", CustomPipeRenderCB);
-	HOOK("_ZN23CCustomBuildingPipeline18CustomPipeRenderCBEP10RwResEntryPvhj", CustomBuildingPipeRenderCB);
-	HOOK("_Z32_rxOpenGLDefaultAllInOneRenderCBP10RwResEntryPvhj", rxOpenGLDefaultAllInOneRenderCB);
-	HOOK("_Z16RwTextureDestroyP9RwTexture", _RwTextureDestroy);
-	HOOK("_Z15RwFrameAddChildP7RwFrameS0_", RwFrameAddChild);
-	HOOK("_Z13RLEDecompressPhjPKhjj", RLEDecompress);
-	HOOK("_Z23RwResourcesFreeResEntryP10RwResEntry", RwResourcesFreeResEntry);
-	HOOK("_Z34_rxOpenGLDefaultAtomicAllInOneNodeP14RxPipelineNodePK19RxPipelineNodeParam", rxOpenGLDefaultAtomicAllInOneNode);
-	HOOK("_ZN22TextureDatabaseRuntime8GetEntryEPKcRb", TextureDatabaseRuntime_GetEntry);
-	HOOK("_ZN10CPlayerPed29GetPlayerInfoForThisPlayerPedEv", GetPlayerInfoForThisPlayerPed);
+	HOOK_SYM(CPlantMgr_ProcessEntryCollisionDataSections_AddLocTris, CPlantMgr_AddLocTris);
+	HOOK_SYM(CRadar_ClearBlip, CRadar_ClearBlip);
+	HOOK_SYM(CWorld_FindPlayerSlotWithPedPointer, CWorld_FindPlayerSlotWithPedPointer);
+	HOOK_SYM(MaterialUpdateUVAnimCB, MaterialUpdateUVAnimCB);
+	HOOK_SYM(rpMatFXOpenGLAllInOneRenderCB, rpMatFXOpenGLAllInOneRenderCB);
+	HOOK_SYM(CCustomBuildingDNPipeline_CustomPipeRenderCB, CustomPipeRenderCB);
+	HOOK_SYM(CCustomBuildingPipeline_CustomPipeRenderCB, CustomBuildingPipeRenderCB);
+	HOOK_SYM(rxOpenGLDefaultAllInOneRenderCB, rxOpenGLDefaultAllInOneRenderCB);
+	HOOK_SYM(RwTextureDestroy, _RwTextureDestroy);
+	HOOK_SYM(RwFrameAddChild, RwFrameAddChild);
+	HOOK_SYM(RLEDecompress, RLEDecompress);
+	HOOK_SYM(RwResourcesFreeResEntry, RwResourcesFreeResEntry);
+	HOOK_SYM(rxOpenGLDefaultAtomicAllInOneNode, rxOpenGLDefaultAtomicAllInOneNode);
+	HOOK_SYM(TextureDatabaseRuntime_GetEntry, TextureDatabaseRuntime_GetEntry);
+	HOOK_SYM(CPlayerPed_GetPlayerInfoForThisPlayerPed, GetPlayerInfoForThisPlayerPed);
 
 	if (!eglGetProcAddress("glAlphaFuncQCOM"))
 	{
@@ -2149,20 +2149,20 @@ void Hooks::install()
 		if (eglGetProcAddress("glAlphaFunc"))
 		{
 			// If "glAlphaFunc" is found, store the address in the global library
-			*((void **)(g_saSym->Abs(VER_x32 ? 0x6BCBF8 : 0x89A1B0))) = (void *)eglGetProcAddress("glAlphaFunc");
+			*((void **)(g_saSym->Abs(addr::glAlphaFuncQCOM_slot))) = (void *)eglGetProcAddress("glAlphaFunc");
 		}
 		else
 		{
 			// If neither function is available, hook the fallback symbol
-			HOOK("_Z25RQ_Command_rqSetAlphaTestRPc", RQCommand_rqSetAlphaTest);
+			HOOK_SYM(RQ_Command_rqSetAlphaTest, RQCommand_rqSetAlphaTest);
 		}
 	}
 
 	// fix spin on keyboard/controller
-	HOOK("_ZN4CHID12GetInputTypeEv", GetInputType);
-	HOOK("_ZN4CHID8ReplacesE10HIDMapping", CHID_Replaces);
-	HOOK("_ZN4CHID10ImplementsE10HIDMapping", CHID_Implements);
-	HOOK("_ZN15CTouchInterface27RepositionAdjustableWidgetsEv", TI_RepositionAdjustableWidgets);
+	HOOK_SYM(CHID_GetInputType, GetInputType);
+	HOOK_SYM(CHID_Replaces, CHID_Replaces);
+	HOOK_SYM(CHID_Implements, CHID_Implements);
+	HOOK_SYM(CTouchInterface_RepositionAdjustableWidgets, TI_RepositionAdjustableWidgets);
 
 	Pickups::installHooks();
 	RemoveBuilding::installHooks();

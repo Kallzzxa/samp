@@ -771,7 +771,7 @@ bool handleCustomOpcode(CleoScript& sc, uint16_t rawOp)
 			uint32_t* outVar = g_fnGetVarPtr(&sc.thread, 0);
 			std::string symName;
 			readStringParam(sc, symName);
-			void* sym = symName.empty() ? nullptr : g_saSym->GetSymbol<void*>(symName.c_str());
+			void* sym = symName.empty() ? nullptr : eng::lookup(symName.c_str());
 			if (!sym && !symName.empty()) {
 				sym = dlsym(RTLD_DEFAULT, symName.c_str());
 			}
@@ -1672,23 +1672,23 @@ void CleoEngine::initialize(const std::string& gameDir)
 	}
 
 	g_gtasaBase = g_saSym->GetLibAddr();
-	g_scriptParams = g_saSym->GetSymbol<uint32_t*>("ScriptParams");
-	g_scriptSpace = g_saSym->GetSymbol<uint8_t*>("_ZN11CTheScripts11ScriptSpaceE");
-	g_timerMs = g_saSym->GetSymbol<uint32_t*>("_ZN6CTimer22m_snTimeInMillisecondsE");
-	g_theText = g_saSym->GetSymbol<void*>("TheText");
+	g_scriptParams = eng::as<uint32_t*>(eng::Sym::ScriptParams);
+	g_scriptSpace = eng::as<uint8_t*>(eng::Sym::CTheScripts_ScriptSpace);
+	g_timerMs = eng::as<uint32_t*>(eng::Sym::CTimer_m_snTimeInMilliseconds);
+	g_theText = eng::ptr(eng::Sym::TheText);
 
-	g_fnInitScript = g_saSym->GetSymbol<FnInitScript>("_ZN14CRunningScript4InitEv");
-	g_fnProcessOneCmd = g_saSym->GetSymbol<FnProcessOneCmd>("_ZN14CRunningScript17ProcessOneCommandEv");
-	g_fnCollectParams = g_saSym->GetSymbol<FnCollectParams>("_ZN14CRunningScript17CollectParametersEs");
-	g_fnStoreParams = g_saSym->GetSymbol<FnStoreParams>("_ZN14CRunningScript15StoreParametersEs");
-	g_fnUpdateCmpFlag = g_saSym->GetSymbol<FnUpdateCmpFlag>("_ZN14CRunningScript17UpdateCompareFlagEh");
-	g_fnGetVarPtr = g_saSym->GetSymbol<FnGetVarPtr>("_ZN14CRunningScript26GetPointerToScriptVariableEh");
-	g_fnAsciiToGxt = g_saSym->GetSymbol<FnAsciiToGxt>("_Z14AsciiToGxtCharPKcPt");
-	g_fnSetHelpMsg = g_saSym->GetSymbol<FnSetHelpMsg>("_ZN4CHud14SetHelpMessageEPKcPtbbbj");
-	g_fnAddMessage = g_saSym->GetSymbol<FnAddMessage>("_ZN9CMessages10AddMessageEPKcPtjtb");
-	g_fnAddMessageJumpQ = g_saSym->GetSymbol<FnAddMessage>("_ZN9CMessages15AddMessageJumpQEPKcPtjtb");
-	g_fnAddBigMessage = g_saSym->GetSymbol<FnAddBigMessage>("_ZN9CMessages13AddBigMessageEPtjt");
-	g_fnCTextGet = g_saSym->GetSymbol<FnCTextGet>("_ZN5CText3GetEPKc");
+	g_fnInitScript = eng::as<FnInitScript>(eng::Sym::CRunningScript_Init);
+	g_fnProcessOneCmd = eng::as<FnProcessOneCmd>(eng::Sym::CRunningScript_ProcessOneCommand);
+	g_fnCollectParams = eng::as<FnCollectParams>(eng::Sym::CRunningScript_CollectParameters);
+	g_fnStoreParams = eng::as<FnStoreParams>(eng::Sym::CRunningScript_StoreParameters);
+	g_fnUpdateCmpFlag = eng::as<FnUpdateCmpFlag>(eng::Sym::CRunningScript_UpdateCompareFlag);
+	g_fnGetVarPtr = eng::as<FnGetVarPtr>(eng::Sym::CRunningScript_GetPointerToScriptVariable);
+	g_fnAsciiToGxt = eng::as<FnAsciiToGxt>(eng::Sym::AsciiToGxtChar);
+	g_fnSetHelpMsg = eng::as<FnSetHelpMsg>(eng::Sym::CHud_SetHelpMessage);
+	g_fnAddMessage = eng::as<FnAddMessage>(eng::Sym::CMessages_AddMessage);
+	g_fnAddMessageJumpQ = eng::as<FnAddMessage>(eng::Sym::CMessages_AddMessageJumpQ);
+	g_fnAddBigMessage = eng::as<FnAddBigMessage>(eng::Sym::CMessages_AddBigMessage);
+	g_fnCTextGet = eng::as<FnCTextGet>(eng::Sym::CText_Get);
 
 	g_symbolsReady = (g_scriptParams && g_scriptSpace && g_timerMs &&
 	                  g_fnInitScript && g_fnProcessOneCmd && g_fnCollectParams &&

@@ -116,7 +116,7 @@ void CActor::ClearAnimation()
 {
 	if (m_actor) {
 		// CPedIntelligence::FlushImmediately
-		Memory::callFunction("_ZN16CPedIntelligence16FlushImmediatelyEb", m_actor->m_pIntelligence, true);
+		eng::fn::CPedIntelligence_FlushImmediately( m_actor->m_pIntelligence, true);
 	}
 }
 

@@ -26,6 +26,7 @@
 #include <obfuscator.h>
 
 #include "Addr.h"
+#include "Game/Engine/Symbols.h"
 
 class Client {
 public:

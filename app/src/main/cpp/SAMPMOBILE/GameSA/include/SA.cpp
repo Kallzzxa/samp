@@ -13,9 +13,9 @@ void Initialize()
 {
 	spdlog::info("Initializing SA...");
 
-	RwEngineInstance = *g_saSym->GetSymbol<RwGlobals**>("RwEngineInstance");
-	RsGlobal = g_saSym->GetSymbol<RsGlobalType*>("RsGlobal");
-	Scene = g_saSym->GetSymbol<CScene*>("Scene");
+	RwEngineInstance = *eng::as<RwGlobals**>(eng::Sym::RwEngineInstance);
+	RsGlobal = eng::as<RsGlobalType*>(eng::Sym::RsGlobal);
+	Scene = eng::as<CScene*>(eng::Sym::Scene);
 
 	CMatrixLinkList::Initialize();
 	CPlaceable::Initialize();

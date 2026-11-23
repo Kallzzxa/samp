@@ -68,11 +68,11 @@ void GameAimSyncInit()
 //    sa::CCamera: 951FA8 TheCamera.Cams[0]: 952118
 	pcaInternalAim = (CAMERA_AIM*) &TheCamera.m_aCams[0].Front; // +2D8(728) TheCamera.Cams[0].Front
 	pbyteCameraMode = (uint8_t*) &TheCamera.m_aCams[0].m_nMode; //+17E(382) TheCamera.Cams[0].m_nMode
-	pfAspectRatio = g_saSym->GetSymbol<float*>("_ZN5CDraw15ms_fAspectRatioE"); // _ZN5CDraw15ms_fAspectRatioE
+	pfAspectRatio = eng::as<float*>(eng::Sym::CDraw_ms_fAspectRatio); // _ZN5CDraw15ms_fAspectRatioE
 	pfCameraExtZoom = &TheCamera.m_aCams[0].FOV; // TheCamera+368 +140 TheCamera.Cams[0].m_fFOV
 	wCameraMode2 = (uint16_t*) &TheCamera.PlayerWeaponMode; // TheCamera.PlayerWeaponMode
 
-	pbyteCurrentPlayer = g_saSym->GetSymbol<uint8_t*>("_ZN6CWorld13PlayerInFocusE"); // _ZN6CWorld13PlayerInFocusE
+	pbyteCurrentPlayer = eng::as<uint8_t*>(eng::Sym::CWorld_PlayerInFocus); // _ZN6CWorld13PlayerInFocusE
 }
 
 CAMERA_AIM* GameGetRemotePlayerAim(uint8_t bytePlayerNumber)

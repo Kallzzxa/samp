@@ -187,6 +187,11 @@ void Client::initialize(const std::string& gameDir, bool offlineMode)
 	spdlog::info("libGTASA.so loaded at 0x{:X}", g_saSym->GetLibAddr());
 	g_gtasaLibBase = g_saSym->GetLibAddr();
 
+	if (!eng::resolveAll()) {
+		spdlog::error("Aborting client initialization due to missing required libGTASA.so symbols!");
+		return;
+	}
+
 	char str[100];
 	snprintf(str, sizeof(str), "0x%llx", (unsigned long long) g_saSym->GetLibAddr());
 	firebase::crashlytics::SetCustomKey("libGTASA.so", str);
@@ -215,8 +220,8 @@ void Client::initialize(const std::string& gameDir, bool offlineMode)
 	// GTA worker thread passes through it, so g_gameThreadTid is only the
 	// LAST spawned thread. The real render thread is comm="NVEvent".
 	std::thread([]() {
-		auto* gameStateSym = g_saSym->GetSymbol<uint32_t*>("gGameState");
-		auto* loadPctSym = g_saSym->GetSymbol<float*>("_ZN14CLoadingScreen15m_PercentLoadedE");
+		auto* gameStateSym = eng::as<uint32_t*>(eng::Sym::gGameState);
+		auto* loadPctSym = eng::as<float*>(eng::Sym::CLoadingScreen_m_PercentLoaded);
 #if defined(__aarch64__)
 		// libGTASA v2.10 arm64 internals (file vaddrs):
 		//   pauseA ptr at base+0x850770: "suspended" flag spun on by
@@ -254,7 +259,7 @@ void Client::process()
 	// StartGame must run on the game thread; calling it from a spawned
 	// thread races with the game loop and crashes on some devices.
 	// GetSymbol returns 0 on failure — never dereference unchecked.
-	static uint32_t* pGameState = g_saSym->GetSymbol<uint32_t*>("gGameState");
+	static uint32_t* pGameState = eng::as<uint32_t*>(eng::Sym::gGameState);
 	if (!g_bGameStarted && pGame && pGameState && *pGameState == 7) {
 		g_bGameStarted = true;
 		Settings::applyToGtaEngine(false);
@@ -349,7 +354,7 @@ void Client::process()
 			uintptr_t* widgets = GetTouchWidgets();
 			if (!widgets || !widgets[sa::WidgetIDs::WIDGET_PED_MOVE] || !widgets[sa::WidgetIDs::WIDGET_ATTACK]) {
 				spdlog::info("Widgets not inited, calling Menu_SwitchOffToGame");
-				Memory::callFunction("_Z20Menu_SwitchOffToGamev");
+				eng::fn::Menu_SwitchOffToGame();
 			}
 			EnsureTouchWidgetsCreated();
 		}

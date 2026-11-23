@@ -45,7 +45,7 @@ CEntity::~CEntity()
 
 void CEntity::ResolveReferences()
 {
-	Memory::callFunction("_ZN7CEntity17ResolveReferencesEv", this);
+	eng::fn::CEntity_ResolveReferences( this);
 }
 
 void CEntity::UpdateRwFrame()
@@ -55,7 +55,7 @@ void CEntity::UpdateRwFrame()
 	}
 
 	//RwFrameUpdateObjects(static_cast<RwFrame*>(rwObjectGetParent(m_pRwObject)));
-	Memory::callFunction("_Z20RwFrameUpdateObjectsP7RwFrame", static_cast<RwFrame*>(rwObjectGetParent(m_pRwObject)));
+	eng::fn::RwFrameUpdateObjects( static_cast<RwFrame*>(rwObjectGetParent(m_pRwObject)));
 }
 
 void CEntity::UpdateRW()
@@ -84,16 +84,16 @@ RwMatrix* CEntity::GetModellingMatrix()
 
 void CEntity::RegisterReference(CEntity** entity)
 {
-	Memory::callFunction("_ZN7CEntity17RegisterReferenceEPPS_", this, entity);
+	eng::fn::CEntity_RegisterReference( this, entity);
 }
 
 void CEntity::PruneReferences()
 {
-	Memory::callFunction("_ZN7CEntity15PruneReferencesEv", this);
+	eng::fn::CEntity_PruneReferences( this);
 }
 
 void CEntity::CleanUpOldReference(CEntity** entity)
 {
-	Memory::callFunction("_ZN7CEntity19CleanUpOldReferenceEPPS_", this, entity);
+	eng::fn::CEntity_CleanUpOldReference( this, entity);
 }
 }

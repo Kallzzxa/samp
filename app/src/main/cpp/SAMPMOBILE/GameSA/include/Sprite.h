@@ -26,12 +26,12 @@ public:
 	void SetTexture(const char* pFilename)
 	{
 		spdlog::info("CSprite2d::SetTexture({})", pFilename);
-		Memory::callFunction("_ZN9CSprite2d10SetTextureEPc", this, pFilename);
+		eng::fn::CSprite2d_SetTexture( this, pFilename);
 	}
 
 	void Draw(sa::CRect* rect, uint32_t dwColor, float* uv)
 	{
-		Memory::callFunction("_ZN9CSprite2d4DrawERK5CRectRK5CRGBAffffffff", this, rect, &dwColor, uv[0], uv[1], uv[2], uv[3], uv[4], uv[5], uv[6], uv[7]);
+		eng::fn::CSprite2d_Draw( this, rect, &dwColor, uv[0], uv[1], uv[2], uv[3], uv[4], uv[5], uv[6], uv[7]);
 	}
 
 public:

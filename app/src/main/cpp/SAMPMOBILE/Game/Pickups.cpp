@@ -4,16 +4,17 @@
 
 #include "Game.h"
 #include "Pickups.h"
+#include "../Addr.h"
 #include "../Net/NetGame.h"
 
 extern NetGame* pNetGame;
 
 DECL_HOOK(void, CPickups_Update)
 {
-	static std::array<sa::CPickup, sa::MAX_NUM_PICKUPS>& aPickUps = *(std::array<sa::CPickup, sa::MAX_NUM_PICKUPS>*) (g_saSym->Abs(VER_x32 ? 0x7AFD70 : 0x991AB8));
+	static std::array<sa::CPickup, sa::MAX_NUM_PICKUPS>& aPickUps = *(std::array<sa::CPickup, sa::MAX_NUM_PICKUPS>*) (g_saSym->Abs(addr::CPickups_aPickUps));
 
-	auto start = 620 * (*g_saSym->GetSymbol<uint32_t*>("_ZN6CTimer14m_FrameCounterE") % 32) / 32;
-	auto end = 620 * (*g_saSym->GetSymbol<uint32_t*>("_ZN6CTimer14m_FrameCounterE") % 32 + 1) / 32;
+	auto start = 620 * (*eng::as<uint32_t*>(eng::Sym::CTimer_m_FrameCounter) % 32) / 32;
+	auto end = 620 * (*eng::as<uint32_t*>(eng::Sym::CTimer_m_FrameCounter) % 32 + 1) / 32;
 	for (auto i = start; i < end; i++) {
 		auto& pickup = aPickUps[i];
 		if (pickup.m_nPickupType == sa::CPickup::PICKUP_NONE) {
@@ -27,7 +28,7 @@ DECL_HOOK(void, CPickups_Update)
 
 				if (auto& obj = pickup.m_pObject; obj) {
 					// CWorld::Add(obj);
-					Memory::callFunction("_ZN6CWorld3AddEP7CEntity", obj);
+					eng::fn::CWorld_Add( obj);
 				}
 			}
 			if (pickup.Update()) {
@@ -44,7 +45,7 @@ DECL_HOOK(void, CPickups_Update)
 void Pickups::installHooks()
 {
 	spdlog::info("Installing pickup hooks...");
-	HOOK("_ZN8CPickups6UpdateEv", CPickups_Update);
+	HOOK_SYM(CPickups_Update, CPickups_Update);
 }
 
 bool sa::CPickup::Update()

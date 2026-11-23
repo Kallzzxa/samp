@@ -154,7 +154,7 @@ CObject::~CObject()
 	// outlives the entity, and RemoveRef is safe on any valid slot id
 	// (the def array is 255 fixed entries, no quadtree entry needed)
 	if (m_iPinnedColSlot >= 0) {
-		Memory::callFunction("_ZN9CColStore9RemoveRefEi", m_iPinnedColSlot);
+		eng::fn::CColStore_RemoveRef( m_iPinnedColSlot);
 		m_iPinnedColSlot = -1;
 	}
 
@@ -294,16 +294,8 @@ static void InjectIntoRepeatSectors(sa::CPhysical* pEntity, const int iRect[4],
 		default: return;
 	}
 
-	auto pSectors = g_saSym->GetSymbol<uintptr_t>("_ZN6CWorld17ms_aRepeatSectorsE");
+	auto pSectors = eng::addr(eng::Sym::CWorld_ms_aRepeatSectors);
 	if (!pSectors) return;
-
-#if VER_x32
-	static constexpr const char* kSymNewNode = "_ZN18CPtrNodeDoubleLinknwEj";
-	static constexpr const char* kSymNewInfo = "_ZN14CEntryInfoNodenwEj";
-#else
-	static constexpr const char* kSymNewNode = "_ZN18CPtrNodeDoubleLinknwEm";
-	static constexpr const char* kSymNewInfo = "_ZN14CEntryInfoNodenwEm";
-#endif
 
 	// cells 16 apart hash to the same group — dedup
 	uint32_t aSeenMask[8] = {};
@@ -317,13 +309,13 @@ static void InjectIntoRepeatSectors(sa::CPhysical* pEntity, const int iRect[4],
 
 			auto** ppHead = reinterpret_cast<sa::CPtrNodeDoubleLink**>(
 					pSectors + static_cast<size_t>(iGroup) * kRepeatSectorSize + uListOff);
-			auto* pNode = Memory::callFunction<sa::CPtrNodeDoubleLink*>(
-					kSymNewNode, sizeof(sa::CPtrNodeDoubleLink));
-			auto* pInfo = Memory::callFunction<CEntryInfoNode*>(
-					kSymNewInfo, sizeof(CEntryInfoNode));
+			auto* pNode = eng::fn::CPtrNodeDoubleLink_OpNew<sa::CPtrNodeDoubleLink*>(
+					sizeof(sa::CPtrNodeDoubleLink));
+			auto* pInfo = eng::fn::CEntryInfoNode_OpNew<CEntryInfoNode*>(
+					sizeof(CEntryInfoNode));
 			if (!pNode || !pInfo) {
-				if (pNode) Memory::callFunction("_ZN18CPtrNodeDoubleLinkdlEPv", pNode);
-				if (pInfo) Memory::callFunction("_ZN14CEntryInfoNodedlEPv", pInfo);
+				if (pNode) eng::fn::CPtrNodeDoubleLink_OpDelete( pNode);
+				if (pInfo) eng::fn::CEntryInfoNode_OpDelete( pInfo);
 				return;
 			}
 
@@ -355,7 +347,7 @@ static void UnlinkFromRepeatSectors(sa::CPhysical* pEntity,
 		std::vector<CEntryInfoNode*>& infos)
 {
 	constexpr size_t kRepeatSectorSize = 3 * sizeof(void*);
-	uintptr_t pSectors = g_saSym->GetSymbol<uintptr_t>("_ZN6CWorld17ms_aRepeatSectorsE");
+	uintptr_t pSectors = eng::addr(eng::Sym::CWorld_ms_aRepeatSectors);
 
 	for (CEntryInfoNode* pInfo : infos) {
 		CEntryInfoNode* pCur = pEntity->m_pCollisionList.m_pNode;
@@ -373,12 +365,12 @@ static void UnlinkFromRepeatSectors(sa::CPhysical* pEntity,
 		if (pNode->m_prev) pNode->m_prev->m_next = pNode->m_next;
 		else *reinterpret_cast<sa::CPtrNodeDoubleLink**>(pInfo->m_pDoubleLinkList) = pNode->m_next;
 		if (pNode->m_next) pNode->m_next->m_prev = pNode->m_prev;
-		Memory::callFunction("_ZN18CPtrNodeDoubleLinkdlEPv", pNode);
+		eng::fn::CPtrNodeDoubleLink_OpDelete( pNode);
 
 		if (pInfo->m_pPrevious) pInfo->m_pPrevious->m_pNext = pInfo->m_pNext;
 		else pEntity->m_pCollisionList.m_pNode = pInfo->m_pNext;
 		if (pInfo->m_pNext) pInfo->m_pNext->m_pPrevious = pInfo->m_pPrevious;
-		Memory::callFunction("_ZN14CEntryInfoNodedlEPv", pInfo);
+		eng::fn::CEntryInfoNode_OpDelete( pInfo);
 	}
 	s_iOobInjectedTotal -= (int) infos.size();
 	infos.clear();
@@ -411,7 +403,7 @@ static std::unordered_set<int> s_oobColReloaded;
 
 static bool OobColDefLoaded(int iSlot)
 {
-	auto ppStore = g_saSym->GetSymbol<uintptr_t*>("_ZN9CColStore11ms_pColPoolE");
+	auto ppStore = eng::as<uintptr_t*>(eng::Sym::CColStore_ms_pColPool);
 	uintptr_t uStore = ppStore ? *ppStore : 0;
 	char* pDefs = uStore ? *reinterpret_cast<char**>(uStore) : nullptr;
 	return pDefs && pDefs[iSlot * 44 + 40];
@@ -424,11 +416,11 @@ static bool PinOobColSlot(sa::CColModel* pCM, int& iPinnedSlot)
 	if (iSlot <= 0 || iSlot >= 255) iSlot = -1;
 	if (iPinnedSlot == iSlot) return false;
 	if (iPinnedSlot >= 0) {
-		Memory::callFunction("_ZN9CColStore9RemoveRefEi", iPinnedSlot);
+		eng::fn::CColStore_RemoveRef( iPinnedSlot);
 	}
 	iPinnedSlot = -1;
 	if (iSlot >= 0) {
-		Memory::callFunction("_ZN9CColStore6AddRefEi", iSlot);
+		eng::fn::CColStore_AddRef( iSlot);
 		iPinnedSlot = iSlot;
 	}
 	return true;
@@ -446,15 +438,15 @@ static void RequestOobColSlot(sa::CColModel* pCM, int iPinnedSlot,
 	// LoadCol, so force exactly one reload cycle to re-run it
 	if (OobColDefLoaded(iPinnedSlot)
 			&& s_oobColReloaded.insert(iPinnedSlot).second) {
-		Memory::callFunction("_ZN10CStreaming11RemoveModelEi",
+		eng::fn::CStreaming_RemoveModel(
 				25000 + iPinnedSlot);
 		spdlog::info("OOBCol: force reload slot={}", iPinnedSlot);
 	}
-	Memory::callFunction("_ZN10CStreaming12RequestModelEii",
+	eng::fn::CStreaming_RequestModel(
 			25000 + iPinnedSlot, 0x18);
 	if (dwNow - s_dwOobColPumpTick > 1000) {
 		s_dwOobColPumpTick = dwNow;
-		Memory::callFunction("_ZN10CStreaming22LoadAllRequestedModelsEb", true);
+		eng::fn::CStreaming_LoadAllRequestedModels( true);
 	}
 }
 
@@ -465,7 +457,7 @@ static void LogOobColPin(int iModel, int iSlot)
 {
 	if (iSlot < 0) return;
 	int iRef = -1, iLoaded = -1, iMin = -1, iMax = -1;
-	auto ppStore = g_saSym->GetSymbol<uintptr_t*>("_ZN9CColStore11ms_pColPoolE");
+	auto ppStore = eng::as<uintptr_t*>(eng::Sym::CColStore_ms_pColPool);
 	uintptr_t uStore = ppStore ? *ppStore : 0;
 	char* pDefs = uStore ? *reinterpret_cast<char**>(uStore) : nullptr;
 	if (pDefs) {
@@ -475,8 +467,7 @@ static void LogOobColPin(int iModel, int iSlot)
 		iRef = (int) *reinterpret_cast<int16_t*>(pDef + 38);
 		iLoaded = (int) *reinterpret_cast<uint8_t*>(pDef + 40);
 	}
-	bool bInImg = Memory::callFunction<bool>(
-			"_ZN10CStreaming17IsObjectInCdImageEi", 25000 + iSlot);
+	bool bInImg = eng::fn::CStreaming_IsObjectInCdImage( 25000 + iSlot);
 	spdlog::info("OOBCol: model={} pin slot={} ref={} loaded={} "
 			"range=[{},{}] inImg={}",
 			iModel, iSlot, iRef, iLoaded, iMin, iMax, (int) bInImg);
@@ -618,7 +609,7 @@ void ProcessOobVehicleSectors()
 			if (it != s_oobVehSectors.end()) {
 				UnlinkFromRepeatSectors(pEnt, it->second.infos);
 				if (it->second.pinnedColSlot >= 0) {
-					Memory::callFunction("_ZN9CColStore9RemoveRefEi",
+					eng::fn::CColStore_RemoveRef(
 							it->second.pinnedColSlot);
 				}
 				s_oobVehSectors.erase(it);
@@ -664,7 +655,7 @@ void ProcessOobVehicleSectors()
 		else {
 			s_iOobInjectedTotal -= (int) it->second.infos.size();
 			if (it->second.pinnedColSlot >= 0) {
-				Memory::callFunction("_ZN9CColStore9RemoveRefEi",
+				eng::fn::CColStore_RemoveRef(
 						it->second.pinnedColSlot);
 			}
 			it = s_oobVehSectors.erase(it);
@@ -746,7 +737,7 @@ float CObject::DistanceRemaining(RwMatrix* matPos)
 void CObject::ApplyMoveSpeed()
 {
 	if (m_entity) {
-		float* pTimeStep = g_saSym->GetSymbol<float*>("_ZN6CTimer12ms_fTimeStepE");
+		float* pTimeStep = eng::as<float*>(eng::Sym::CTimer_ms_fTimeStep);
 		if (!pTimeStep) {
 			return;
 		}
@@ -1028,7 +1019,7 @@ void CObject::GetRotation(float* pfX, float* pfY, float* pfZ)
 
 		if (mat) {
 			// CMatrix::ConvertToEulerAngles
-			Memory::callFunction("_ZN7CMatrix20ConvertToEulerAnglesERfS0_S0_i", mat, pfX, pfY, pfZ, 21);
+			eng::fn::CMatrix_ConvertToEulerAngles( mat, pfX, pfY, pfZ, 21);
 		}
 
 		*pfX = *pfX * 57.295776 * -1.0;
@@ -1450,8 +1441,7 @@ static void ForEachObjectAtomic(RwObject* rwObj, RpAtomic* (*cb)(RpAtomic*, void
 		cb(reinterpret_cast<RpAtomic*>(rwObj), data);
 	}
 	else if (type == 2 /*rpCLUMP*/) {
-		Memory::callFunction<RpClump*>(
-				"_Z20RpClumpForAllAtomicsP7RpClumpPFP8RpAtomicS2_PvES3_",
+		eng::fn::RpClumpForAllAtomics<RpClump*>(
 				reinterpret_cast<RpClump*>(rwObj), cb, data);
 	}
 	else if (rwObj->parent) {
@@ -1466,7 +1456,7 @@ RpMaterial* EnableUVAnimMaterialCB(RpMaterial* material, void* data)
 		return material;
 	}
 
-	bool bHasUVAnim = Memory::callFunction<bool>("_Z22RpMaterialUVAnimExistsPK10RpMaterial", material);
+	bool bHasUVAnim = eng::fn::RpMaterialUVAnimExists( material);
 	if (!bHasUVAnim) {
 		return material;
 	}
@@ -1482,13 +1472,13 @@ RpMaterial* EnableUVAnimMaterialCB(RpMaterial* material, void* data)
 
 	// If the material uses MatFX UV transform (5 = UVTRANSFORM, 6 = DUALUVTRANSFORM),
 	// link its matrix slots to ext->uv[0..1] updated by DriveUVAnimMaterialCB.
-	int32_t iEffects = Memory::callFunction<int32_t>("_Z25RpMatFXMaterialGetEffectsPK10RpMaterial", material);
+	int32_t iEffects = eng::fn::RpMatFXMaterialGetEffects( material);
 	if (iEffects == 5 /*rpMATFXEFFECTUVTRANSFORM*/ || iEffects == 6 /*rpMATFXEFFECTDUALUVTRANSFORM*/) {
-		auto* pUVAnimGlobals = g_saSym->GetSymbol<RpUVAnimMaterialGlobalVars*>("RpUVAnimMaterialGlobals");
+		auto* pUVAnimGlobals = eng::as<RpUVAnimMaterialGlobalVars*>(eng::Sym::RpUVAnimMaterialGlobals);
 		if (pUVAnimGlobals) {
 			auto* ext = (RpUVAnimMaterialExtension*) ((char*) material + pUVAnimGlobals->engineOffset);
 			if (ext->uv[0] || ext->uv[1]) {
-				Memory::callFunction("_Z37RpMatFXMaterialSetUVTransformMatricesP10RpMaterialP11RwMatrixTagS2_", material, ext->uv[0], ext->uv[1]);
+				eng::fn::RpMatFXMaterialSetUVTransformMatrices( material, ext->uv[0], ext->uv[1]);
 			}
 		}
 	}
@@ -1500,7 +1490,7 @@ RpAtomic* EnableUVAnimAtomicCB(RpAtomic* atomic, void* data)
 {
 	if (atomic && *(uint8_t*) atomic == 1 /*rpATOMIC*/ && atomic->geometry) {
 		bool bHasUVAnimMaterial = false;
-		Memory::callFunction<RpGeometry*>("_Z25RpGeometryForAllMaterialsP10RpGeometryPFP10RpMaterialS2_PvES3_", atomic->geometry, (RpMaterial* (*)(RpMaterial*, void*)) EnableUVAnimMaterialCB, &bHasUVAnimMaterial);
+		eng::fn::RpGeometryForAllMaterials<RpGeometry*>( atomic->geometry, (RpMaterial* (*)(RpMaterial*, void*)) EnableUVAnimMaterialCB, &bHasUVAnimMaterial);
 		if (!bHasUVAnimMaterial) {
 			return atomic;
 		}
@@ -1537,11 +1527,11 @@ RpMaterial* DriveUVAnimMaterialCB(RpMaterial* material, void* data)
 		return material;
 	}
 
-	if (!Memory::callFunction<bool>("_Z22RpMaterialUVAnimExistsPK10RpMaterial", material)) {
+	if (!eng::fn::RpMaterialUVAnimExists( material)) {
 		return material;
 	}
 
-	auto* pUVAnimGlobals = g_saSym->GetSymbol<RpUVAnimMaterialGlobalVars*>("RpUVAnimMaterialGlobals");
+	auto* pUVAnimGlobals = eng::as<RpUVAnimMaterialGlobalVars*>(eng::Sym::RpUVAnimMaterialGlobals);
 	if (!pUVAnimGlobals) {
 		return material;
 	}
@@ -1772,9 +1762,9 @@ RpMaterial* DriveUVAnimMaterialCB(RpMaterial* material, void* data)
 		// Guard against SIGSEGV: RpMatFXMaterialSetUVTransformMatrices dereferences
 		// material's MatFX extension without a null check — only call when MatFX UV
 		// transform effect (5 or 6) is present.
-		int32_t iEffects = Memory::callFunction<int32_t>("_Z25RpMatFXMaterialGetEffectsPK10RpMaterial", material);
+		int32_t iEffects = eng::fn::RpMatFXMaterialGetEffects( material);
 		if (iEffects == 5 /*rpMATFXEFFECTUVTRANSFORM*/ || iEffects == 6 /*rpMATFXEFFECTDUALUVTRANSFORM*/) {
-			Memory::callFunction("_Z37RpMatFXMaterialSetUVTransformMatricesP10RpMaterialP11RwMatrixTagS2_",
+			eng::fn::RpMatFXMaterialSetUVTransformMatrices(
 					material, ext->uv[0], ext->uv[1]);
 		}
 	}
@@ -1790,7 +1780,7 @@ RpMaterial* DriveUVAnimMaterialCB(RpMaterial* material, void* data)
 RpAtomic* DriveUVAnimAtomicCB(RpAtomic* atomic, void* data)
 {
 	if (atomic && *(uint8_t*) atomic == 1 /*rpATOMIC*/ && atomic->geometry) {
-		Memory::callFunction<RpGeometry*>("_Z25RpGeometryForAllMaterialsP10RpGeometryPFP10RpMaterialS2_PvES3_",
+		eng::fn::RpGeometryForAllMaterials<RpGeometry*>(
 				atomic->geometry, (RpMaterial* (*)(RpMaterial*, void*)) DriveUVAnimMaterialCB, nullptr);
 	}
 
@@ -1809,7 +1799,7 @@ RwMatrix* FindAtomicUVAnimMatrix(RpAtomic* atomic, bool* outHasDualUV)
 	if (!geo->matList.materials || geo->matList.numMaterials <= 0) {
 		return nullptr;
 	}
-	auto* pUVAnimGlobals = g_saSym->GetSymbol<RpUVAnimMaterialGlobalVars*>("RpUVAnimMaterialGlobals");
+	auto* pUVAnimGlobals = eng::as<RpUVAnimMaterialGlobalVars*>(eng::Sym::RpUVAnimMaterialGlobals);
 	if (!pUVAnimGlobals) {
 		return nullptr;
 	}
@@ -1819,7 +1809,7 @@ RwMatrix* FindAtomicUVAnimMatrix(RpAtomic* atomic, bool* outHasDualUV)
 	for (int i = 0; i < count; ++i) {
 		RpMaterial* mat = geo->matList.materials[i];
 		if (!mat) continue;
-		if (!Memory::callFunction<bool>("_Z22RpMaterialUVAnimExistsPK10RpMaterial", mat)) {
+		if (!eng::fn::RpMaterialUVAnimExists( mat)) {
 			continue;
 		}
 		auto* ext = (RpUVAnimMaterialExtension*) ((char*) mat + pUVAnimGlobals->engineOffset);
@@ -1829,7 +1819,7 @@ RwMatrix* FindAtomicUVAnimMatrix(RpAtomic* atomic, bool* outHasDualUV)
 				firstUv = uv;
 			}
 			if (outHasDualUV) {
-				int32_t iEffects = Memory::callFunction<int32_t>("_Z25RpMatFXMaterialGetEffectsPK10RpMaterial", mat);
+				int32_t iEffects = eng::fn::RpMatFXMaterialGetEffects( mat);
 				if (iEffects == 6 /*rpMATFXEFFECTDUALUVTRANSFORM*/) {
 					*outHasDualUV = true;
 				}

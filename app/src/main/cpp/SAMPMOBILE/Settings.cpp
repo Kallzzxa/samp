@@ -331,14 +331,14 @@ void Settings::applyFpsLimitPatch()
 	if (!g_saSym) return;
 	uint8_t targetFps = (m_fpslimit <= 0) ? 250 : (uint8_t) std::max(15, std::min(250, m_fpslimit));
 #if VER_x32
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x5E49E0), (uintptr_t) &targetFps, 1);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x5E492E), (uintptr_t) &targetFps, 1);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch1_arm32), (uintptr_t) &targetFps, 1);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch2_arm32), (uintptr_t) &targetFps, 1);
 #else
 	uint32_t movW9 = 0x52800009u | ((uint32_t) targetFps << 5);
 	uint32_t movW8 = 0x52800008u | ((uint32_t) targetFps << 5);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x70A38C), (uintptr_t) &movW9, 4);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x70A43C), (uintptr_t) &movW8, 4);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(0x70A458), (uintptr_t) &movW9, 4);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch1_arm64), (uintptr_t) &movW9, 4);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch2_arm64), (uintptr_t) &movW8, 4);
+	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch3_arm64), (uintptr_t) &movW9, 4);
 #endif
 	if (sa::RsGlobal) {
 		sa::RsGlobal->maxFPS = targetFps;
@@ -347,14 +347,7 @@ void Settings::applyFpsLimitPatch()
 
 static GtaMobileSettingEntry* getLiveMobileSettings()
 {
-	if (!g_saSym) return nullptr;
-	// Read live GOT slot so AML plugins (e.g. libSAUtils64.so -> pNewSettings)
-	// that redirect MobileSettings::settings after init are respected.
-	auto** pGotSlot = g_saSym->Abs<GtaMobileSettingEntry**>(VER_x32 ? 0x679A3C : 0x851498);
-	if (pGotSlot && *pGotSlot) {
-		return *pGotSlot;
-	}
-	return g_saSym->GetSymbol<GtaMobileSettingEntry*>("_ZN14MobileSettings8settingsE");
+	return static_cast<GtaMobileSettingEntry*>(eng::live::mobileSettings());
 }
 
 void Settings::applyDynamicCameraAndFreeCam()
@@ -362,12 +355,12 @@ void Settings::applyDynamicCameraAndFreeCam()
 	if (!g_saSym) return;
 
 	// 1. Free Camera (patch PEDCAM_SET[0..2].MaxBetaSpeed and CARCAM_SET[0..5].MaxBetaSpeed)
-	if (auto* pedCamSet = g_saSym->GetSymbol<float*>("PEDCAM_SET")) {
+	if (auto* pedCamSet = eng::as<float*>(eng::Sym::PEDCAM_SET)) {
 		for (int i = 0; i < 3; ++i) {
 			pedCamSet[i * 15 + 9] = m_freecam ? 0.0f : 0.08f;
 		}
 	}
-	if (auto* carCamSet = g_saSym->GetSymbol<float*>("CARCAM_SET")) {
+	if (auto* carCamSet = eng::as<float*>(eng::Sym::CARCAM_SET)) {
 		for (int i = 0; i < 6; ++i) {
 			carCamSet[i * 15 + 9] = m_freecam ? 0.0f : 0.06f;
 			carCamSet[i * 15 + 12] = m_freecam ? 0.0f : 1.0f;
@@ -423,7 +416,7 @@ void Settings::applyToGtaEngine(bool bInGameReady)
 	};
 
 	// Prevent SetRendererDefaults() from clobbering user choices when gta_sa.set is absent
-	if (auto* pLoaded = g_saSym->GetSymbol<uint8_t*>("_ZN14MobileSettings6loadedE")) {
+	if (auto* pLoaded = eng::as<uint8_t*>(eng::Sym::MobileSettings_loaded)) {
 		*pLoaded = 1;
 	}
 
@@ -464,7 +457,7 @@ void Settings::applyToGtaEngine(bool bInGameReady)
 	applyDynamicCameraAndFreeCam();
 
 	// Apply draw distance to CRenderer::ms_lodDistScale (matches Menu_SwitchOffToGame formula)
-	if (auto* pLodDist = g_saSym->GetSymbol<float*>("_ZN9CRenderer15ms_lodDistScaleE")) {
+	if (auto* pLodDist = eng::as<float*>(eng::Sym::CRenderer_ms_lodDistScale)) {
 		*pLodDist = 0.875f + ((float) m_drawdistance * 0.875f * 0.01f);
 	}
 
@@ -480,11 +473,11 @@ void Settings::applyToGtaEngine(bool bInGameReady)
 		uintptr_t* widgets = GetTouchWidgets();
 		if (widgets && widgets[sa::WidgetIDs::WIDGET_PED_MOVE] && widgets[sa::WidgetIDs::WIDGET_ATTACK]) {
 			EnsureTouchWidgetsCreated();
-			Memory::callFunction("_ZN15CTouchInterface18SetupLayoutObjectsEv");
-			Memory::callFunction("_ZN15CTouchInterface17SetupSteeringModeEv");
+			eng::fn::CTouchInterface_SetupLayoutObjects();
+			eng::fn::CTouchInterface_SetupSteeringMode();
 			EnsureTouchWidgetsCreated();
 		}
-		Memory::callFunction("_Z23Menu_ApplyAudioSettingsv");
+		eng::fn::Menu_ApplyAudioSettings();
 		sa::getTheCamera().m_nPedZoom = std::max(1, std::min(3, m_pedcamzoom));
 	}
 }

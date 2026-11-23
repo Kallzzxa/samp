@@ -9,7 +9,6 @@
 #include <atomic>
 #include <cstring>
 
-extern std::string g_lastScriptCommand;
 extern std::atomic<uint16_t> g_lastScriptOpcode;
 extern int g_lastObjectModel;
 extern uintptr_t g_gtasaLibBase;
@@ -46,7 +45,7 @@ void logDeviceInfo()
 void logLastInfo()
 {
 	crash_log(" ");
-	crash_log("Last Script Command: %s", g_lastScriptCommand.c_str());
+	crash_log("Last Script Command: 0x%04X", (unsigned int) g_lastScriptOpcode.load(std::memory_order_relaxed));
 	crash_log("Last Rendered Object Model: %d", g_lastObjectModel);
 	crash_log(" ");
 }

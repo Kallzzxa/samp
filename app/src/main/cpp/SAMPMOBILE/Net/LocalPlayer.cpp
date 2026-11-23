@@ -535,7 +535,7 @@ bool CLocalPlayer::Spawn()
 	uintptr_t* widgets = GetTouchWidgets();
 	if (!widgets || !widgets[sa::WidgetIDs::WIDGET_PED_MOVE] || !widgets[sa::WidgetIDs::WIDGET_ATTACK]) {
 		spdlog::info("Widgets not inited, calling Menu_SwitchOffToGame");
-		Memory::callFunction("_Z20Menu_SwitchOffToGamev");
+		eng::fn::Menu_SwitchOffToGame();
 	}
 	EnsureTouchWidgetsCreated();
 

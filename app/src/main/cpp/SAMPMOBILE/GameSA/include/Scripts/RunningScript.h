@@ -42,12 +42,12 @@ class CRunningScript {
 public:
 	void Init()
 	{
-		Memory::callFunction("_ZN14CRunningScript4InitEv", this);
+		eng::fn::CRunningScript_Init( this);
 	}
 
 	void ProcessOneCommand()
 	{
-		Memory::callFunction("_ZN14CRunningScript17ProcessOneCommandEv", this);
+		eng::fn::CRunningScript_ProcessOneCommand( this);
 	}
 
 	void setName(const char* name) { strcpy(m_szScriptName, name); }

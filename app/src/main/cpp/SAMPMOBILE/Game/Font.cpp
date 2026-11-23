@@ -76,59 +76,59 @@ void CFont::AsciiToGxtChar(const char* ascii, uint16_t* gxt)
 
 void CFont::SetScale(float x, float y)
 {
-	sa::CFontDetails& fontDetails = *g_saSym->GetSymbol<sa::CFontDetails*>("_ZN5CFont7DetailsE");
+	sa::CFontDetails& fontDetails = *eng::as<sa::CFontDetails*>(eng::Sym::CFont_Details);
 	fontDetails.ScaleX = x;
 	fontDetails.ScaleY = y;
 }
 
 void CFont::SetColor(RGBA* dwColor)
 {
-	Memory::callFunction("_ZN5CFont8SetColorE5CRGBA", dwColor);
+	eng::fn::CFont_SetColor( dwColor);
 }
 
 void CFont::SetJustify(uint8_t just)
 {
-	Memory::callFunction("_ZN5CFont10SetJustifyEh", just);
+	eng::fn::CFont_SetJustify( just);
 }
 
 void CFont::SetOrientation(uint8_t orientation)
 {
-	Memory::callFunction("_ZN5CFont14SetOrientationEh", orientation);
+	eng::fn::CFont_SetOrientation( orientation);
 }
 
 void CFont::SetWrapX(float wrap)
 {
-	Memory::callFunction("_ZN5CFont8SetWrapxEf", wrap);
+	eng::fn::CFont_SetWrapx( wrap);
 }
 
 void CFont::SetCentreSize(float size)
 {
-	Memory::callFunction("_ZN5CFont13SetCentreSizeEf", size);
+	eng::fn::CFont_SetCentreSize( size);
 }
 
 void CFont::SetBackground(uint8_t bBackground, uint8_t bOnlyText)
 {
-	Memory::callFunction("_ZN5CFont13SetBackgroundEhh", bBackground, bOnlyText);
+	eng::fn::CFont_SetBackground( bBackground, bOnlyText);
 }
 
 void CFont::SetBackgroundColor(RGBA* dwColor)
 {
-	Memory::callFunction("_ZN5CFont18SetBackgroundColorE5CRGBA", dwColor);
+	eng::fn::CFont_SetBackgroundColor( dwColor);
 }
 
 void CFont::SetProportional(uint8_t prop)
 {
-	Memory::callFunction("_ZN5CFont15SetProportionalEh", prop);
+	eng::fn::CFont_SetProportional( prop);
 }
 
 void CFont::SetDropShadowPosition(uint8_t pos)
 {
-	Memory::callFunction("_ZN5CFont21SetDropShadowPositionEa", pos);
+	eng::fn::CFont_SetDropShadowPosition( pos);
 }
 
 void CFont::SetDropColor(RGBA* dwColor)
 {
-	Memory::callFunction("_ZN5CFont12SetDropColorE5CRGBA", dwColor);
+	eng::fn::CFont_SetDropColor( dwColor);
 }
 
 void CFont::PrintString(float fX, float fY, const char* szText)
@@ -141,22 +141,22 @@ void CFont::PrintString(float fX, float fY, const char* szText)
 	AsciiToGxtCharU8(szAscii, gxt_string);
 
 	// CFont::PrintString
-	Memory::callFunction("_ZN5CFont11PrintStringEffPt", fX, fY, gxt_string);
+	eng::fn::CFont_PrintString( fX, fY, gxt_string);
 
 	delete[] gxt_string;
 
 	// CFont::RenderFontBuffer
-	Memory::callFunction("_ZN5CFont16RenderFontBufferEv");
+	eng::fn::CFont_RenderFontBuffer();
 }
 
 void CFont::SetFontStyle(uint8_t style)
 {
-	Memory::callFunction("_ZN5CFont12SetFontStyleEh", style);
+	eng::fn::CFont_SetFontStyle( style);
 }
 
 void CFont::SetEdge(uint8_t edge)
 {
-	Memory::callFunction("_ZN5CFont7SetEdgeEa", edge);
+	eng::fn::CFont_SetEdge( edge);
 }
 
 

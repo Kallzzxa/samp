@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Engine/Symbols.h"
 #include "RenderWare/skeleton.h"
 
 #include "Core/PtrNode.h"

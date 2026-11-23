@@ -44,19 +44,19 @@ public:
 
 	void GiveUsAPickUpObject(CObject** obj, int32 slotIndex)
 	{
-		Memory::callFunction("_ZN7CPickup19GiveUsAPickUpObjectEPP7CObjecti", this, obj, slotIndex);
+		eng::fn::CPickup_GiveUsAPickUpObject( this, obj, slotIndex);
 	}
 
 	bool Update();
 
 	void Remove()
 	{
-		Memory::callFunction("_ZN7CPickup6RemoveEv", this);
+		eng::fn::CPickup_Remove( this);
 	}
 
 	void GetRidOfObjects()
 	{
-		Memory::callFunction("_ZN7CPickup15GetRidOfObjectsEv", this);
+		eng::fn::CPickup_GetRidOfObjects( this);
 	}
 
 public:

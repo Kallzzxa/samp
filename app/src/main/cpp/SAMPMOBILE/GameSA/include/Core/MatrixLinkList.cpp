@@ -12,8 +12,8 @@ void CMatrixLinkList::Initialize()
 {
 	//gMatrixList = *g_saSym->GetSymbol<CMatrixLinkList*>("gMatrixList");
 
-	Memory::protectAddr(g_saSym->Abs(VER_x32 ? 0x6776AC : 0x84CD98));
-	*g_saSym->Abs<CMatrixLinkList**>(VER_x32 ? 0x6776AC : 0x84CD98) = &gMatrixList;
+	Memory::protectAddr(g_saSym->Abs(addr::GOT_CMatrixLinkList_gMatrixList));
+	*g_saSym->Abs<CMatrixLinkList**>(addr::GOT_CMatrixLinkList_gMatrixList) = &gMatrixList;
 }
 
 CMatrixLinkList::CMatrixLinkList()
