@@ -44,6 +44,44 @@ MaterialTextGenerator* pMaterialTextGenerator = nullptr;
 SymUtils* g_saSym = new SymUtils();
 JavaVM* g_vm = nullptr;
 
+static std::string logLevelFlagPath(const std::string& gameDir)
+{
+	return gameDir + "loglevel_debug.flag";
+}
+
+bool Client::isLogLevelDebug()
+{
+	if (auto logger = spdlog::default_logger()) {
+		return logger->level() <= spdlog::level::debug;
+	}
+	return false;
+}
+
+bool Client::setLogLevelDebug(bool debug, bool persist)
+{
+	if (auto logger = spdlog::default_logger()) {
+		logger->set_level(debug ? spdlog::level::debug : spdlog::level::info);
+	}
+	if (persist && !game_dir.empty()) {
+		const std::string flag = logLevelFlagPath(game_dir);
+		if (debug) {
+			FILE* f = fopen(flag.c_str(), "wb");
+			if (!f) {
+				return false;
+			}
+			fclose(f);
+		}
+		else {
+			unlink(flag.c_str());
+		}
+	}
+	spdlog::info("[LOGLEVEL] set to {}", debug ? "debug" : "info");
+	if (auto logger = spdlog::default_logger()) {
+		logger->flush();
+	}
+	return true;
+}
+
 void init_logger(const std::string& gameDir)
 {
 	try {
@@ -68,12 +106,16 @@ void init_logger(const std::string& gameDir)
 		std::vector<spdlog::sink_ptr> sinks{android_sink, file_sink};
 		auto logger = std::make_shared<spdlog::logger>("SAMPMOBILE", sinks.begin(), sinks.end());
 
-		// Set log level and pattern
-		logger->set_level(spdlog::level::info);
+		// Set log level and pattern (debug if marker flag exists, else info)
+		const bool debugEnabled = (access(logLevelFlagPath(gameDir).c_str(), F_OK) == 0);
+		logger->set_level(debugEnabled ? spdlog::level::debug : spdlog::level::info);
 		logger->set_pattern("[%d-%m-%Y %H:%M:%S] [%^%l%$] %v");
 
 		// Set as default logger
 		spdlog::set_default_logger(logger);
+		if (debugEnabled) {
+			spdlog::info("[LOGLEVEL] debug mode restored from flag file");
+		}
 	}
 	catch (const spdlog::spdlog_ex& ex) {
 		__android_log_print(ANDROID_LOG_ERROR, "SAMPMOBILE", "Log initialization failed: %s", ex.what());

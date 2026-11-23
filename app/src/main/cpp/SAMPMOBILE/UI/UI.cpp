@@ -71,12 +71,6 @@ bool UI::initialize()
 	m_spawn->setPosition(UISettings::spawnPos());
 	m_spawn->setVisible(false);
 
-	m_dialog = new Dialog();
-	this->addChild(m_dialog);
-	m_dialog->setVisible(false);
-	m_dialog->setMinSize(UISettings::dialogMinSize());
-	m_dialog->setMaxSize(UISettings::dialogMaxSize());
-
 	m_keyboard = new Keyboard();
 	this->addChild(m_keyboard);
 	m_keyboard->setFixedSize(UISettings::keyboardSize());
@@ -140,7 +134,7 @@ void UI::processPendingTouchEvents()
 
 void UI::updateTouchSnapshot()
 {
-	const bool modalOpen = (m_keyboard && m_keyboard->visible()) || (m_dialog && m_dialog->visible());
+	const bool modalOpen = (m_keyboard && m_keyboard->visible());
 	m_snapModalOpen.store(modalOpen, std::memory_order_release);
 
 	std::lock_guard<std::mutex> lock(m_touchMutex);
@@ -220,7 +214,7 @@ void UI::drawList()
 
 	if (Settings::voice()) {
 		if (pNetGame) {
-			if (!Settings::voiceSpeakerList() || dialog()->visible() || scoreboard()->visible() || keyboard()->visible()) {
+			if (!Settings::voiceSpeakerList() || scoreboard()->visible() || keyboard()->visible()) {
 				SpeakerList::Hide();
 			}
 			else {
@@ -248,11 +242,6 @@ void UI::touchEvent(const ImVec2& pos, TouchType type)
 {
 	if (m_keyboard && m_keyboard->visible() && m_keyboard->contains(pos)) {
 		m_keyboard->touchEvent(pos, type);
-		return;
-	}
-
-	if (m_dialog && m_dialog->visible() && m_dialog->contains(pos)) {
-		m_dialog->touchEvent(pos, type);
 		return;
 	}
 

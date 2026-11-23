@@ -32,8 +32,6 @@
 #include "SAMPWidgets/DebugLabels.h"
 #include "SAMPWidgets/DeathWindow.h"
 
-#include "SAMPWidgets/Dialogs//Dialog.h"
-
 class UI : public Widget, public ImGuiWrapper {
 public:
 	UI(const ImVec2& display_size, const std::string& fonts_path);
@@ -46,7 +44,6 @@ public:
 	Chat* chat() const { return m_chat; }
 	Spawn* spawn() const { return m_spawn; }
 	Keyboard* keyboard() const { return m_keyboard; }
-	Dialog* dialog() const { return m_dialog; }
 	ButtonPanel* buttonpanel() const { return m_buttonPanel; }
 	Scoreboard* scoreboard() const { return m_scoreboard; }
 	VoiceButton* voicebutton() const { return m_voiceButton; }
@@ -100,7 +97,6 @@ private:
 	SplashScreen* m_splashScreen = nullptr;
 	Chat* m_chat = nullptr;
 	Spawn* m_spawn = nullptr;
-	Dialog* m_dialog = nullptr;
 	ButtonPanel* m_buttonPanel = nullptr;
 	Scoreboard* m_scoreboard = nullptr;
 	VoiceButton* m_voiceButton = nullptr;

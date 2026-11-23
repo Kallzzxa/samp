@@ -11,12 +11,6 @@ extern UI* pUI;
 extern Game* pGame;
 extern NetGame* pNetGame;
 
-extern int g_iLagCompensationMode;
-extern int iNetModeNormalOnFootSendRate;
-extern int iNetModeNormalInCarSendRate;
-extern int iNetModeFiringSendRate;
-extern int iNetModeSendMultiplier;
-
 uint32_t dwEnterVehTimeElasped = -1;
 bool bFirstSpawn = true;
 // bool g_bLockEnterVehicleWidget = false;
@@ -297,8 +291,8 @@ bool CLocalPlayer::Process()
 
 			bool bWannaSync = false;
 			if (wKeys & 0x84) {
-				if (g_iLagCompensationMode == 2) {
-					bWannaSync = (dwThisTick - m_dwLastSendAimSyncTick) > iNetModeFiringSendRate;
+				if (pNetGame->session().lagCompensationMode == 2) {
+					bWannaSync = (dwThisTick - m_dwLastSendAimSyncTick) > pNetGame->session().firingSendRate;
 				}
 				else {
 					bWannaSync = (dwThisTick - m_dwLastSendAimSyncTick) > 100;
@@ -796,7 +790,8 @@ void CLocalPlayer::SendInCarFullSyncData()
 	}
 
 	icSync.byteSirenOn = pVehicle->IsSirenOn();
-//	 icSync.byteLandingGearState = pVehicle->GetLandingGearState();
+	// 保留：T20 — landing gear sync
+	// icSync.byteLandingGearState = pVehicle->GetLandingGearState();
 
 	if (IsNeedSyncDataSend(&m_icSync, &icSync, sizeof(INCAR_SYNC_DATA), m_dwLastInCarSyncTick)) {
 		proto::OutboundVehicleSync pkt{};
@@ -1264,11 +1259,11 @@ int CLocalPlayer::GetOptimumOnFootSendRate()
 	if (!m_pPlayerPed) {
 		return 1000;
 	}
-	if (pNetGame->m_lanMode) {
+	if (pNetGame->session().lanMode) {
 		return 15;
 	}
 
-	return iNetModeNormalOnFootSendRate + pGame->GetPedSlotsUsed();
+	return pNetGame->session().onFootSendRate + pGame->GetPedSlotsUsed();
 }
 
 int CLocalPlayer::GetOptimumInCarSendRate()
@@ -1276,11 +1271,11 @@ int CLocalPlayer::GetOptimumInCarSendRate()
 	if (!m_pPlayerPed) {
 		return 1000;
 	}
-	if (pNetGame->m_lanMode) {
+	if (pNetGame->session().lanMode) {
 		return 15;
 	}
 
-	return iNetModeNormalInCarSendRate + pGame->GetPedSlotsUsed();
+	return pNetGame->session().inCarSendRate + pGame->GetPedSlotsUsed();
 }
 
 void CLocalPlayer::UpdateVehicleDamage(VEHICLEID vehicleID)

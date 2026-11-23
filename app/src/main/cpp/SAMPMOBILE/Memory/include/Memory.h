@@ -128,7 +128,7 @@ static void saveBytesToMap(uintptr_t addr, uint32_t byte_count, std::unordered_m
 	if (map.find(addr) == map.end()) {
 		std::vector<uint8_t> buffer(byte_count);
 		readMemory(addr, reinterpret_cast<uintptr_t>(buffer.data()), byte_count);
-		spdlog::info("saveBytesToMap addr: 0x{:x} bytes: {}", addr, buffer2Str(buffer));
+		spdlog::debug("saveBytesToMap addr: 0x{:x} bytes: {}", addr, buffer2Str(buffer));
 		map[addr] = std::move(buffer);
 	}
 }

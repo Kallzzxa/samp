@@ -40,6 +40,7 @@ typedef unsigned short OBJECTID;
 #include "PlayerBubblePool.h"
 #include "GangZonePool.h"
 #include "MenuPool.h"
+#include "Session.h"
 
 class NetGame {
 public:
@@ -64,7 +65,10 @@ public:
 
 	void Process();
 
-	void ShutdownForGameModeRestart();
+	SessionState& session() { return m_session; }
+	const SessionState& session() const { return m_session; }
+
+	void ShutdownForGameModeRestart(SessionState::ResetReason reason = SessionState::ResetReason::Restart);
 	void UpdatePlayerScoresAndPings();
 	void InitGameLogic();
 
@@ -118,38 +122,15 @@ private:
 	void ResetMenuPool();
 
 public:
-	char m_hostName[256 + 1];
+	using NET_SETTINGS = ServerSettings;
+
 	char m_host[256 + 1];
 	int m_port;
-	bool m_lanMode;
 
-	struct NET_SETTINGS {
-		bool useCJWalk;
-		int deathDropMoney;
-		bool allowWeapons;
-		float gravity;
-		bool disableInteriorEnterExits;
-		int vehicleFriendlyFire;
-		bool holdTime;
-		bool instagib;
-		bool zoneNames;
-		bool friendlyFire;
-		int spawnsAvailable;
-		float nameTagDrawDistance;
-		bool manualVehicleEngineAndLight;
-		uint8_t worldTime_Hour;
-		uint8_t worldTime_Minute;
-		uint8_t weather;
-		bool nameTagLOS;
-		int showPlayerMarkers;
-		float globalChatRadius;
-		bool showNameTags;
-		bool limitGlobalChatRadius;
-		float worldBounds[4];
-		bool disableVehicleCollisions;
-	} * m_netSet;
+	NET_SETTINGS* m_netSet;
 
 private:
+	SessionState m_session;
 	RakClientInterface* m_rakClient;
 
 	int m_gameState;

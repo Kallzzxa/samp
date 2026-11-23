@@ -111,14 +111,15 @@ void CRemotePlayer::Process()
 			}
 
 			if (m_pCurrentVehicle->GetVehicleSubtype() == VEHICLE_SUBTYPE_BIKE || m_pCurrentVehicle->GetVehicleSubtype() == VEHICLE_SUBTYPE_PUSHBIKE) {
-//				sub_100B7A40(_this->m_pCurrentVehicle, m_inCarSync.fTrainSpeed);
+				// 保留：T20 — remote bike lean sync
+				// sub_100B7A40(_this->m_pCurrentVehicle, m_inCarSync.fTrainSpeed);
 			}
 
 			// set alarm
 			m_pCurrentVehicle->SetSirenOn(m_inCarSync.byteSirenOn);
 
-			// landing gear
-//			m_pCurrentVehicle->SetLandingGearState(m_inCarSync.byteLandingGearState);
+			// 保留：T20 — remote landing gear sync
+			// m_pCurrentVehicle->SetLandingGearState(m_inCarSync.byteLandingGearState);
 
 			m_pCurrentVehicle->SetHealth(m_inCarSync.fCarHealth);
 

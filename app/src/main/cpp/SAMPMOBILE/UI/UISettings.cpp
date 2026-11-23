@@ -44,13 +44,6 @@ ImVec2 UISettings::m_spawnSize = ImVec2(240.0f, 45.0f);
 /* nametag */
 ImVec2 UISettings::m_nametagBarSize = ImVec2(25.0f, 6.0f);
 
-/* dialog */
-ImVec2 UISettings::m_dialogButtonPanelSize = ImVec2(150.0f, 45.0f);
-ImVec2 UISettings::m_dialogMinSize = ImVec2(150.0f, 120.0f);
-ImVec2 UISettings::m_dialogMaxSize = ImVec2(620.0f, 400.0f);
-float UISettings::m_dialogTitleHeight = 20.0f;
-float UISettings::m_dialogListItemHeight = 30.0f;
-
 /* voice button */
 ImVec2 UISettings::m_buttonVoicePos = ImVec2(480.0f, 270.0f);
 ImVec2 UISettings::m_buttonVoiceSize = ImVec2(45.0f, 60.0f);
@@ -66,10 +59,6 @@ ImColor UISettings::m_buttonFocusedColor = ImColor(0x32, 0x91, 0xF5);
 
 /* keyboard */
 ImColor UISettings::m_keyboardBackgroundColor = ImColor(0, 0, 0, 150);
-
-/* dialog */
-ImColor UISettings::m_dialogBackgroundColor = ImColor(0, 0, 0, 200);
-ImColor UISettings::m_dialogTitleBackgroundColor = ImColor(0, 0, 0, 200);
 
 void UISettings::Initialize(const ImVec2& display_size)
 {
@@ -106,13 +95,6 @@ void UISettings::Initialize(const ImVec2& display_size)
 
 	/* nametag */
 	m_nametagBarSize = m_nametagBarSize * m_scaleFactor;
-
-	/* dialog */
-	m_dialogButtonPanelSize = m_dialogButtonPanelSize * m_scaleFactor;
-	m_dialogMinSize = m_dialogMinSize * m_scaleFactor;
-	m_dialogMaxSize = m_dialogMaxSize * m_scaleFactor;
-	m_dialogTitleHeight *= m_scaleFactor.y;
-	m_dialogListItemHeight *= m_scaleFactor.y;
 
 	/* button voice */
 	float voiceScale = (float) Settings::voiceBtnSize() / 100.0f;

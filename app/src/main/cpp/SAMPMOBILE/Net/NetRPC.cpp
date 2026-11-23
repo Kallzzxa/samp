@@ -12,17 +12,10 @@ extern UI* pUI;
 extern Game* pGame;
 extern NetGame* pNetGame;
 
-extern int iNetModeNormalOnFootSendRate;
-extern int iNetModeNormalInCarSendRate;
-extern int iNetModeFiringSendRate;
-extern int iNetModeSendMultiplier;
-
 #define REJECT_REASON_BAD_VERSION 1
 #define REJECT_REASON_BAD_NICKNAME 2
 #define REJECT_REASON_BAD_MOD 3
 #define REJECT_REASON_BAD_PLAYERID 4
-
-int g_iLagCompensationMode = 0;
 
 void ProcessIncommingEvent(PLAYERID playerID, int iEventType, uint32_t dwParam1, uint32_t dwParam2, uint32_t dwParam3);
 
@@ -33,36 +26,38 @@ void RpcHandlers::OnInitGame(const proto::InitGame& p)
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) return;
 
-	pNetGame->m_netSet->zoneNames = p.zoneNames;
-	pNetGame->m_netSet->useCJWalk = p.useCJWalk;
-	pNetGame->m_netSet->allowWeapons = p.allowWeapons;
-	pNetGame->m_netSet->limitGlobalChatRadius = p.limitGlobalChatRadius;
-	pNetGame->m_netSet->globalChatRadius = p.globalChatRadius;
-	pNetGame->m_netSet->nameTagDrawDistance = p.nameTagDrawDistance;
-	pNetGame->m_netSet->disableInteriorEnterExits = p.disableInteriorEnterExits;
-	pNetGame->m_netSet->nameTagLOS = p.nameTagLOS;
+	SessionState& sess = pNetGame->session();
+	sess.settings.zoneNames = p.zoneNames;
+	sess.settings.useCJWalk = p.useCJWalk;
+	sess.settings.allowWeapons = p.allowWeapons;
+	sess.settings.limitGlobalChatRadius = p.limitGlobalChatRadius;
+	sess.settings.globalChatRadius = p.globalChatRadius;
+	sess.settings.nameTagDrawDistance = p.nameTagDrawDistance;
+	sess.settings.disableInteriorEnterExits = p.disableInteriorEnterExits;
+	sess.settings.nameTagLOS = p.nameTagLOS;
+	// 保留：T35 — nameTagLOS polarity check
 	//pNetGame->m_netSet->nameTagLOS = true;
-	pNetGame->m_netSet->manualVehicleEngineAndLight = p.manualVehicleEngineAndLight;
-	pNetGame->m_netSet->spawnsAvailable = p.spawnsAvailable;
-	pNetGame->m_netSet->showNameTags = p.showNameTags;
-	pNetGame->m_netSet->showPlayerMarkers = p.showPlayerMarkers;
-	pNetGame->m_netSet->worldTime_Hour = p.worldTimeHour;
-	pNetGame->m_netSet->weather = p.weather;
-	pNetGame->m_netSet->gravity = p.gravity;
-	pNetGame->m_netSet->deathDropMoney = p.deathDropMoney;
-	pNetGame->m_netSet->instagib = p.instagib;
+	sess.settings.manualVehicleEngineAndLight = p.manualVehicleEngineAndLight;
+	sess.settings.spawnsAvailable = p.spawnsAvailable;
+	sess.settings.showNameTags = p.showNameTags;
+	sess.settings.showPlayerMarkers = p.showPlayerMarkers;
+	sess.settings.worldTime_Hour = p.worldTimeHour;
+	sess.settings.weather = p.weather;
+	sess.settings.gravity = p.gravity;
+	sess.settings.deathDropMoney = p.deathDropMoney;
+	sess.settings.instagib = p.instagib;
 
-	iNetModeNormalOnFootSendRate = p.onFootSendRate;
-	iNetModeNormalInCarSendRate = p.inCarSendRate;
-	iNetModeFiringSendRate = p.firingSendRate;
-	iNetModeSendMultiplier = p.sendMultiplier;
+	sess.onFootSendRate = p.onFootSendRate;
+	sess.inCarSendRate = p.inCarSendRate;
+	sess.firingSendRate = p.firingSendRate;
+	sess.sendMultiplier = p.sendMultiplier;
 
 	switch (p.lagCompensation) {
-		case 1: g_iLagCompensationMode = 0;
+		case 1: sess.lagCompensationMode = 0;
 			break;
-		case 2: g_iLagCompensationMode = 1;
+		case 2: sess.lagCompensationMode = 1;
 			break;
-		default: g_iLagCompensationMode = 2;
+		default: sess.lagCompensationMode = 2;
 			break;
 	}
 
@@ -70,39 +65,39 @@ void RpcHandlers::OnInitGame(const proto::InitGame& p)
 		pGame->DisableAutoAim();
 	}
 
-	memset(pNetGame->m_hostName, 0, sizeof(pNetGame->m_hostName));
-	strncpy(pNetGame->m_hostName, p.hostName.c_str(), sizeof(pNetGame->m_hostName) - 1);
-	pNetGame->m_hostName[sizeof(pNetGame->m_hostName) - 1] = '\0';
+	memset(sess.hostName, 0, sizeof(sess.hostName));
+	strncpy(sess.hostName, p.hostName.c_str(), sizeof(sess.hostName) - 1);
+	sess.hostName[sizeof(sess.hostName) - 1] = '\0';
 
 	// pGame->PreloadVehicleModels(p.vehicleModels.data());
 
-	pNetGame->m_netSet->vehicleFriendlyFire = p.vehicleFriendlyFire;
+	sess.settings.vehicleFriendlyFire = p.vehicleFriendlyFire;
 	pPlayerPool->SetLocalPlayerID(p.myPlayerId);
 	pGame->EnableStuntBonus(p.stuntBonus);
 
 	if (p.lanMode) {
-		pNetGame->m_lanMode = true;
+		sess.lanMode = true;
 	}
 
 	pNetGame->InitGameLogic();
-	pGame->SetGravity(pNetGame->m_netSet->gravity);
+	pGame->SetGravity(sess.settings.gravity);
 
-	if (pNetGame->m_netSet->disableInteriorEnterExits) {
+	if (sess.settings.disableInteriorEnterExits) {
 		pGame->DisableEnterExits();
 	}
 
-	if (pNetGame->m_netSet->vehicleFriendlyFire) {
+	if (sess.settings.vehicleFriendlyFire) {
 		//InstallHook_VehicleFriendlyFire();
 	}
 
-	pGame->SetWorldWeather(pNetGame->m_netSet->weather);
-	pGame->ToggleCJWalk(pNetGame->m_netSet->useCJWalk);
+	pGame->SetWorldWeather(sess.settings.weather);
+	pGame->ToggleCJWalk(sess.settings.useCJWalk);
 
-	spdlog::info("szHostName, {}", pNetGame->m_hostName);
-	spdlog::info("vehicleFriendlyFire, {}", pNetGame->m_netSet->vehicleFriendlyFire);
+	spdlog::info("szHostName, {}", sess.hostName);
+	spdlog::debug("vehicleFriendlyFire, {}", sess.settings.vehicleFriendlyFire);
 
 	if (pUI) {
-		pUI->chat()->addDebugMessage("Connected to {B9C9BF}%s", Encoding::cp2utf(pNetGame->m_hostName).c_str());
+		pUI->chat()->addDebugMessage("Connected to {B9C9BF}%s", Encoding::cp2utf(sess.hostName).c_str());
 		pUI->voicebutton()->setVisible(Settings::voice() && Settings::voiceMicEnable());
 	}
 
@@ -114,13 +109,13 @@ void RpcHandlers::OnInitGame(const proto::InitGame& p)
 //Prompt box rpc processing
 void RpcHandlers::OnShowDialog(const proto::ShowDialog& p)
 {
-	spdlog::info("RPC: DialogBox");
-	spdlog::info("wDialogID {}", p.id);
-	spdlog::info("byteDialogStyle {}", (int) p.style);
-	spdlog::info("szTitle {}", p.title);
-	spdlog::info("szButton1 {}", p.button1);
-	spdlog::info("szButton2 {}", p.button2);
-	spdlog::info("szMessage {}", p.body);
+	spdlog::debug("RPC: DialogBox");
+	spdlog::debug("wDialogID {}", p.id);
+	spdlog::debug("byteDialogStyle {}", (int) p.style);
+	spdlog::debug("szTitle {}", p.title);
+	spdlog::debug("szButton1 {}", p.button1);
+	spdlog::debug("szButton2 {}", p.button2);
+	spdlog::debug("szMessage {}", p.body);
 
 	if (g_java) {
 		std::string uTitle = Encoding::cp2utf(p.title.c_str());
@@ -160,14 +155,14 @@ void RpcHandlers::OnChatMessage(const proto::ChatMessage& p)
 //client message
 void RpcHandlers::OnClientMessage(const proto::ClientMessage& p)
 {
-	spdlog::info("RPC: Client message ");
+	spdlog::debug("RPC: Client message ");
 	if (p.message.empty()) {
 		return;
 	}
 
-	spdlog::info("dwColor {}", p.color);
-	spdlog::info("dwStrLen {}", p.message.size());
-	spdlog::info("szMsg {}", p.message);
+	spdlog::debug("dwColor {}", p.color);
+	spdlog::debug("dwStrLen {}", p.message.size());
+	spdlog::debug("szMsg {}", p.message);
 
 	if (pUI && pUI->chat()) {
 		pUI->chat()->addClientMessage(Encoding::cp2utf(p.message.c_str()), p.color);
@@ -176,7 +171,7 @@ void RpcHandlers::OnClientMessage(const proto::ClientMessage& p)
 
 void RpcHandlers::OnRequestClass(const proto::RequestClassReply& p)
 {
-	spdlog::info("RPC: Request class");
+	spdlog::debug("RPC: Request class");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool || !pPlayerPool->GetLocalPlayer()) return;
@@ -203,13 +198,13 @@ void RpcHandlers::OnRequestClass(const proto::RequestClassReply& p)
 //Request spawn players
 void RpcHandlers::OnRequestSpawn(const proto::RequestSpawnReply& p)
 {
-	spdlog::info("RPC: Request spawn");
+	spdlog::debug("RPC: Request spawn");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool || !pPlayerPool->GetLocalPlayer()) return;
 	CLocalPlayer* pLocalPlayer = pPlayerPool->GetLocalPlayer();
 
-	spdlog::info("byteRequestOutcome {}", p.outcome);
+	spdlog::debug("byteRequestOutcome {}", p.outcome);
 
 	if (p.outcome == 2 || (p.outcome && pLocalPlayer->m_bWaitingForSpawnRequestReply)) {
 		pLocalPlayer->Spawn();
@@ -221,8 +216,8 @@ void RpcHandlers::OnRequestSpawn(const proto::RequestSpawnReply& p)
 
 void RpcHandlers::OnToggleClock(const proto::ToggleClock& p)
 {
-	spdlog::info("RPC: Toggle clock");
-	spdlog::info("byteClock {}", p.toggle);
+	spdlog::debug("RPC: Toggle clock");
+	spdlog::debug("byteClock {}", p.toggle);
 
 	if (p.toggle) {
 		pNetGame->m_netSet->holdTime = false;
@@ -240,9 +235,9 @@ void RpcHandlers::OnToggleClock(const proto::ToggleClock& p)
 
 void RpcHandlers::OnSetTimeEx(const proto::SetTimeEx& p)
 {
-	spdlog::info("RPC: SetTimeEx");
-	spdlog::info("byteHour {}", p.hour);
-	spdlog::info("byteMinute {}", p.minute);
+	spdlog::debug("RPC: SetTimeEx");
+	spdlog::debug("byteHour {}", p.hour);
+	spdlog::debug("byteMinute {}", p.minute);
 
 	if (pGame) pGame->SetWorldTime(p.hour, p.minute);
 	pNetGame->m_netSet->worldTime_Hour = p.hour;
@@ -251,8 +246,8 @@ void RpcHandlers::OnSetTimeEx(const proto::SetTimeEx& p)
 
 void RpcHandlers::OnWeather(const proto::Weather& p)
 {
-	spdlog::info("RPC: Weather");
-	spdlog::info("weather {}", p.weatherId);
+	spdlog::debug("RPC: Weather");
+	spdlog::debug("weather {}", p.weatherId);
 
 	pNetGame->m_netSet->weather = p.weatherId;
 	if (pGame) pGame->SetWorldWeather(p.weatherId);
@@ -260,8 +255,8 @@ void RpcHandlers::OnWeather(const proto::Weather& p)
 
 void RpcHandlers::OnWorldTime(const proto::WorldTime& p)
 {
-	spdlog::info("RPC: World time");
-	spdlog::info("byteWorldTIme {}", p.hour);
+	spdlog::debug("RPC: World time");
+	spdlog::debug("byteWorldTIme {}", p.hour);
 
 	pNetGame->m_netSet->worldTime_Hour = p.hour;
 }
@@ -311,10 +306,10 @@ void RpcHandlers::OnServerJoin(const proto::ServerJoin& p)
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) return;
 
-	spdlog::info("PlayerID {}", p.playerId);
-	spdlog::info("dwMarkerColor {}", p.markerColor);
-	spdlog::info("byteIsNPC {}", p.isNpc);
-	spdlog::info("szPlayerName {}", p.name);
+	spdlog::debug("PlayerID {}", p.playerId);
+	spdlog::debug("dwMarkerColor {}", p.markerColor);
+	spdlog::debug("byteIsNPC {}", p.isNpc);
+	spdlog::debug("szPlayerName {}", p.name);
 
 	if (p.name.size() > MAX_PLAYER_NAME) {
 		return;
@@ -331,7 +326,7 @@ void RpcHandlers::OnServerJoin(const proto::ServerJoin& p)
 
 void RpcHandlers::OnServerQuit(const proto::ServerQuit& p)
 {
-	spdlog::info("RPC: Server quit");
+	spdlog::debug("RPC: Server quit");
 
 	if (pNetGame->GetPlayerPool()) {
 		pNetGame->GetPlayerPool()->Delete(p.playerId, p.reason);
@@ -340,7 +335,7 @@ void RpcHandlers::OnServerQuit(const proto::ServerQuit& p)
 
 void RpcHandlers::OnWorldPlayerAdd(const proto::WorldPlayerAdd& p)
 {
-	spdlog::info("RPC: World player add");
+	spdlog::debug("RPC: World player add");
 
 	if (!proto::isFinite(p.position) || !std::isfinite(p.rotation)) return;
 
@@ -378,8 +373,8 @@ void RpcHandlers::OnWorldPlayerAdd(const proto::WorldPlayerAdd& p)
 
 void RpcHandlers::OnWorldPlayerRemove(const proto::WorldPlayerRemove& p)
 {
-	spdlog::info("RPC: World player remove");
-	spdlog::info("playerId {}", p.playerId);
+	spdlog::debug("RPC: World player remove");
+	spdlog::debug("playerId {}", p.playerId);
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (pPlayerPool) {
@@ -392,7 +387,7 @@ void RpcHandlers::OnWorldPlayerRemove(const proto::WorldPlayerRemove& p)
 
 void RpcHandlers::OnWorldPlayerDeath(const proto::WorldPlayerDeath& p)
 {
-	spdlog::info("RPC: Player Death");
+	spdlog::debug("RPC: Player Death");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (pPlayerPool) {
@@ -405,7 +400,7 @@ void RpcHandlers::OnWorldPlayerDeath(const proto::WorldPlayerDeath& p)
 
 void RpcHandlers::OnWorldVehicleAdd(const proto::WorldVehicleAdd& p)
 {
-	spdlog::info("RPC: World vehicle add");
+	spdlog::debug("RPC: World vehicle add");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
@@ -480,14 +475,14 @@ void RpcHandlers::OnWorldVehicleAdd(const proto::WorldVehicleAdd& p)
 
 void RpcHandlers::OnWorldVehicleRemove(const proto::WorldVehicleRemove& p)
 {
-	spdlog::info("RPC: World vehicle remove");
+	spdlog::debug("RPC: World vehicle remove");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
 		return;
 	}
 
-	spdlog::info("VehicleID {}", p.vehicleId);
+	spdlog::debug("VehicleID {}", p.vehicleId);
 
 	CVehicle* pVehicle = pVehiclePool->GetAt(p.vehicleId);
 	if (!pVehicle) {
@@ -506,32 +501,32 @@ void RpcHandlers::OnWorldVehicleRemove(const proto::WorldVehicleRemove& p)
 
 void RpcHandlers::OnTimerUpdate(const proto::TimerUpdate& p)
 {
-	spdlog::info("dwTime {}", p.time);
+	spdlog::debug("dwTime {}", p.time);
 
 	if (pGame) pGame->UpdateGlobalTimer(p.time);
 }
 
 void RpcHandlers::OnScmEvent(const proto::ScmEvent& p)
 {
-	spdlog::info("RPC: SCM event");
-	spdlog::info("playerId {}", p.playerId);
-	spdlog::info("iEvent {}", p.eventType);
-	spdlog::info("dwParam1 {}", p.param1);
-	spdlog::info("dwParam2 {}", p.param2);
-	spdlog::info("dwParam3 {}", p.param3);
+	spdlog::debug("RPC: SCM event");
+	spdlog::debug("playerId {}", p.playerId);
+	spdlog::debug("iEvent {}", p.eventType);
+	spdlog::debug("dwParam1 {}", p.param1);
+	spdlog::debug("dwParam2 {}", p.param2);
+	spdlog::debug("dwParam3 {}", p.param3);
 
 	ProcessIncommingEvent(p.playerId, p.eventType, p.param1, p.param2, p.param3);
 }
 
 void RpcHandlers::OnUpdateScoresPingsIPs(const proto::UpdateScoresPingsIPs& p)
 {
-	spdlog::info("RPC: Update scores and pings");
+	spdlog::debug("RPC: Update scores and pings");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) return;
 
 	for (const auto& entry : p.entries) {
-		spdlog::info("RPC_PINGIP: ({}): score: {}, ping: {}", entry.playerId, entry.score, entry.ping);
+		spdlog::debug("RPC_PINGIP: ({}): score: {}, ping: {}", entry.playerId, entry.score, entry.ping);
 
 		pPlayerPool->UpdatePlayerScore(entry.playerId, entry.score);
 		pPlayerPool->UpdatePlayerPing(entry.playerId, entry.ping);
@@ -540,7 +535,7 @@ void RpcHandlers::OnUpdateScoresPingsIPs(const proto::UpdateScoresPingsIPs& p)
 
 void RpcHandlers::OnCreatePickup(const proto::CreatePickup& p)
 {
-	spdlog::info("RPC: Pickup");
+	spdlog::debug("RPC: Pickup");
 
 	PICKUP pickup{};
 	pickup.iModel = p.model;
@@ -558,7 +553,7 @@ void RpcHandlers::OnCreatePickup(const proto::CreatePickup& p)
 //destroy pickup
 void RpcHandlers::OnDestroyPickup(const proto::DestroyPickup& p)
 {
-	spdlog::info("RPC: Destroy pickup");
+	spdlog::debug("RPC: Destroy pickup");
 	CPickupPool* pPickupPool = pNetGame->GetPickupPool();
 	if (pPickupPool) {
 		pPickupPool->Destroy(p.pickupId);
@@ -568,7 +563,7 @@ void RpcHandlers::OnDestroyPickup(const proto::DestroyPickup& p)
 //destroy dropped weapon pickup by owner (0.3.DL, RPC 151)
 void RpcHandlers::OnDestroyWeaponPickup(const proto::DestroyWeaponPickup& p)
 {
-	spdlog::info("RPC: Destroy weapon pickup");
+	spdlog::debug("RPC: Destroy weapon pickup");
 	CPickupPool* pPickupPool = pNetGame->GetPickupPool();
 	if (pPickupPool) {
 		pPickupPool->DestroyWeaponByOwner(p.owner);
@@ -603,7 +598,7 @@ void RpcHandlers::OnClientCheck(const proto::ClientCheckRequest& p)
 //Create 3D text
 void RpcHandlers::OnCreate3DTextLabel(const proto::Create3DTextLabel& p)
 {
-	spdlog::info("RPC: Create 3D text label");
+	spdlog::debug("RPC: Create 3D text label");
 
 	CTextLabelPool* pTextLabelPool = pNetGame->GetTextLabelPool();
 	if (pTextLabelPool == nullptr) {
@@ -630,7 +625,7 @@ void RpcHandlers::OnCreate3DTextLabel(const proto::Create3DTextLabel& p)
 //update 3d text
 void RpcHandlers::OnDelete3DTextLabel(const proto::Delete3DTextLabel& p)
 {
-	spdlog::info("RPC: Update 3D text label");
+	spdlog::debug("RPC: Update 3D text label");
 
 	CTextLabelPool* pTextLabelPool = pNetGame->GetTextLabelPool();
 	if (pTextLabelPool == nullptr) {
@@ -644,7 +639,7 @@ void RpcHandlers::OnDelete3DTextLabel(const proto::Delete3DTextLabel& p)
 
 void RpcHandlers::OnSetCheckpoint(const proto::SetCheckpoint& p)
 {
-	spdlog::info("RPC: Set checkpoint");
+	spdlog::debug("RPC: Set checkpoint");
 
 	if (!proto::isFinite(p.position) || !std::isfinite(p.size)) return;
 
@@ -659,13 +654,13 @@ void RpcHandlers::OnSetCheckpoint(const proto::SetCheckpoint& p)
 
 void RpcHandlers::OnDisableCheckpoint(const proto::DisableCheckpoint&)
 {
-	spdlog::info("RPC: Disable checkpoint");
+	spdlog::debug("RPC: Disable checkpoint");
 	if (pGame) pGame->EnableCheckpoints(false);
 }
 
 void RpcHandlers::OnSetRaceCheckpoint(const proto::SetRaceCheckpoint& p)
 {
-	spdlog::info("RPC: Set race checkpoint");
+	spdlog::debug("RPC: Set race checkpoint");
 
 	if (!proto::isFinite(p.position) || !proto::isFinite(p.nextPosition) || !std::isfinite(p.radius)) return;
 
@@ -680,13 +675,13 @@ void RpcHandlers::OnSetRaceCheckpoint(const proto::SetRaceCheckpoint& p)
 
 void RpcHandlers::OnDisableRaceCheckpoint(const proto::DisableRaceCheckpoint&)
 {
-	spdlog::info("RPC: Disable race checkpoint");
+	spdlog::debug("RPC: Disable race checkpoint");
 	if (pGame) pGame->EnableRaceCheckpoints(false);
 }
 
 void RpcHandlers::OnDamageVehicle(const proto::DamageVehicle& p)
 {
-	spdlog::info("RPC: Damage vehicle");
+	spdlog::debug("RPC: Damage vehicle");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
@@ -701,7 +696,7 @@ void RpcHandlers::OnDamageVehicle(const proto::DamageVehicle& p)
 
 void RpcHandlers::OnEnterVehicle(const proto::EnterVehicle& p)
 {
-	spdlog::info("RPC: Enter vehicle");
+	spdlog::debug("RPC: Enter vehicle");
 
 	uint8_t bytePassenger = p.passenger ? 1 : 0;
 
@@ -719,7 +714,7 @@ void RpcHandlers::OnEnterVehicle(const proto::EnterVehicle& p)
 
 void RpcHandlers::OnExitVehicle(const proto::ExitVehicle& p)
 {
-	spdlog::info("RPC: Exit vehicle");
+	spdlog::debug("RPC: Exit vehicle");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) {
@@ -736,7 +731,7 @@ void RpcHandlers::OnExitVehicle(const proto::ExitVehicle& p)
 //Vehicle parameters
 void RpcHandlers::OnVehicleParamsEx(const proto::VehicleParamsEx& p)
 {
-	spdlog::info("RPC: VehicleParamsEx");
+	spdlog::debug("RPC: VehicleParamsEx");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
@@ -837,7 +832,7 @@ void RpcHandlers::OnVehicleParamsEx(const proto::VehicleParamsEx& p)
 //show npc
 void RpcHandlers::OnShowActor(const proto::ShowActor& p)
 {
-	spdlog::info("RPC: Show actor");
+	spdlog::debug("RPC: Show actor");
 
 	CActorPool* pActorPool = pNetGame->GetActorPool();
 	if (!pActorPool) {
@@ -860,7 +855,7 @@ void RpcHandlers::OnShowActor(const proto::ShowActor& p)
 //hide npc
 void RpcHandlers::OnHideActor(const proto::HideActor& p)
 {
-	spdlog::info("RPC: Hide actor");
+	spdlog::debug("RPC: Hide actor");
 
 	CActorPool* pActorPool = pNetGame->GetActorPool();
 	if (!pActorPool) {
@@ -873,7 +868,7 @@ void RpcHandlers::OnHideActor(const proto::HideActor& p)
 //chat bubble
 void RpcHandlers::OnChatBubble(const proto::ChatBubble& p)
 {
-	spdlog::info("RPC: ChatBubble");
+	spdlog::debug("RPC: ChatBubble");
 
 	CPlayerBubblePool* pPlayerBubblePool = pNetGame->GetPlayerBubblePool();
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
@@ -891,14 +886,14 @@ void RpcHandlers::OnChatBubble(const proto::ChatBubble& p)
 //Edit attached object
 void RpcHandlers::OnEditAttachedObject(const proto::EditAttachedObject& p)
 {
-	spdlog::info("RPC: EditAttachedObject");
+	spdlog::debug("RPC: EditAttachedObject");
 	EditObject::startEditAttachedObject(p.index);
 }
 
 //edit object
 void RpcHandlers::OnEditObject(const proto::EditObject& p)
 {
-	spdlog::info("RPC: EditObject");
+	spdlog::debug("RPC: EditObject");
 
 	EditObject::m_playerObj = p.playerObject;
 
@@ -915,12 +910,12 @@ void RpcHandlers::OnEditObject(const proto::EditObject& p)
 //Go to edit object
 void RpcHandlers::OnEnterEditObject(const proto::EnterEditObject&)
 {
-	spdlog::info("RPC: EnterEditObject");
+	spdlog::debug("RPC: EnterEditObject");
 }
 
 //cancel editor object
 void RpcHandlers::OnCancelEditObject(const proto::CancelEditObject&)
 {
-	spdlog::info("RPC: CancelEditObject");
+	spdlog::debug("RPC: CancelEditObject");
 	EditObject::cancelEdit();
 }

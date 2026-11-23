@@ -12,7 +12,6 @@ extern NetGame* pNetGame;
 
 extern CPlayerPed* g_pCurrentFiredPed;
 extern BULLET_DATA* g_pCurrentBulletData;
-extern int g_iLagCompensationMode;
 
 PAD_KEYS LocalPlayerKeys;
 PAD_KEYS RemotePlayerKeys[PLAYER_PED_SLOTS];
@@ -1191,7 +1190,8 @@ void SendBulletSync(sa::CVector* vecOrigin, sa::CVector* vecPos, sa::CEntity** p
 		pEntity = *ppEntity;
 		if (pEntity) {
 			if (pEntity->m_matrix) {
-				if (g_iLagCompensationMode) {
+				const int lagComp = pNetGame ? pNetGame->session().lagCompensationMode : 0;
+				if (lagComp) {
 					bulletData.vecOffset.x = vecPos->x - pEntity->m_matrix->m_pos.x;
 					bulletData.vecOffset.y = vecPos->y - pEntity->m_matrix->m_pos.y;
 					bulletData.vecOffset.z = vecPos->z - pEntity->m_matrix->m_pos.z;
@@ -1284,11 +1284,13 @@ DECL_HOOK(uint32_t, CWorld_ProcessLineOfSight, sa::CVector* vecOrigin, sa::CVect
 	static sa::CVector vecPosPlusOffset;
 	CPlayerPed* pLocalPlayerPed = pGame ? pGame->FindPlayerPed() : nullptr;
 
-	if (g_iLagCompensationMode != 2 && vecOrigin && vecEnd) {
+	const int lagComp = pNetGame ? pNetGame->session().lagCompensationMode : 0;
+
+	if (lagComp != 2 && vecOrigin && vecEnd) {
 		if (g_pCurrentFiredPed && g_pCurrentFiredPed != pLocalPlayerPed) {
 			if (g_pCurrentBulletData && g_pCurrentBulletData->pEntity) {
 				if (!IsEntityPlaceable(g_pCurrentBulletData->pEntity) && g_pCurrentBulletData->pEntity->m_matrix) {
-					if (g_iLagCompensationMode) {
+					if (lagComp) {
 						vecPosPlusOffset.x = g_pCurrentBulletData->pEntity->m_matrix->m_pos.x + g_pCurrentBulletData->vecOffset.x;
 						vecPosPlusOffset.y = g_pCurrentBulletData->pEntity->m_matrix->m_pos.y + g_pCurrentBulletData->vecOffset.y;
 						vecPosPlusOffset.z = g_pCurrentBulletData->pEntity->m_matrix->m_pos.z + g_pCurrentBulletData->vecOffset.z;
@@ -1314,7 +1316,7 @@ DECL_HOOK(uint32_t, CWorld_ProcessLineOfSight, sa::CVector* vecOrigin, sa::CVect
 
 	uint32_t result = CWorld_ProcessLineOfSight(vecOrigin, vecEnd, colPoint, ppEntity, b1, b2, b3, b4, b5, b6, b7, b8);
 
-	if (g_iLagCompensationMode == 2) {
+	if (lagComp == 2) {
 		if (g_pCurrentFiredPed && g_pCurrentFiredPed == pLocalPlayerPed && vecOrigin && colPoint) {
 			SendBulletSync(vecOrigin, &colPoint->m_vecPoint, ppEntity);
 		}

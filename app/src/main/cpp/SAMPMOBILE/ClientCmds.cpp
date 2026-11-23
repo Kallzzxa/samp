@@ -227,6 +227,9 @@ void cmdCmds(const std::string& params)
 		pUI->chat()->addInfoMessage("/dw -> Toggle Death / Kill Window");
 		pUI->chat()->addInfoMessage("/netcap on|off -> Record network packets to netcap/ (debug)");
 		pUI->chat()->addInfoMessage("/rpcstats [all|reset] -> Show declarative RPC hit/fail counts");
+		pUI->chat()->addInfoMessage("/session -> Dump current session state to log");
+		pUI->chat()->addInfoMessage("/patches -> Dump engine patch & hook registry to log");
+		pUI->chat()->addInfoMessage("/loglevel [debug|info] -> Switch client log verbosity");
 		pUI->chat()->addInfoMessage("/rcon -> Send RCON Command (e.g. /rcon login [pass])");
 		pUI->chat()->addInfoMessage(" ");
 	}
@@ -329,12 +332,46 @@ void cmdPatches(const std::string& params)
 		static_cast<unsigned long long>(s.restoreNopCalls));
 }
 
+void cmdSession(const std::string& params)
+{
+	if (!pUI || !pNetGame) return;
+	const SessionState& s = pNetGame->session();
+	s.dumpToLog();
+	pUI->chat()->addInfoMessage("-> Session: %s (%s, lan=%d, lagComp=%d)",
+		s.hostName,
+		s.protoVersion == proto::ProtoVersion::V03DL ? "0.3.DL" : "0.3.7",
+		s.lanMode ? 1 : 0, s.lagCompensationMode);
+	pUI->chat()->addInfoMessage("   rates=%d/%d/%d(x%d) time=%02d:%02d weather=%d grav=%.4f cj=%d tagLOS=%d",
+		s.onFootSendRate, s.inCarSendRate, s.firingSendRate, s.sendMultiplier,
+		(int) s.settings.worldTime_Hour, (int) s.settings.worldTime_Minute,
+		(int) s.settings.weather, s.settings.gravity,
+		s.settings.useCJWalk ? 1 : 0, s.settings.nameTagLOS ? 1 : 0);
+}
+
+void cmdLogLevel(const std::string& params)
+{
+	if (!pUI) return;
+	if (params == "debug") {
+		Client::setLogLevelDebug(true, true);
+		pUI->chat()->addInfoMessage("-> LogLevel: DEBUG (saved across restarts)");
+	}
+	else if (params == "info") {
+		Client::setLogLevelDebug(false, true);
+		pUI->chat()->addInfoMessage("-> LogLevel: INFO (saved across restarts)");
+	}
+	else {
+		pUI->chat()->addInfoMessage("-> Usage: /loglevel debug|info (now: %s)",
+			Client::isLogLevelDebug() ? "DEBUG" : "INFO");
+	}
+}
+
 void ClientCmds::initialize()
 {
 	spdlog::info("Initializing client commands..");
 
 	pUI->chat()->addClientCommand("cleo", cmdCleo);
 	pUI->chat()->addClientCommand("patches", cmdPatches);
+	pUI->chat()->addClientCommand("loglevel", cmdLogLevel);
 
 	pUI->chat()->addClientCommand("ss", cmdScreenshot);
 	pUI->chat()->addClientCommand("screenshot", cmdScreenshot);
@@ -360,5 +397,6 @@ void ClientCmds::initialize()
 		pUI->chat()->addClientCommand("dw", cmdDW);
 		pUI->chat()->addClientCommand("netcap", cmdNetCap);
 		pUI->chat()->addClientCommand("rpcstats", cmdRpcStats);
+		pUI->chat()->addClientCommand("session", cmdSession);
 	}
 }

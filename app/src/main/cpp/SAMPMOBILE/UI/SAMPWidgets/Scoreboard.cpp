@@ -89,7 +89,7 @@ void Scoreboard::draw(ImGuiRenderer* renderer)
 			ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
 
 	ImGui::Columns(2, "ScoreboardInfo", false);
-	ImGui::Text("%s", pNetGame ? Encoding::cp2utf(pNetGame->m_hostName).c_str() : "");
+	ImGui::Text("%s", pNetGame ? Encoding::cp2utf(pNetGame->session().hostName).c_str() : "");
 	ImGui::SetColumnWidth(-1, size().x - (wPlayerTextSize + (ImGui::GetStyle().ItemSpacing.x * 2)));
 	ImGui::NextColumn();
 	ImGui::Text("%s", szPlayerCount);

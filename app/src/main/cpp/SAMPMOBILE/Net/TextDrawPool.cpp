@@ -82,6 +82,7 @@ void CTextDrawPool::SetSelectState(bool bState, uint32_t dwColor)
 {
 	if (bState) {
 		m_bSelectState.store(true, std::memory_order_release);
+		// 保留：§10 悬停颜色字节序疑点
 		m_dwHoverColor = dwColor; //(((dwColor << 16) | dwColor & 0xFF00) << 8) | (((dwColor >> 16) | dwColor & 0xFF0000) >> 8);
 		m_wClickedTextDrawID = 0xFFFF;
 		//pGame->DisplayHUD(false);

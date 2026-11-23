@@ -102,7 +102,7 @@ ButtonPanel::ButtonPanel()
 	});
 
 	m_tab->setCallback([]() {
-		if (pUI && !pUI->dialog()->visible() && !pUI->keyboard()->visible()) {
+		if (pUI && !pUI->keyboard()->visible()) {
 			pUI->scoreboard()->setVisible(!pUI->scoreboard()->visible());
 		}
 
@@ -390,13 +390,10 @@ void ButtonPanel::handleHardwareKey(int androidKeyCode, bool isDown)
 	if (!Settings::kmEnabled()) return;
 	if (!pUI || !pGame) return;
 
-	// If in-game ImGui keyboard or dialog is open, only allow ESC
-	if ((pUI->keyboard() && pUI->keyboard()->visible()) ||
-		(pUI->dialog() && pUI->dialog()->visible())) {
+	// If in-game ImGui keyboard is open, only allow ESC
+	if (pUI->keyboard() && pUI->keyboard()->visible()) {
 		if (androidKeyCode == 111 /* KEYCODE_ESCAPE */ && isDown) {
-			if (pUI->keyboard() && pUI->keyboard()->visible()) {
-				pUI->keyboard()->setVisible(false);
-			}
+			pUI->keyboard()->setVisible(false);
 		}
 		return;
 	}

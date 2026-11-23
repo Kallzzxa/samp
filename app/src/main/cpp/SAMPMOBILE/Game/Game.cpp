@@ -187,6 +187,7 @@ uint32_t Game::CreateRadarMarkerIcon(uint8_t byteType, float fPosX, float fPosY,
 
 	return dwMarkerID;
 
+	// 保留：T26 — map icon style switch (crashes investigation)
 	// crashes sometimes wtf?
 	/*uint32_t dwMapIcon = 0;
 

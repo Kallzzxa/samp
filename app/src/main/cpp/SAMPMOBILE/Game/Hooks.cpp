@@ -192,31 +192,7 @@ DECL_HOOK(void, AND_TouchEvent, int type, int num, int posX, int posY)
 
 DECL_HOOK(void, DisplayScreen)
 {
-	/*
-	 * using the loadingscreen from java so we don't need this anymore
-	 */
-
-	/*if (RwCameraBeginUpdate(sa::Scene->m_pRwCamera)) {
-		// DefinedState2d
-		Memory::callFunction<void>("_Z14DefinedState2dv");
-
-		// CSprite2d::InitPerFrame
-		Memory::callFunction<void>("_ZN9CSprite2d12InitPerFrameEv");
-
-		RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*) rwTEXTUREADDRESSCLAMP);
-
-		// emu_GammaSet
-		Memory::callFunction("_Z12emu_GammaSeth", false);
-
-		// CLoadingScreen::m_PercentLoaded
-		float fPercentLoaded = *g_saSym->GetSymbol<float*>("_ZN14CLoadingScreen15m_PercentLoadedE");
-
-		pUI->splashscreen()->setProgressBarValue(fPercentLoaded / 100.0f);
-		pUI->render();
-
-		RwCameraEndUpdate(sa::Scene->m_pRwCamera);
-		RwCameraShowRaster(sa::Scene->m_pRwCamera, nullptr, 0);
-	}*/
+	// Loading screen is rendered on the Java layer; suppress the native GTA screen.
 }
 
 DECL_HOOK(int, OS_FileOpen, int a1, uintptr_t handle, char *name, int a2)

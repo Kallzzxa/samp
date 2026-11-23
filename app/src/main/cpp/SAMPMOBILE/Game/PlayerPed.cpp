@@ -48,7 +48,7 @@ CPlayerPed::CPlayerPed()
 
 CPlayerPed::CPlayerPed(int iNum, int iSkin, float fX, float fY, float fZ, float fRotation)
 {
-	spdlog::info("CPlayerPed::CPlayerPed({}, {}, {}, {}, {}, {})", iNum, iSkin, fX, fY, fZ, fRotation);
+	spdlog::debug("CPlayerPed::CPlayerPed({}, {}, {}, {}, {}, {})", iNum, iSkin, fX, fY, fZ, fRotation);
 
 	uint32_t dwPlayerActorID;
 	ScriptCommand(&create_player, &iNum, fX, fY, fZ, &dwPlayerActorID);
@@ -106,7 +106,7 @@ CPlayerPed::CPlayerPed(int iNum, int iSkin, float fX, float fY, float fZ, float 
 
 CPlayerPed::~CPlayerPed()
 {
-	spdlog::info("Destroying PlayerPed({})", m_bytePlayerNumber);
+	spdlog::debug("Destroying PlayerPed({})", m_bytePlayerNumber);
 
 	// GameResetPlayerKeys
 
@@ -330,6 +330,7 @@ void CPlayerPed::SetSpecialAction(uint8_t byteSpecialAction)
 		TogglePissing(false);
 	}
 
+	// 保留：T17 — dancing & drinking/smoking special actions
 	// dancing:start
 	/*if (GetDanceStyle() == -1) {
 		if (byteSpecialAction == SPECIAL_ACTION_DANCE1) {
@@ -419,6 +420,7 @@ uint8_t CPlayerPed::GetSpecialAction()
 		return SPECIAL_ACTION_CARRY;
 	}
 
+	// 保留：T17 — dance style reporting
 	/*if (GetDanceStyle() != -1) {
 		switch (GetDanceStyle()) {
 			case 0: return SPECIAL_ACTION_DANCE1;
@@ -511,6 +513,7 @@ void CPlayerPed::ProcessDancing()
 
 	if (!m_iDanceState) return;
 
+	// 保留：T17 — dance input & animation loop
 	/*uint16_t wKeysUpDown, wKeysLeftRight, iExtra;
 	if (!m_bytePlayerNumber) {
 		wKeysUpDown = LocalPlayerKeys.wKeyUD;
@@ -623,7 +626,7 @@ void CPlayerPed::ApplyCrouch()
 		return;
 	}
 
-	spdlog::info("Apply crouch");
+	spdlog::debug("Apply crouch");
 
 	if (!IsCrouching()) {
 		if (m_ped->m_pIntelligence) {
@@ -639,7 +642,7 @@ void CPlayerPed::ResetCrouch()
 		return;
 	}
 
-	spdlog::info("Reset crouch");
+	spdlog::debug("Reset crouch");
 
 	m_ped->m_nPedFlags.bIsDucking = false;
 
@@ -1434,7 +1437,7 @@ void CPlayerPed::ApplyAnimation(const char* szAnimName, const char* szAnimLib, f
 		}
 	}
 
-	spdlog::info("Animation {} loaded!", szAnimLib);
+	spdlog::debug("Animation {} loaded!", szAnimLib);
 
 	ScriptCommand(&apply_animation, m_gtaId, szAnimName, szAnimLib, fT, opt1, opt2, opt3, opt4, iTime);
 }
@@ -1450,7 +1453,7 @@ void CPlayerPed::SetInterior(uint8_t byteInteriorId, bool bRefresh)
 		ScriptCommand(&link_actor_to_interior, m_gtaId, byteInteriorId);
 		if (bRefresh) {
 			RwMatrix mat = m_ped->GetMatrix().ToRwMatrix();
-			spdlog::info("refresh streaming at x: {}, y: {}", mat.pos.x, mat.pos.y);
+			spdlog::debug("refresh streaming at x: {}, y: {}", mat.pos.x, mat.pos.y);
 			pGame->RefreshStreamingAt(mat.pos.x, mat.pos.y);
 		}
 	}
@@ -1474,7 +1477,7 @@ void CPlayerPed::ResetHealth()
 
 void CPlayerPed::SetModelIndex(uint uiModel)
 {
-	spdlog::info("SetModelIndex: {}", uiModel);
+	spdlog::debug("SetModelIndex: {}", uiModel);
 
 	if (!m_ped) {
 		spdlog::error("SetModelIndex: m_ped is null");
@@ -1619,7 +1622,7 @@ void CPlayerPed::ProcessParachuteSkydiving()
 
 	// if the parachute object isn't created, do it now.
 	if (!m_dwParachuteObject) {
-		spdlog::info("Creating parachute object");
+		spdlog::debug("Creating parachute object");
 		mat = m_ped->GetMatrix().ToRwMatrix();
 		ScriptCommand(&create_object, OBJECT_PARACHUTE, mat.pos.x, mat.pos.y, mat.pos.z, &m_dwParachuteObject);
 
@@ -2082,7 +2085,7 @@ void CPlayerPed::ProcessAttachedObjects()
 
 void CPlayerPed::PutDirectlyInVehicle(uint32_t dwVehicleGTAId, uint8_t byteSeatID)
 {
-	spdlog::info("PutDirectlyInVehicle: {} {}", dwVehicleGTAId, byteSeatID);
+	spdlog::debug("PutDirectlyInVehicle: {} {}", dwVehicleGTAId, byteSeatID);
 
 	if (!m_ped) {
 		return;
@@ -2434,7 +2437,7 @@ BULLET_DATA* g_pCurrentBulletData = nullptr;
 
 void CPlayerPed::FireInstant()
 {
-	spdlog::info("CPlayerPed::FireInstant");
+	spdlog::debug("CPlayerPed::FireInstant");
 
 	ScopedPlayerContext ctx(m_bytePlayerNumber, ScopedPlayerContext::kFireInstant, m_bytePlayerNumber != 0);
 

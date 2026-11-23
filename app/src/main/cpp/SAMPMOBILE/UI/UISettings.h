@@ -38,13 +38,6 @@ public:
 	/* nametag */
 	static ImVec2 nametagBarSize() { return m_nametagBarSize; }
 
-	/* dialog */
-	static ImVec2 dialogButtonPanelSize() { return m_dialogButtonPanelSize; }
-	static ImVec2 dialogMinSize() { return m_dialogMinSize; }
-	static ImVec2 dialogMaxSize() { return m_dialogMaxSize; }
-	static float dialogTitleHeight() { return m_dialogTitleHeight; }
-	static float dialogListItemHeight() { return m_dialogListItemHeight; }
-
 	/* voice button */
 	static ImVec2 buttonVoicePos() { return m_buttonVoicePos; }
 	static ImVec2 buttonVoiceSize() { return m_buttonVoiceSize; }
@@ -60,10 +53,6 @@ public:
 
 	/* keyboard */
 	static ImColor keyboardBackgroundColor() { return m_keyboardBackgroundColor; }
-
-	/* dialog */
-	static ImColor dialogBackgroundColor() { return m_dialogBackgroundColor; }
-	static ImColor dialogTitleBackgroundColor() { return m_dialogTitleBackgroundColor; }
 
 private:
 	/* scaling */
@@ -106,13 +95,6 @@ private:
 	/* nametag */
 	static ImVec2 m_nametagBarSize;
 
-	/* dialog */
-	static ImVec2 m_dialogButtonPanelSize;
-	static ImVec2 m_dialogMinSize;
-	static ImVec2 m_dialogMaxSize;
-	static float m_dialogTitleHeight;
-	static float m_dialogListItemHeight;
-
 	/* voice button */
 	static ImVec2 m_buttonVoicePos;
 	static ImVec2 m_buttonVoiceSize;
@@ -129,8 +111,4 @@ private:
 
 	/* keyboard */
 	static ImColor m_keyboardBackgroundColor;
-
-	/* dialog */
-	static ImColor m_dialogBackgroundColor;
-	static ImColor m_dialogTitleBackgroundColor;
 };

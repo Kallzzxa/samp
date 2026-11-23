@@ -415,28 +415,6 @@ void CVehicle::AddComponent(int iComponentID)
 		return;
 	}
 
-	/*if (!ScriptCommand(&is_component_available, iComponentID)) {
-		pGame->RequestModel(iComponentID);
-		pGame->LoadRequestedModels();
-		ScriptCommand(&request_car_component, iComponentID);
-
-		int dwTime = 0;
-		while (dwTime < 20) {
-			if (ScriptCommand(&is_component_available, iComponentID)) {
-				break;
-			}
-			usleep(1000);
-			dwTime++;
-		}
-	}
-
-	if (!ScriptCommand(&is_component_available, iComponentID)) {
-		return;
-	}
-
-	uint32_t dwRet;
-	ScriptCommand(&add_car_component, m_gtaId, iComponentID, &dwRet);*/
-
 	// CStreaming::HasVehicleUpgradeLoaded
 	bool HasVehicleUpgradeLoaded = eng::fn::CStreaming_HasVehicleUpgradeLoaded( iComponentID);
 

@@ -51,11 +51,6 @@ extern "C" __attribute__((visibility("default"))) void SAMPMOBILE_RegisterNetGam
 	}
 }
 
-int iNetModeNormalOnFootSendRate = 30;
-int iNetModeNormalInCarSendRate = 30;
-int iNetModeFiringSendRate = 30;
-int iNetModeSendMultiplier = 2;
-
 void InstallVehicleEngineLightPatches();
 
 unsigned char GetPacketID(Packet* p)
@@ -75,11 +70,11 @@ NetGame::NetGame(const char* host, int port, const char* playerName, const char*
 {
 	spdlog::info("NetGame initializing..");
 
-	m_netSet = new NET_SETTINGS{};
-	memset(m_hostName, 0, sizeof(m_hostName));
-	memset(m_host, 0, sizeof(m_host));
+	m_netSet = &m_session.settings;
+	m_session.protoVersion = proto::versionFromNetgame(static_cast<uint32_t>(Client::netgameVersion()));
+	m_session.reset(SessionState::ResetReason::Connect);
 
-	strcpy(m_hostName, "SA-MP");
+	memset(m_host, 0, sizeof(m_host));
 	if (host) {
 		strncpy(m_host, host, sizeof(m_host) - 1);
 		m_host[sizeof(m_host) - 1] = '\0';
@@ -97,7 +92,7 @@ NetGame::NetGame(const char* host, int port, const char* playerName, const char*
 
 	GetPlayerPool()->SetLocalPlayerName(Encoding::utf2cp(playerName).c_str());
 
-	RpcTable::registerAll(m_rakClient, proto::versionFromNetgame(static_cast<uint32_t>(Client::netgameVersion())));
+	RpcTable::registerAll(m_rakClient, m_session.protoVersion);
 	m_rakClient->SetPassword(password);
 
 	if (Settings::voice()) {
@@ -110,25 +105,8 @@ NetGame::NetGame(const char* host, int port, const char* playerName, const char*
 	pGame->EnableClock(false);
 	pGame->EnableZoneNames(false);
 
-	m_netSet->deathDropMoney = 0;
-	m_netSet->spawnsAvailable = 0;
-	m_netSet->nameTagLOS = 0;
-	m_netSet->holdTime = true;
-	m_netSet->useCJWalk = 0;
-	m_netSet->disableInteriorEnterExits = 0;
-	m_netSet->zoneNames = false;
-	m_netSet->instagib = false;
-	m_netSet->nameTagDrawDistance = 60.0f;
-	m_netSet->friendlyFire = true;
-	m_netSet->worldTime_Hour = 12;
-	m_netSet->worldTime_Minute = 0;
-	m_netSet->weather = 1;
-	m_netSet->gravity = 0.008f;
-	m_netSet->disableVehicleCollisions = false;
-
 	m_lastConnectAttempt = GetTickCount();
 	SetGameState(GAMESTATE_WAIT_CONNECT);
-	m_lanMode = false;
 
 	if (pUI) {
 		pUI->chat()->addDebugMessage("{FFFFFF}SA-MP {B9C9BF}%s {FFFFFF}Started", Client::sampVersion().c_str());
@@ -145,7 +123,7 @@ NetGame::~NetGame()
 		}
 	}
 	m_rakClient->Disconnect(0);
-	RpcTable::unregisterAll(m_rakClient, proto::versionFromNetgame(static_cast<uint32_t>(Client::netgameVersion())));
+	RpcTable::unregisterAll(m_rakClient, m_session.protoVersion);
 	RakNetworkFactory::DestroyRakClientInterface(m_rakClient);
 
 	UninitializePools();
@@ -154,10 +132,7 @@ NetGame::~NetGame()
 		Network::OnRaknetDisconnect();
 	}
 
-	if (m_netSet) {
-		delete m_netSet;
-		m_netSet = nullptr;
-	}
+	m_netSet = nullptr;
 }
 
 void NetGame::InitializePools()
@@ -230,11 +205,6 @@ void NetGame::UninitializePools()
 	if (m_pools) {
 		delete m_pools;
 		m_pools = nullptr;
-	}
-
-	if (m_netSet) {
-		delete m_netSet;
-		m_netSet = nullptr;
 	}
 }
 
@@ -334,7 +304,7 @@ void NetGame::UpdateNetwork()
 	}
 }
 
-void NetGame::ShutdownForGameModeRestart()
+void NetGame::ShutdownForGameModeRestart(SessionState::ResetReason reason)
 {
 	for (PLAYERID playerId = 0; playerId < MAX_PLAYERS; playerId++) {
 		CRemotePlayer* pRemotePlayer = GetPlayerPool()->GetAt(playerId);
@@ -366,17 +336,7 @@ void NetGame::ShutdownForGameModeRestart()
 	ResetObjectPool();
 	ResetMenuPool();
 
-	m_netSet->disableInteriorEnterExits = false;
-	m_netSet->nameTagDrawDistance = 60.0f;
-	m_netSet->worldTime_Hour = 12;
-	m_netSet->worldTime_Minute = 0;
-	m_netSet->weather = 1;
-	m_netSet->holdTime = true;
-	m_netSet->nameTagLOS = true;
-	m_netSet->useCJWalk = false;
-	m_netSet->gravity = 0.008f;
-	m_netSet->deathDropMoney = 0;
-	m_netSet->disableVehicleCollisions = false;
+	m_session.reset(reason);
 
 	if (pGame) {
 		pGame->EnableCheckpoints(false);
@@ -389,7 +349,6 @@ void NetGame::ShutdownForGameModeRestart()
 		}
 		pGame->ResetLocalMoney();
 		pGame->EnableZoneNames(false);
-		m_netSet->zoneNames = false;
 		GameResetRadarColors();
 		pGame->SetGravity(m_netSet->gravity);
 		pGame->SetWantedLevel(0);
@@ -470,52 +429,6 @@ void NetGame::ProcessConnecting()
 }
 
 void gen_auth_key(char buf[260], char* auth_in);
-char* findAuthKey(const char* key)
-{
-	for (auto& i : AuthKeyTable) {
-		if (strcmp(i[0], key) == 0) {
-			return i[1];
-		}
-	}
-	return nullptr; // Return null if key is not found
-}
-
-/*void NetGame::Packet_AuthKey(Packet* pkt)
-{
-	uint8_t byteAuthLen;
-	char szAuth[260], szAuthKey[269];
-
-	RakNet::BitStream bsAuth((unsigned char*) pkt->data, pkt->length, false);
-
-	if (GetGameState() < GAMESTATE_WAIT_CONNECT || GetGameState() > GAMESTATE_AWAIT_JOIN) return;
-
-	bsAuth.IgnoreBits(8);
-	bsAuth.Read(byteAuthLen);
-	bsAuth.Read(szAuth, byteAuthLen);
-	szAuth[byteAuthLen] = '\0';
-
-#if VER_x32
-	gen_auth_key(szAuthKey, szAuth);
-#else
-	char* key = findAuthKey(szAuth);
-	if (key) {
-		strcpy(szAuthKey, key);
-	}
-	else {
-		spdlog::info("cannot get auth key: {}", szAuth);
-	}
-#endif
-
-	uint8_t byteAuthKeyLen = strlen(szAuthKey);
-
-	RakNet::BitStream bsKey;
-	bsKey.Write((uint8_t) ID_AUTH_KEY);
-	bsKey.Write(byteAuthKeyLen);
-	bsKey.Write(szAuthKey, byteAuthKeyLen);
-	m_rakClient->Send(&bsKey, SYSTEM_PRIORITY, RELIABLE, 0);
-
-	spdlog::info("[AUTH] {} -> {}", szAuth, szAuthKey);
-}*/
 
 void NetGame::Packet_AuthKey(Packet* pkt)
 {
@@ -679,7 +592,7 @@ void NetGame::Packet_ConnectionLost(Packet* pkt)
 		pUI->chat()->addDebugMessage("Lost connection to the server. Reconnecting..");
 	}
 
-	ShutdownForGameModeRestart();
+	ShutdownForGameModeRestart(SessionState::ResetReason::Disconnect);
 
 	CPlayerPool* pPlayerPool = GetPlayerPool();
 	if (pPlayerPool) {

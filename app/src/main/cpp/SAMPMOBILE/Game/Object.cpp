@@ -41,7 +41,7 @@ CObject* CObject::FindByGtaEntity(sa::CEntity* pEntity)
 
 CObject::CObject(int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDrawDistance, uint8_t bAttached)
 {
-	spdlog::info("CObject::CObject({}, [{} {} {}], [{} {} {}], {}, {}).", iModel, vecPos.x, vecPos.y, vecPos.z, vecRot.x, vecRot.y, vecRot.z, fDrawDistance, bAttached);
+	spdlog::debug("CObject::CObject({}, [{} {} {}], [{} {} {}], {}, {}).", iModel, vecPos.x, vecPos.y, vecPos.z, vecRot.x, vecRot.y, vecRot.z, fDrawDistance, bAttached);
 	m_AttachedVehicleID = INVALID_VEHICLE_ID;
 	m_AttachedObjectID = INVALID_OBJECT_ID;
 	m_bAttachedToPed = bAttached;
@@ -78,7 +78,7 @@ CObject::CObject(int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDraw
 
 	uint32_t dwRetID = 0;
 	ScriptCommand(&create_object, iModel, vecPos.x, vecPos.y, vecPos.z, &dwRetID);
-	spdlog::info("Object created with model {} at [{} {} {}].", iModel, vecPos.x, vecPos.y, vecPos.z);
+	spdlog::debug("Object created with model {} at [{} {} {}].", iModel, vecPos.x, vecPos.y, vecPos.z);
 
 	sa::CObject* pEntity = dwRetID ? GamePool_Object_GetAt(dwRetID) : nullptr;
 
@@ -217,7 +217,7 @@ void CObject::EnsureRwObject()
 		return;
 	}
 
-	spdlog::info("EnsureRwObject: re-instancing atomic for object {} (model {})", m_gtaId, m_iModel);
+	spdlog::debug("EnsureRwObject: re-instancing atomic for object {} (model {})", m_gtaId, m_iModel);
 	CEntity::SetModelIndex(m_iModel);
 	UpdateRwMatrixAndFrame();
 }
@@ -1236,7 +1236,7 @@ bool CObject::AttachedToMovingEntity()
 
 void CObject::SetMaterial(int iModel, uint8_t byteMaterialIndex, char* txdname, char* texturename, uint32_t dwColor)
 {
-	spdlog::info("CObject::SetMaterial({}, {}, {}, {}, 0x{:X}).", iModel, byteMaterialIndex, txdname ? txdname : "", texturename ? texturename : "", dwColor);
+	spdlog::debug("CObject::SetMaterial({}, {}, {}, {}, 0x{:X}).", iModel, byteMaterialIndex, txdname ? txdname : "", texturename ? texturename : "", dwColor);
 
 	if (byteMaterialIndex >= MAX_MATERIALS) {
 		return;
@@ -1291,7 +1291,7 @@ void CObject::SetMaterial(int iModel, uint8_t byteMaterialIndex, char* txdname, 
 
 void CObject::SetMaterialText(uint8_t byteMaterialIndex, uint8_t byteMaterialSize, const char* szFontName, uint8_t byteFontSize, uint8_t byteFontBold, uint32_t dwFontColor, uint32_t dwBackgroundColor, uint8_t byteAlign, const char* szText)
 {
-	spdlog::info("CObject::SetMaterialText({}, {}, {}, {}, {}, 0x{:X}, 0x{:X}, {}, {}).", byteMaterialIndex, byteMaterialSize, szFontName ? szFontName : "", byteFontSize, byteFontBold, dwFontColor, dwBackgroundColor, byteAlign, szText ? szText : "");
+	spdlog::debug("CObject::SetMaterialText({}, {}, {}, {}, {}, 0x{:X}, 0x{:X}, {}, {}).", byteMaterialIndex, byteMaterialSize, szFontName ? szFontName : "", byteFontSize, byteFontBold, dwFontColor, dwBackgroundColor, byteAlign, szText ? szText : "");
 
 	if (byteMaterialIndex < MAX_MATERIALS) {
 		if (!szText || !strlen(szText)) {
@@ -1381,7 +1381,7 @@ void CObject::ProcessMaterialText()
 
 		if (m_Material[i].pMaterialTexture) {
 			m_Material[i].bTextureWasCreated = true;
-			spdlog::info("ProcessMaterialText: texture created {}x{} for slot {}", iSizeX, iSizeY, i);
+			spdlog::debug("ProcessMaterialText: texture created {}x{} for slot {}", iSizeX, iSizeY, i);
 		}
 		else {
 			// a failed first attempt used to latch bTextureWasCreated and
@@ -1501,7 +1501,7 @@ RpAtomic* EnableUVAnimAtomicCB(RpAtomic* atomic, void* data)
 
 			static std::unordered_set<int> s_loggedModels;
 			if (s_loggedModels.size() < 24 && s_loggedModels.insert(pObj->GetModelIndex()).second) {
-				spdlog::info("UVAnim: enabled for object model {} (atomic={:p}, pipeline={:p})",
+				spdlog::debug("UVAnim: enabled for object model {} (atomic={:p}, pipeline={:p})",
 						pObj->GetModelIndex(), (void*) atomic, (void*) atomic->pipeline);
 			}
 		}

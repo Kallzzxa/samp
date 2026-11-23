@@ -43,6 +43,8 @@ public:
 	static std::string sampVersion() { return samp_version; }
 	static int netgameVersion() { return samp_netgame; }
 	static bool isDL() { return samp_netgame == 0xFDE; }
+	static bool setLogLevelDebug(bool debug, bool persist = true);
+	static bool isLogLevelDebug();
 
 private:
 	static JavaVM* java_vm;

@@ -14,19 +14,19 @@ extern AudioStream* pAudioStream;
 
 void RpcHandlers::OnSetGravity(const proto::SetGravity& p)
 {
-	spdlog::info("ScriptRPC: ScrSetGravity");
+	spdlog::debug("ScriptRPC: ScrSetGravity");
 	pGame->SetGravity(p.gravity);
 }
 
 void RpcHandlers::OnSetCameraPos(const proto::SetCameraPos& p)
 {
-	spdlog::info("ScriptRPC: ScrSetCameraPos");
+	spdlog::debug("ScriptRPC: ScrSetCameraPos");
 	pGame->GetCamera()->SetPosition(p.position.x, p.position.y, p.position.z, 0.0f, 0.0f, 0.0f);
 }
 
 void RpcHandlers::OnSetCameraLookAt(const proto::SetCameraLookAt& p)
 {
-	spdlog::info("ScriptRPC: ScrSetCameraLookAt");
+	spdlog::debug("ScriptRPC: ScrSetCameraLookAt");
 
 	uint8_t byteType = p.cutType;
 	if (byteType < 1 || byteType > 2) {
@@ -38,7 +38,7 @@ void RpcHandlers::OnSetCameraLookAt(const proto::SetCameraLookAt& p)
 
 void RpcHandlers::OnInterpolateCamera(const proto::InterpolateCamera& p)
 {
-	spdlog::info("ScriptRPC: ScrInterpolateCamera");
+	spdlog::debug("ScriptRPC: ScrInterpolateCamera");
 
 	uint8_t byteMode = p.cutType;
 	if (byteMode < 1 || byteMode > 2) {
@@ -60,15 +60,15 @@ void RpcHandlers::OnInterpolateCamera(const proto::InterpolateCamera& p)
 
 void RpcHandlers::OnTogglePlayerSpectating(const proto::TogglePlayerSpectating& p)
 {
-	spdlog::info("ScriptRPC: ScrTogglePlayerSpectating");
-	spdlog::info("dwToggle: {}", p.toggle);
+	spdlog::debug("ScriptRPC: ScrTogglePlayerSpectating");
+	spdlog::debug("dwToggle: {}", p.toggle);
 
 	pNetGame->GetPlayerPool()->GetLocalPlayer()->ToggleSpectating(p.toggle);
 }
 
 void RpcHandlers::OnSetSpawnInfo(const proto::SetSpawnInfo& p)
 {
-	spdlog::info("ScriptRPC: ScrSetSpawnInfo");
+	spdlog::debug("ScriptRPC: ScrSetSpawnInfo");
 
 	PLAYER_SPAWN_INFO spawnInfo{};
 	spawnInfo.byteTeam = p.spawnInfo.team;
@@ -84,7 +84,7 @@ void RpcHandlers::OnSetSpawnInfo(const proto::SetSpawnInfo& p)
 
 void RpcHandlers::OnShowGangZone(const proto::ShowGangZone& p)
 {
-	spdlog::info("ScriptRPC: ScrAddGangZone");
+	spdlog::debug("ScriptRPC: ScrAddGangZone");
 
 	CGangZonePool* pGangZonePool = pNetGame->GetGangZonePool();
 	if (pGangZonePool) {
@@ -94,7 +94,7 @@ void RpcHandlers::OnShowGangZone(const proto::ShowGangZone& p)
 
 void RpcHandlers::OnHideGangZone(const proto::HideGangZone& p)
 {
-	spdlog::info("ScriptRPC: ScrGangZoneDestroy");
+	spdlog::debug("ScriptRPC: ScrGangZoneDestroy");
 
 	CGangZonePool* pGangZonePool = pNetGame->GetGangZonePool();
 	if (pGangZonePool) {
@@ -104,7 +104,7 @@ void RpcHandlers::OnHideGangZone(const proto::HideGangZone& p)
 
 void RpcHandlers::OnFlashGangZone(const proto::FlashGangZone& p)
 {
-	spdlog::info("ScriptRPC: ScrGangZoneFlash");
+	spdlog::debug("ScriptRPC: ScrGangZoneFlash");
 
 	CGangZonePool* pGangZonePool = pNetGame->GetGangZonePool();
 	if (pGangZonePool) {
@@ -114,7 +114,7 @@ void RpcHandlers::OnFlashGangZone(const proto::FlashGangZone& p)
 
 void RpcHandlers::OnStopFlashGangZone(const proto::StopFlashGangZone& p)
 {
-	spdlog::info("ScriptRPC: ScrGangZoneStopFlash");
+	spdlog::debug("ScriptRPC: ScrGangZoneStopFlash");
 
 	CGangZonePool* pGangZonePool = pNetGame->GetGangZonePool();
 	if (pGangZonePool) {
@@ -158,7 +158,7 @@ static void ApplyObjectMaterial(CObject* pObject, const proto::ObjectMaterial& m
 
 void RpcHandlers::OnCreateObject(const proto::CreateObject& p)
 {
-	spdlog::info("ScriptRPC: ScrCreateObject");
+	spdlog::debug("ScriptRPC: ScrCreateObject");
 
 	// NaN coords/rotation would write straight into the engine transform
 	if (!proto::isFinite(p.position) || !proto::isFinite(p.rotation)
@@ -201,7 +201,7 @@ void RpcHandlers::OnCreateObject(const proto::CreateObject& p)
 
 void RpcHandlers::OnDestroyObject(const proto::DestroyObject& p)
 {
-	spdlog::info("ScriptRPC: ScrDestroyObject");
+	spdlog::debug("ScriptRPC: ScrDestroyObject");
 
 	CObjectPool* pObjectPool = pNetGame->GetObjectPool();
 	if (!pObjectPool) return;
@@ -219,14 +219,14 @@ void RpcHandlers::OnDestroyObject(const proto::DestroyObject& p)
 		}
 
 		if (pObjectPool->Delete(p.objectId)) {
-			spdlog::info("DestroyObject; Total objects: {}", pObjectPool->m_iObjectCount);
+			spdlog::debug("DestroyObject; Total objects: {}", pObjectPool->m_iObjectCount);
 		}
 	}
 }
 
 void RpcHandlers::OnSetObjectMaterial(const proto::SetObjectMaterial& p)
 {
-	spdlog::info("ScriptRPC: ScrSetObjectMaterial");
+	spdlog::debug("ScriptRPC: ScrSetObjectMaterial");
 
 	CObjectPool* pObjectPool = pNetGame->GetObjectPool();
 	if (!pObjectPool || p.objectId >= MAX_OBJECTS) {
@@ -241,13 +241,13 @@ void RpcHandlers::OnSetObjectMaterial(const proto::SetObjectMaterial& p)
 
 void RpcHandlers::OnRemoveBuilding(const proto::RemoveBuilding& p)
 {
-	spdlog::info("ScriptRPC: ScrRemoveBuilding");
+	spdlog::debug("ScriptRPC: ScrRemoveBuilding");
 	RemoveBuilding::add(p.modelId, {p.position.x, p.position.y, p.position.z}, p.radius);
 }
 
 void RpcHandlers::OnStopObjectCameraCollision(const proto::StopObjectCameraCollision& p)
 {
-	spdlog::info("ScriptRPC: ScrStopObjectCameraCollision");
+	spdlog::debug("ScriptRPC: ScrStopObjectCameraCollision");
 
 	CObjectPool* pObjectPool = pNetGame->GetObjectPool();
 	if (!pObjectPool) return;
@@ -260,7 +260,7 @@ void RpcHandlers::OnStopObjectCameraCollision(const proto::StopObjectCameraColli
 
 void RpcHandlers::OnAttachCameraToObject(const proto::AttachCameraToObject& p)
 {
-	spdlog::info("ScriptRPC: ScrAttachCameraToObject");
+	spdlog::debug("ScriptRPC: ScrAttachCameraToObject");
 
 	CObjectPool* pObjectPool = pNetGame->GetObjectPool();
 	if (!pObjectPool) return;
@@ -280,7 +280,7 @@ void RpcHandlers::OnAttachCameraToObject(const proto::AttachCameraToObject& p)
 
 void RpcHandlers::OnSetPlayerSkinLegacyT03(const proto::SetPlayerSkinLegacyT03& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerSkin");
+	spdlog::debug("ScriptRPC: ScrSetPlayerSkin");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) {
@@ -312,7 +312,7 @@ void RpcHandlers::OnSetPlayerSkinLegacyT03(const proto::SetPlayerSkinLegacyT03& 
 
 void RpcHandlers::OnSetPlayerMapIcon(const proto::SetPlayerMapIcon& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerMapIcon");
+	spdlog::debug("ScriptRPC: ScrSetPlayerMapIcon");
 
 	uint8_t byteType = p.type;
 	// fix crash (invalid GTASA map icon sprite types)
@@ -325,13 +325,13 @@ void RpcHandlers::OnSetPlayerMapIcon(const proto::SetPlayerMapIcon& p)
 
 void RpcHandlers::OnRemovePlayerMapIcon(const proto::RemovePlayerMapIcon& p)
 {
-	spdlog::info("ScriptRPC: ScrRemovePlayerMapIcon");
+	spdlog::debug("ScriptRPC: ScrRemovePlayerMapIcon");
 	pNetGame->DisableMapIcon(p.iconId);
 }
 
 void RpcHandlers::OnShowNameTag(const proto::ShowNameTag& p)
 {
-	spdlog::info("ScriptRPC: ScrShowNameTag");
+	spdlog::debug("ScriptRPC: ScrShowNameTag");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (pPlayerPool && pPlayerPool->GetSlotState(p.playerId)) {
@@ -344,7 +344,7 @@ void RpcHandlers::OnShowNameTag(const proto::ShowNameTag& p)
 
 void RpcHandlers::OnApplyPlayerAnimation(const proto::ApplyPlayerAnimation& p)
 {
-	spdlog::info("ScriptRPC: ScrApplyPlayerAnimation");
+	spdlog::debug("ScriptRPC: ScrApplyPlayerAnimation");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	CPlayerPed* pPlayerPed = nullptr;
@@ -360,7 +360,7 @@ void RpcHandlers::OnApplyPlayerAnimation(const proto::ApplyPlayerAnimation& p)
 			}
 		}
 
-		spdlog::info("ApplyAnimation: {}, {}", p.animLib, p.animName);
+		spdlog::debug("ApplyAnimation: {}, {}", p.animLib, p.animName);
 
 		if (pPlayerPed) {
 			pPlayerPed->ApplyAnimation(
@@ -373,7 +373,7 @@ void RpcHandlers::OnApplyPlayerAnimation(const proto::ApplyPlayerAnimation& p)
 
 void RpcHandlers::OnClearPlayerAnimations(const proto::ClearPlayerAnimations& p)
 {
-	spdlog::info("ScriptRPC: ScrClearPlayerAnimations");
+	spdlog::debug("ScriptRPC: ScrClearPlayerAnimations");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	CPlayerPed* pPlayerPed = nullptr;
@@ -400,7 +400,7 @@ void RpcHandlers::OnClearPlayerAnimations(const proto::ClearPlayerAnimations& p)
 
 void RpcHandlers::OnSetPlayerHealth(const proto::SetPlayerHealth& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerHealth");
+	spdlog::debug("ScriptRPC: ScrSetPlayerHealth");
 
 	CPlayerPed* pPlayerPed = pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed();
 	if (pPlayerPed) {
@@ -410,7 +410,7 @@ void RpcHandlers::OnSetPlayerHealth(const proto::SetPlayerHealth& p)
 
 void RpcHandlers::OnGivePlayerWeapon(const proto::GivePlayerWeapon& p)
 {
-	spdlog::info("ScriptRPC: ScrGivePlayerWeapon");
+	spdlog::debug("ScriptRPC: ScrGivePlayerWeapon");
 
 	CPlayerPed* pPlayerPed = pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed();
 	if (pPlayerPed) {
@@ -420,13 +420,13 @@ void RpcHandlers::OnGivePlayerWeapon(const proto::GivePlayerWeapon& p)
 
 void RpcHandlers::OnSetPlayerInterior(const proto::SetPlayerInterior& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerInterior");
+	spdlog::debug("ScriptRPC: ScrSetPlayerInterior");
 	pGame->FindPlayerPed()->SetInterior(p.interiorId, true);
 }
 
 void RpcHandlers::OnShowTextDraw(const proto::ShowTextDraw& p)
 {
-	spdlog::info("ScriptRPC: ScrShowTextDraw");
+	spdlog::debug("ScriptRPC: ScrShowTextDraw");
 
 	CTextDrawPool* pTextDrawPool = pNetGame->GetTextDrawPool();
 	if (pTextDrawPool == nullptr) {
@@ -464,7 +464,7 @@ void RpcHandlers::OnShowTextDraw(const proto::ShowTextDraw& p)
 
 void RpcHandlers::OnHideTextDraw(const proto::HideTextDraw& p)
 {
-	spdlog::info("ScriptRPC: ScrHideTextDraw");
+	spdlog::debug("ScriptRPC: ScrHideTextDraw");
 
 	CTextDrawPool* pTextDrawPool = pNetGame->GetTextDrawPool();
 	if (pTextDrawPool == nullptr) {
@@ -476,7 +476,7 @@ void RpcHandlers::OnHideTextDraw(const proto::HideTextDraw& p)
 
 void RpcHandlers::OnTextDrawSetString(const proto::TextDrawSetString& p)
 {
-	spdlog::info("ScriptRPC: ScrTextDrawSetString");
+	spdlog::debug("ScriptRPC: ScrTextDrawSetString");
 
 	CTextDrawPool* pTextDrawPool = pNetGame->GetTextDrawPool();
 	if (pTextDrawPool == nullptr) {
@@ -493,15 +493,15 @@ void RpcHandlers::OnTextDrawSetString(const proto::TextDrawSetString& p)
 
 void RpcHandlers::OnSelectTextDraw(const proto::SelectTextDraw& p)
 {
-	spdlog::info("ScriptRPC: ScrSelectTextDraw");
-	spdlog::info("SELECTTEXTDRAW: bEnable: {}, dwColor: {}", p.enable, p.hoverColor);
+	spdlog::debug("ScriptRPC: ScrSelectTextDraw");
+	spdlog::debug("SELECTTEXTDRAW: bEnable: {}, dwColor: {}", p.enable, p.hoverColor);
 
 	pNetGame->GetTextDrawPool()->SetSelectState(p.enable, p.hoverColor);
 }
 
 void RpcHandlers::OnSetPlayerAmmo(const proto::SetPlayerAmmo& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerAmmo");
+	spdlog::debug("ScriptRPC: ScrSetPlayerAmmo");
 
 	CLocalPlayer* pLocalPlayer = pNetGame->GetPlayerPool()->GetLocalPlayer();
 	pLocalPlayer->GetPlayerPed()->SetAmmo(p.weapon, p.ammo);
@@ -509,7 +509,7 @@ void RpcHandlers::OnSetPlayerAmmo(const proto::SetPlayerAmmo& p)
 
 void RpcHandlers::OnSetVehicleHealth(const proto::SetVehicleHealth& p)
 {
-	spdlog::info("ScriptRPC: ScrSetVehicleHealth");
+	spdlog::debug("ScriptRPC: ScrSetVehicleHealth");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (pVehiclePool) {
@@ -522,7 +522,7 @@ void RpcHandlers::OnSetVehicleHealth(const proto::SetVehicleHealth& p)
 
 void RpcHandlers::OnAttachTrailerToVehicle(const proto::AttachTrailerToVehicle& p)
 {
-	spdlog::info("ScriptRPC: ScrAttachTrailerToVehicle");
+	spdlog::debug("ScriptRPC: ScrAttachTrailerToVehicle");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
@@ -540,7 +540,7 @@ void RpcHandlers::OnAttachTrailerToVehicle(const proto::AttachTrailerToVehicle& 
 
 void RpcHandlers::OnDetachTrailerFromVehicle(const proto::DetachTrailerFromVehicle& p)
 {
-	spdlog::info("ScriptRPC: ScrDetachTrailerFromVehicle");
+	spdlog::debug("ScriptRPC: ScrDetachTrailerFromVehicle");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
@@ -556,7 +556,7 @@ void RpcHandlers::OnDetachTrailerFromVehicle(const proto::DetachTrailerFromVehic
 
 void RpcHandlers::OnSetObjectPosLegacyT36(const proto::SetObjectPosLegacyT36& p)
 {
-	spdlog::info("ScriptRPC: ScrSetObjectPos");
+	spdlog::debug("ScriptRPC: ScrSetObjectPos");
 
 	if (!proto::isFinite(p.position)) {
 		spdlog::warn("ScrSetObjectPos: rejected non-finite position for object {}", p.objectId);
@@ -576,7 +576,7 @@ void RpcHandlers::OnSetObjectPosLegacyT36(const proto::SetObjectPosLegacyT36& p)
 
 void RpcHandlers::OnSetObjectRotation(const proto::SetObjectRotation& p)
 {
-	spdlog::info("ScriptRPC: ScrSetObjectRotation");
+	spdlog::debug("ScriptRPC: ScrSetObjectRotation");
 
 	if (!proto::isFinite(p.rotation)) {
 		spdlog::warn("ScrSetObjectRotation: rejected non-finite rotation for object {}", p.objectId);
@@ -599,13 +599,13 @@ void RpcHandlers::OnSetObjectRotation(const proto::SetObjectRotation& p)
 
 void RpcHandlers::OnCreateExplosion(const proto::CreateExplosion& p)
 {
-	spdlog::info("ScriptRPC: ScrCreateExplosion");
+	spdlog::debug("ScriptRPC: ScrCreateExplosion");
 	ScriptCommand(&create_explosion_with_radius, p.position.x, p.position.y, p.position.z, p.type, p.radius);
 }
 
 void RpcHandlers::OnSetVehicleNumberPlate(const proto::SetVehicleNumberPlate& p)
 {
-	spdlog::info("ScriptRPC: ScrSetVehicleNumberPlate");
+	spdlog::debug("ScriptRPC: ScrSetVehicleNumberPlate");
 	if (p.plate.size() > 32) {
 		return;
 	}
@@ -629,7 +629,7 @@ void RpcHandlers::OnSetVehicleNumberPlate(const proto::SetVehicleNumberPlate& p)
 
 void RpcHandlers::OnSpectatePlayer(const proto::SpectatePlayer& p)
 {
-	spdlog::info("ScriptRPC: ScrSpectatePlayer");
+	spdlog::debug("ScriptRPC: ScrSpectatePlayer");
 
 	uint8_t byteMode = p.mode;
 	switch (byteMode) {
@@ -651,7 +651,7 @@ void RpcHandlers::OnSpectatePlayer(const proto::SpectatePlayer& p)
 
 void RpcHandlers::OnSpectateVehicle(const proto::SpectateVehicle& p)
 {
-	spdlog::info("ScriptRPC: ScrSpectateVehicle");
+	spdlog::debug("ScriptRPC: ScrSpectateVehicle");
 
 	uint8_t byteMode = p.mode;
 	switch (byteMode) {
@@ -673,7 +673,7 @@ void RpcHandlers::OnSpectateVehicle(const proto::SpectateVehicle& p)
 
 void RpcHandlers::OnRemoveVehicleComponent(const proto::RemoveVehicleComponent& p)
 {
-	spdlog::info("ScriptRPC: ScrRemoveVehicleComponent");
+	spdlog::debug("ScriptRPC: ScrRemoveVehicleComponent");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
@@ -690,7 +690,7 @@ void RpcHandlers::OnRemoveVehicleComponent(const proto::RemoveVehicleComponent& 
 
 void RpcHandlers::OnAttachObjectToPlayer(const proto::AttachObjectToPlayer& p)
 {
-	spdlog::info("ScriptRPC: ScrAttachObjectToPlayer");
+	spdlog::debug("ScriptRPC: ScrAttachObjectToPlayer");
 
 	if (!proto::isFinite(p.offset) || !proto::isFinite(p.rotation)) {
 		spdlog::warn("ScrAttachObjectToPlayer: rejected non-finite offset/rot for object {}", p.objectId);
@@ -737,7 +737,7 @@ void RpcHandlers::OnAttachObjectToPlayer(const proto::AttachObjectToPlayer& p)
 
 void RpcHandlers::OnSetPlayerWantedLevel(const proto::SetPlayerWantedLevel& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerWantedLevel");
+	spdlog::debug("ScriptRPC: ScrSetPlayerWantedLevel");
 
 	if (pGame) {
 		pGame->SetWantedLevel(p.level);
@@ -746,7 +746,7 @@ void RpcHandlers::OnSetPlayerWantedLevel(const proto::SetPlayerWantedLevel& p)
 
 void RpcHandlers::OnSetPlayerSpecialAction(const proto::SetPlayerSpecialAction& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerSpecialAction");
+	spdlog::debug("ScriptRPC: ScrSetPlayerSpecialAction");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) {
@@ -758,13 +758,13 @@ void RpcHandlers::OnSetPlayerSpecialAction(const proto::SetPlayerSpecialAction& 
 
 void RpcHandlers::OnEnableStuntBonus(const proto::EnableStuntBonus& p)
 {
-	spdlog::info("ScriptRPC: ScrEnableStuntBonus");
+	spdlog::debug("ScriptRPC: ScrEnableStuntBonus");
 	pGame->EnableStuntBonus(p.enable);
 }
 
 void RpcHandlers::OnSetPlayerFightingStyle(const proto::SetPlayerFightingStyle& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerFightingStyle");
+	spdlog::debug("ScriptRPC: ScrSetPlayerFightingStyle");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) {
@@ -790,7 +790,7 @@ void RpcHandlers::OnSetPlayerFightingStyle(const proto::SetPlayerFightingStyle& 
 
 void RpcHandlers::OnSetPlayerVelocity(const proto::SetPlayerVelocity& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerVelocity");
+	spdlog::debug("ScriptRPC: ScrSetPlayerVelocity");
 
 	CPlayerPed* pPlayerPed = pGame->FindPlayerPed();
 	if (!pPlayerPed) {
@@ -810,7 +810,7 @@ void RpcHandlers::OnSetPlayerVelocity(const proto::SetPlayerVelocity& p)
 
 void RpcHandlers::OnSetVehicleVelocity(const proto::SetVehicleVelocity& p)
 {
-	spdlog::info("ScriptRPC: ScrSetVehicleVelocity");
+	spdlog::debug("ScriptRPC: ScrSetVehicleVelocity");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
@@ -844,13 +844,13 @@ void RpcHandlers::OnSetVehicleVelocity(const proto::SetVehicleVelocity& p)
 
 void RpcHandlers::OnToggleWidescreen(const proto::ToggleWidescreen& p)
 {
-	spdlog::info("ScriptRPC: ScrToggleWidescreen");
+	spdlog::debug("ScriptRPC: ScrToggleWidescreen");
 	ScriptCommand(&toggle_widescreen, p.toggle);
 }
 
 void RpcHandlers::OnSetVehicleTireDamageStatus(const proto::SetVehicleTireDamageStatus& p)
 {
-	spdlog::info("ScriptRPC: ScrSetVehicleTireDamageStatus");
+	spdlog::debug("ScriptRPC: ScrSetVehicleTireDamageStatus");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
@@ -867,7 +867,7 @@ void RpcHandlers::OnSetVehicleTireDamageStatus(const proto::SetVehicleTireDamage
 
 void RpcHandlers::OnSetPlayerTeam(const proto::SetPlayerTeam& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerTeam");
+	spdlog::debug("ScriptRPC: ScrSetPlayerTeam");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) {
@@ -892,7 +892,7 @@ void RpcHandlers::OnSetPlayerTeam(const proto::SetPlayerTeam& p)
 
 void RpcHandlers::OnSetPlayerName(const proto::SetPlayerName& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerName");
+	spdlog::debug("ScriptRPC: ScrSetPlayerName");
 
 	if (p.name.size() > MAX_PLAYER_NAME) {
 		return;
@@ -914,7 +914,7 @@ void RpcHandlers::OnSetPlayerName(const proto::SetPlayerName& p)
 
 void RpcHandlers::OnSetPlayerPos(const proto::SetPlayerPos& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerPos");
+	spdlog::debug("ScriptRPC: ScrSetPlayerPos");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) {
@@ -931,7 +931,7 @@ void RpcHandlers::OnSetPlayerPos(const proto::SetPlayerPos& p)
 
 void RpcHandlers::OnSetPlayerPosFindZ(const proto::SetPlayerPosFindZ& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerPosFindZ");
+	spdlog::debug("ScriptRPC: ScrSetPlayerPosFindZ");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) {
@@ -950,7 +950,7 @@ void RpcHandlers::OnSetPlayerPosFindZ(const proto::SetPlayerPosFindZ& p)
 
 void RpcHandlers::OnPutPlayerInVehicle(const proto::PutPlayerInVehicle& p)
 {
-	spdlog::info("ScriptRPC: ScrPutPlayerInVehicle");
+	spdlog::debug("ScriptRPC: ScrPutPlayerInVehicle");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
@@ -968,7 +968,7 @@ void RpcHandlers::OnPutPlayerInVehicle(const proto::PutPlayerInVehicle& p)
 
 void RpcHandlers::OnRemovePlayerFromVehicle(const proto::RemovePlayerFromVehicle&)
 {
-	spdlog::info("ScriptRPC: ScrRemovePlayerFromVehicle");
+	spdlog::debug("ScriptRPC: ScrRemovePlayerFromVehicle");
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) {
 		return;
@@ -984,7 +984,7 @@ void RpcHandlers::OnRemovePlayerFromVehicle(const proto::RemovePlayerFromVehicle
 
 void RpcHandlers::OnSetPlayerColor(const proto::SetPlayerColor& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerColor");
+	spdlog::debug("ScriptRPC: ScrSetPlayerColor");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) {
@@ -1007,7 +1007,7 @@ void RpcHandlers::OnSetPlayerColor(const proto::SetPlayerColor& p)
 
 void RpcHandlers::OnShowGameText(const proto::ShowGameText& p)
 {
-	spdlog::info("ScriptRPC: ScrShowGameText");
+	spdlog::debug("ScriptRPC: ScrShowGameText");
 
 	if (p.text.size() > 200 || p.style < 0 || p.style > 6) {
 		return;
@@ -1018,7 +1018,7 @@ void RpcHandlers::OnShowGameText(const proto::ShowGameText& p)
 
 void RpcHandlers::OnSetVehiclePos(const proto::SetVehiclePos& p)
 {
-	spdlog::info("ScriptRPC: ScrSetVehiclePos");
+	spdlog::debug("ScriptRPC: ScrSetVehiclePos");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
@@ -1035,7 +1035,7 @@ void RpcHandlers::OnSetVehiclePos(const proto::SetVehiclePos& p)
 
 void RpcHandlers::OnSetVehicleZAngle(const proto::SetVehicleZAngle& p)
 {
-	spdlog::info("ScriptRPC: ScrSetVehicleZAngle");
+	spdlog::debug("ScriptRPC: ScrSetVehicleZAngle");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
@@ -1052,9 +1052,9 @@ void RpcHandlers::OnSetVehicleZAngle(const proto::SetVehicleZAngle& p)
 
 void RpcHandlers::OnSetVehicleParamsForPlayer(const proto::SetVehicleParamsForPlayer& p)
 {
-	spdlog::info("ScriptRPC: ScrSetVehicleParams");
-	spdlog::info("VehicleID: {}", p.vehicleId);
-	spdlog::info("objective: {}, doors: {}", p.objective, p.doorsLocked);
+	spdlog::debug("ScriptRPC: ScrSetVehicleParams");
+	spdlog::debug("VehicleID: {}", p.vehicleId);
+	spdlog::debug("objective: {}, doors: {}", p.objective, p.doorsLocked);
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (pVehiclePool) {
@@ -1064,25 +1064,25 @@ void RpcHandlers::OnSetVehicleParamsForPlayer(const proto::SetVehicleParamsForPl
 
 void RpcHandlers::OnSetCameraBehindPlayer(const proto::SetCameraBehindPlayer&)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerCameraBehindPlayer");
+	spdlog::debug("ScriptRPC: ScrSetPlayerCameraBehindPlayer");
 	pGame->GetCamera()->SetBehindPlayer();
 }
 
 void RpcHandlers::OnTogglePlayerControllable(const proto::TogglePlayerControllable& p)
 {
-	spdlog::info("ScriptRPC: ScrTogglePlayerControllable");
+	spdlog::debug("ScriptRPC: ScrTogglePlayerControllable");
 	pGame->FindPlayerPed()->TogglePlayerControllable(p.controllable);
 }
 
 void RpcHandlers::OnPlayerPlaySound(const proto::PlayerPlaySound&)
 {
-	spdlog::info("ScriptRPC: ScrPlayerPlaySound");
+	spdlog::debug("ScriptRPC: ScrPlayerPlaySound");
 	// TODO: Implement (T06)
 }
 
 void RpcHandlers::OnSetWorldBounds(const proto::SetWorldBounds& p)
 {
-	spdlog::info("ScriptRPC: ScrSetWorldBounds");
+	spdlog::debug("ScriptRPC: ScrSetWorldBounds");
 
 	pNetGame->m_netSet->worldBounds[0] = p.bounds[0];
 	pNetGame->m_netSet->worldBounds[1] = p.bounds[1];
@@ -1092,31 +1092,31 @@ void RpcHandlers::OnSetWorldBounds(const proto::SetWorldBounds& p)
 
 void RpcHandlers::OnGivePlayerMoney(const proto::GivePlayerMoney& p)
 {
-	spdlog::info("ScriptRPC: ScrGivePlayerMoney");
+	spdlog::debug("ScriptRPC: ScrGivePlayerMoney");
 	pGame->AddToLocalMoney(p.money);
 }
 
 void RpcHandlers::OnSetPlayerFacingAngle(const proto::SetPlayerFacingAngle& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerFacingAngle");
+	spdlog::debug("ScriptRPC: ScrSetPlayerFacingAngle");
 	pGame->FindPlayerPed()->SetTargetRotation(p.angle);
 }
 
 void RpcHandlers::OnResetPlayerMoney(const proto::ResetPlayerMoney&)
 {
-	spdlog::info("ScriptRPC: ScrResetPlayerMoney");
+	spdlog::debug("ScriptRPC: ScrResetPlayerMoney");
 	pGame->ResetLocalMoney();
 }
 
 void RpcHandlers::OnResetPlayerWeapons(const proto::ResetPlayerWeapons&)
 {
-	spdlog::info("ScriptRPC: ScrResetPlayerWeapons");
+	spdlog::debug("ScriptRPC: ScrResetPlayerWeapons");
 	pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed()->ClearWeapons();
 }
 
 void RpcHandlers::OnLinkVehicleToInterior(const proto::LinkVehicleToInterior& p)
 {
-	spdlog::info("ScriptRPC: ScrLinkVehicleToInterior");
+	spdlog::debug("ScriptRPC: ScrLinkVehicleToInterior");
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	if (!pVehiclePool) {
@@ -1128,7 +1128,7 @@ void RpcHandlers::OnLinkVehicleToInterior(const proto::LinkVehicleToInterior& p)
 
 void RpcHandlers::OnSetPlayerArmour(const proto::SetPlayerArmour& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerArmour");
+	spdlog::debug("ScriptRPC: ScrSetPlayerArmour");
 
 	CLocalPlayer* pLocalPlayer = pNetGame->GetPlayerPool()->GetLocalPlayer();
 	pLocalPlayer->GetPlayerPed()->SetArmour(p.armour);
@@ -1136,7 +1136,7 @@ void RpcHandlers::OnSetPlayerArmour(const proto::SetPlayerArmour& p)
 
 void RpcHandlers::OnSetArmedWeapon(const proto::SetArmedWeapon& p)
 {
-	spdlog::info("ScriptRPC: ScrSetArmedWeapon");
+	spdlog::debug("ScriptRPC: ScrSetArmedWeapon");
 	if (p.weapon <= 46) {
 		CPlayerPed* pPlayerPed = pGame->FindPlayerPed();
 		if (pPlayerPed) {
@@ -1147,7 +1147,7 @@ void RpcHandlers::OnSetArmedWeapon(const proto::SetArmedWeapon& p)
 
 void RpcHandlers::OnSetPlayerAttachedObject(const proto::SetPlayerAttachedObject& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerAttachedObject");
+	spdlog::debug("ScriptRPC: ScrSetPlayerAttachedObject");
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (pPlayerPool) {
@@ -1186,7 +1186,7 @@ void RpcHandlers::OnSetPlayerAttachedObject(const proto::SetPlayerAttachedObject
 
 void RpcHandlers::OnApplyActorAnimation(const proto::ApplyActorAnimation& p)
 {
-	spdlog::info("ScriptRPC: ScrApplyActorAnimation");
+	spdlog::debug("ScriptRPC: ScrApplyActorAnimation");
 
 	CActorPool* pActorPool = pNetGame->GetActorPool();
 	if (!pActorPool) {
@@ -1204,7 +1204,7 @@ void RpcHandlers::OnApplyActorAnimation(const proto::ApplyActorAnimation& p)
 
 void RpcHandlers::OnClearActorAnimation(const proto::ClearActorAnimation& p)
 {
-	spdlog::info("ScriptRPC: ScrClearActorAnimation");
+	spdlog::debug("ScriptRPC: ScrClearActorAnimation");
 
 	CActorPool* pActorPool = pNetGame->GetActorPool();
 	if (!pActorPool) {
@@ -1219,7 +1219,7 @@ void RpcHandlers::OnClearActorAnimation(const proto::ClearActorAnimation& p)
 
 void RpcHandlers::OnSetActorFacingAngle(const proto::SetActorFacingAngle& p)
 {
-	spdlog::info("ScriptRPC: ScrSetActorFacingAngle");
+	spdlog::debug("ScriptRPC: ScrSetActorFacingAngle");
 
 	CActorPool* pActorPool = pNetGame->GetActorPool();
 	if (!pActorPool) {
@@ -1234,7 +1234,7 @@ void RpcHandlers::OnSetActorFacingAngle(const proto::SetActorFacingAngle& p)
 
 void RpcHandlers::OnSetActorPos(const proto::SetActorPos& p)
 {
-	spdlog::info("ScriptRPC: ScrSetActorPos");
+	spdlog::debug("ScriptRPC: ScrSetActorPos");
 
 	CActorPool* pActorPool = pNetGame->GetActorPool();
 	if (!pActorPool) {
@@ -1249,7 +1249,7 @@ void RpcHandlers::OnSetActorPos(const proto::SetActorPos& p)
 
 void RpcHandlers::OnSetActorHealth(const proto::SetActorHealth& p)
 {
-	spdlog::info("ScriptRPC: ScrSetActorHealth");
+	spdlog::debug("ScriptRPC: ScrSetActorHealth");
 
 	CActorPool* pActorPool = pNetGame->GetActorPool();
 	if (!pActorPool) {
@@ -1264,7 +1264,7 @@ void RpcHandlers::OnSetActorHealth(const proto::SetActorHealth& p)
 
 void RpcHandlers::OnPlayAudioStream(const proto::PlayAudioStream& p)
 {
-	spdlog::info("ScriptRPC: ScrPlayAudioStream");
+	spdlog::debug("ScriptRPC: ScrPlayAudioStream");
 
 	if (pUI && pUI->chat()) {
 		pUI->chat()->addInfoMessage("[Audio Stream]: %s", p.url.c_str());
@@ -1277,7 +1277,7 @@ void RpcHandlers::OnPlayAudioStream(const proto::PlayAudioStream& p)
 
 void RpcHandlers::OnStopAudioStream(const proto::StopAudioStream&)
 {
-	spdlog::info("ScriptRPC: ScrStopAudioStream");
+	spdlog::debug("ScriptRPC: ScrStopAudioStream");
 
 	if (pAudioStream) {
 		pAudioStream->Stop(false);
@@ -1287,7 +1287,7 @@ void RpcHandlers::OnStopAudioStream(const proto::StopAudioStream&)
 
 void RpcHandlers::OnMoveObject(const proto::MoveObject& p)
 {
-	spdlog::info("ScriptRPC: ScrMoveObject");
+	spdlog::debug("ScriptRPC: ScrMoveObject");
 
 	if (!proto::isFinite(p.targetPos) || !proto::isFinite(p.targetRot) || !std::isfinite(p.speed)) {
 		spdlog::warn("ScrMoveObject: rejected non-finite params for object {}", p.objectId);
@@ -1311,7 +1311,7 @@ void RpcHandlers::OnMoveObject(const proto::MoveObject& p)
 
 void RpcHandlers::OnStopObject(const proto::StopObject& p)
 {
-	spdlog::info("ScriptRPC: ScrStopObject");
+	spdlog::debug("ScriptRPC: ScrStopObject");
 
 	CObjectPool* pObjectPool = pNetGame->GetObjectPool();
 	if (!pObjectPool) return;
@@ -1324,7 +1324,7 @@ void RpcHandlers::OnStopObject(const proto::StopObject& p)
 
 void RpcHandlers::OnSetPlayerDrunkLevel(const proto::SetPlayerDrunkLevel& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerDrunkLevel");
+	spdlog::debug("ScriptRPC: ScrSetPlayerDrunkLevel");
 
 	CPlayerPed* pPlayerPed = pGame->FindPlayerPed();
 	if (pPlayerPed) {
@@ -1334,19 +1334,19 @@ void RpcHandlers::OnSetPlayerDrunkLevel(const proto::SetPlayerDrunkLevel& p)
 
 void RpcHandlers::OnSetPlayerDrunkVisuals(const proto::SetPlayerDrunkVisuals& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerDrunkVisuals");
+	spdlog::debug("ScriptRPC: ScrSetPlayerDrunkVisuals");
 	ScriptCommand(&set_player_drunk_visuals, 0, p.visuals);
 }
 
 void RpcHandlers::OnSetPlayerDrunkHandling(const proto::SetPlayerDrunkHandling& p)
 {
-	spdlog::info("ScriptRPC: ScrSetPlayerDrunkHandling");
+	spdlog::debug("ScriptRPC: ScrSetPlayerDrunkHandling");
 	ScriptCommand(&set_player_drunk_handling, 0, p.handling);
 }
 
 void RpcHandlers::OnDeathMessage(const proto::DeathMessage& p)
 {
-	spdlog::info("ScriptRPC: ScrDeathMessage");
+	spdlog::debug("ScriptRPC: ScrDeathMessage");
 
 	std::string killername, playername;
 	unsigned int killercolor = 0, playercolor = 0;
@@ -1387,6 +1387,6 @@ void RpcHandlers::OnDeathMessage(const proto::DeathMessage& p)
 
 void RpcHandlers::OnDisableVehicleCollisions(const proto::DisableVehicleCollisions& p)
 {
-	spdlog::info("ScriptRPC: ScrDisableVehicleCollisions");
+	spdlog::debug("ScriptRPC: ScrDisableVehicleCollisions");
 	pNetGame->m_netSet->disableVehicleCollisions = p.disable;
 }
