@@ -4,6 +4,7 @@
 
 #include "Game.h"
 #include "Pickups.h"
+#include "Engine/PatchRegistry.h"
 #include "../Addr.h"
 #include "../Net/NetGame.h"
 
@@ -45,7 +46,7 @@ DECL_HOOK(void, CPickups_Update)
 void Pickups::installHooks()
 {
 	spdlog::info("Installing pickup hooks...");
-	HOOK_SYM(CPickups_Update, CPickups_Update);
+	REG_HOOK(Boot, CPickups_Update, CPickups_Update, "SA-MP pickup collection detection");
 }
 
 bool sa::CPickup::Update()

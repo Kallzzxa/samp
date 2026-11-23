@@ -225,26 +225,28 @@ void MultiTouch::initialize()
 	memset(g_points, 0, 999 * sizeof(int));
 	Memory::protectAddr(g_saSym->Abs(addr::GOT_MultiTouch_points));
 	*g_saSym->Abs<int**>(addr::GOT_MultiTouch_points) = &g_points[0];
+	patches::registerData("MultiTouch.points", "Relocate NVEvent touch points array", patches::Scope::Boot, g_saSym->Abs<uintptr_t>(addr::GOT_MultiTouch_points));
 
 	// pointers
 	memset(g_pointers, 0, 999 * sizeof(int));
 	Memory::protectAddr(g_saSym->Abs(addr::GOT_MultiTouch_pointers));
 	*g_saSym->Abs<int**>(addr::GOT_MultiTouch_pointers) = &g_pointers[0];
+	patches::registerData("MultiTouch.pointers", "Relocate NVEvent touch pointers array", patches::Scope::Boot, g_saSym->Abs<uintptr_t>(addr::GOT_MultiTouch_pointers));
 
 #if VER_x32
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::OS_PointerGetNumber_patch), (uintptr_t) "\x04\x20", 2);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::OS_PointerGetType_patch), (uintptr_t) "\x04\x28", 2);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetCoordinates_patch), (uintptr_t) "\x03\x28", 2);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetWheel_patch), (uintptr_t) "\x03\x28", 2);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerDoubleClicked_patch), (uintptr_t) "\x03\x28", 2);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetButton_patch), (uintptr_t) "\x03\x2A", 2);
+	patches::updateBytes("MultiTouch.OS_PointerGetNumber", "Expand touch pointer cap to 4", g_saSym->Abs<uintptr_t>(addr::OS_PointerGetNumber_patch), "\x04\x20", 2);
+	patches::updateBytes("MultiTouch.OS_PointerGetType", "Expand touch pointer cap to 4", g_saSym->Abs<uintptr_t>(addr::OS_PointerGetType_patch), "\x04\x28", 2);
+	patches::updateBytes("MultiTouch.LIB_PointerGetCoordinates", "Expand touch pointer cap to 4", g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetCoordinates_patch), "\x03\x28", 2);
+	patches::updateBytes("MultiTouch.LIB_PointerGetWheel", "Expand touch pointer cap to 4", g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetWheel_patch), "\x03\x28", 2);
+	patches::updateBytes("MultiTouch.LIB_PointerDoubleClicked", "Expand touch pointer cap to 4", g_saSym->Abs<uintptr_t>(addr::LIB_PointerDoubleClicked_patch), "\x03\x28", 2);
+	patches::updateBytes("MultiTouch.LIB_PointerGetButton", "Expand touch pointer cap to 4", g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetButton_patch), "\x03\x2A", 2);
 #else
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::OS_PointerGetNumber_patch), (uintptr_t) "\x80\x00\x80\x52", 4);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::OS_PointerGetType_patch), (uintptr_t) "\x1F\x10\x00\x71", 4);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetCoordinates_patch), (uintptr_t) "\x1F\x0C\x00\x71", 4);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetWheel_patch), (uintptr_t) "\x1F\x0C\x00\x71", 4);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerDoubleClicked_patch), (uintptr_t) "\x1F\x0C\x00\x71", 4);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetButton_patch), (uintptr_t) "\x1F\x0D\x00\x71", 4);
+	patches::updateBytes("MultiTouch.OS_PointerGetNumber", "Expand touch pointer cap to 4", g_saSym->Abs<uintptr_t>(addr::OS_PointerGetNumber_patch), "\x80\x00\x80\x52", 4);
+	patches::updateBytes("MultiTouch.OS_PointerGetType", "Expand touch pointer cap to 4", g_saSym->Abs<uintptr_t>(addr::OS_PointerGetType_patch), "\x1F\x10\x00\x71", 4);
+	patches::updateBytes("MultiTouch.LIB_PointerGetCoordinates", "Expand touch pointer cap to 4", g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetCoordinates_patch), "\x1F\x0C\x00\x71", 4);
+	patches::updateBytes("MultiTouch.LIB_PointerGetWheel", "Expand touch pointer cap to 4", g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetWheel_patch), "\x1F\x0C\x00\x71", 4);
+	patches::updateBytes("MultiTouch.LIB_PointerDoubleClicked", "Expand touch pointer cap to 4", g_saSym->Abs<uintptr_t>(addr::LIB_PointerDoubleClicked_patch), "\x1F\x0C\x00\x71", 4);
+	patches::updateBytes("MultiTouch.LIB_PointerGetButton", "Expand touch pointer cap to 4", g_saSym->Abs<uintptr_t>(addr::LIB_PointerGetButton_patch), "\x1F\x0D\x00\x71", 4);
 #endif
 
 	// Resolve live _Z14AND_TouchEventiiii entry point so touches flow through
@@ -252,7 +254,7 @@ void MultiTouch::initialize()
 	g_fnAndTouchEvent = eng::as<FnAndTouchEvent>(eng::Sym::AND_TouchEvent);
 
 	// NVEventGetNextEvent
-	HOOK_SYM(NVEventGetNextEvent, NVEventGetNextEvent);
+	REG_HOOK(Boot, NVEventGetNextEvent, NVEventGetNextEvent, "Multi-touch NVEvent queue intercept");
 }
 
 extern "C"

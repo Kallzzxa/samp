@@ -238,8 +238,10 @@ void CPlaceable::FreeStaticMatrix()
 
 void CPlaceable::Initialize()
 {
-	Memory::hookSym(eng::ptr(eng::Sym::CPlaceable_InitMatrixArray), (void*) &CPlaceable::InitMatrixArray, (void**) &CPlaceable_InitMatrixArray, eng::name(eng::Sym::CPlaceable_InitMatrixArray));
-	Memory::hookSym(eng::ptr(eng::Sym::CPlaceable_ShutdownMatrixArray), (void*) &CPlaceable::ShutdownMatrixArray, (void**) &CPlaceable_ShutdownMatrixArray, eng::name(eng::Sym::CPlaceable_ShutdownMatrixArray));
+	patches::installHook("CPlaceable::InitMatrixArray", "Init expanded matrix pool", patches::Scope::Boot,
+		eng::Sym::CPlaceable_InitMatrixArray, (void*) &CPlaceable::InitMatrixArray, (void**) &CPlaceable_InitMatrixArray);
+	patches::installHook("CPlaceable::ShutdownMatrixArray", "Shutdown expanded matrix pool", patches::Scope::Boot,
+		eng::Sym::CPlaceable_ShutdownMatrixArray, (void*) &CPlaceable::ShutdownMatrixArray, (void**) &CPlaceable_ShutdownMatrixArray);
 }
 
 CPlaceable::CPlaceable()

@@ -1490,8 +1490,8 @@ void CPlayerPed::SetModelIndex(uint uiModel)
 		uiModel = 0;
 	}
 
-	// CClothes::RebuildPlayer
-	Memory::ret(eng::addr(eng::Sym::CClothes_RebuildPlayer));
+	// CClothes::RebuildPlayer (registered in PatchRegistry as Session patch)
+	patches::set("CClothes::RebuildPlayer", true);
 
 	DestroyFollowPedTask();
 

@@ -206,6 +206,7 @@ void Client::initialize(const std::string& gameDir, bool offlineMode)
 	Patches::apply();
 
 	MultiTouch::initialize();
+	patches::dumpToLog();
 
 	pGame = new Game();
 

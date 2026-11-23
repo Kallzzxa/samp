@@ -111,7 +111,28 @@ DECL_HOOK(uint32_t, CWidgetRegionMove_IsTouched, uintptr_t _this, uintptr_t pVec
 static constexpr uintptr_t kTaskPlayerOnFootTimerOffset = VER_x32 ? 40 : 56;
 
 extern std::atomic<bool> g_suppressWidgetSetEnabled;
+static std::atomic<bool> g_suppressPedUpdatePosition{false};
+static std::atomic<bool> g_suppressPedRotFromCam{true};
 static bool g_bEnableLineOfSightHook = false;
+
+DECL_HOOK(void, CPed_UpdatePosition_fromProcessControl, sa::CPed* _this)
+{
+	if (g_suppressPedUpdatePosition.load(std::memory_order_acquire)) {
+		return;
+	}
+	CPed_UpdatePosition_fromProcessControl(_this);
+}
+
+DECL_HOOK(void, CTaskSimplePlayerOnFoot_PlayerControlZelda, void* _this, sa::CPed* pPed, bool bUnk)
+{
+	if (!pPed || !g_suppressPedRotFromCam.load(std::memory_order_acquire)) {
+		CTaskSimplePlayerOnFoot_PlayerControlZelda(_this, pPed, bUnk);
+		return;
+	}
+	const float savedAimRot = pPed->m_fAimingRotation;
+	CTaskSimplePlayerOnFoot_PlayerControlZelda(_this, pPed, bUnk);
+	pPed->m_fAimingRotation = savedAimRot;
+}
 
 DECL_HOOK(void, CPed_ProcessControl, sa::CPed* _this)
 {
@@ -145,9 +166,9 @@ DECL_HOOK(void, CPed_ProcessControl, sa::CPed* _this)
 		// set the internal player to the passed actor.
 		*pbyteCurrentPlayer = curPlayer;
 
-		// CPed::UpdatePosition nulled from CPed::ProcessControl;
-		// suppress CWidget::SetEnabled via hook flag instead of rewriting hooked .text.
-		Memory::nop(g_saSym->Abs<uintptr_t>(addr::CPed_UpdatePosition_BranchBL1), 2);
+		// Suppress CPed::UpdatePosition (via hookBL) and CWidget::SetEnabled (via hook)
+		// for remote peds without rewriting .text every frame.
+		g_suppressPedUpdatePosition.store(true, std::memory_order_release);
 		g_suppressWidgetSetEnabled.store(true, std::memory_order_release);
 
 		// call orig
@@ -155,7 +176,7 @@ DECL_HOOK(void, CPed_ProcessControl, sa::CPed* _this)
 
 		// restore
 		g_suppressWidgetSetEnabled.store(false, std::memory_order_release);
-		Memory::restoreNop(g_saSym->Abs<uintptr_t>(addr::CPed_UpdatePosition_BranchBL1));
+		g_suppressPedUpdatePosition.store(false, std::memory_order_release);
 
 		// restore the camera modes.
 		*pbyteCameraMode = byteSavedCameraMode;
@@ -171,14 +192,15 @@ DECL_HOOK(void, CPed_ProcessControl, sa::CPed* _this)
 		GameSetLocalPlayerAim();
 	}
 	else {
-		// Apply the original code to set ped rot from Cam
-		Memory::restoreNop(g_saSym->Abs<uintptr_t>(addr::pedRots));
+		// Allow local player / actors to update m_fAimingRotation from camera
+		// in CTaskSimplePlayerOnFoot::PlayerControlZelda without rewriting .text.
+		g_suppressPedRotFromCam.store(false, std::memory_order_release);
 
 		// call orig
 		CPed_ProcessControl(_this);
 
-		// Reapply the no ped rots from Cam patch
-		Memory::nop(g_saSym->Abs<uintptr_t>(addr::pedRots), 2);
+		// Re-enable suppression for non-local peds
+		g_suppressPedRotFromCam.store(true, std::memory_order_release);
 	}
 
 	dwCurPlayerActor = prevCurActor;
@@ -2348,96 +2370,105 @@ void Hooks::installPadHooks()
 
 	memset(&LocalPlayerKeys, 0, sizeof(PAD_KEYS));
 
-	// playerped
-	HOOK_SYM(CPlayerPed_ProcessControl, CPed_ProcessControl);
+	// playerped & per-frame guard hooks (replaces per-frame .text nop/restoreNop)
+	REG_HOOK(Boot, CPlayerPed_ProcessControl, CPed_ProcessControl, "Remote player ped control context switch");
+	REG_HOOK_BL(Boot, addr::CPed_UpdatePosition_BranchBL1, "CPed_UpdatePosition.ProcessControl",
+		&CPed_UpdatePosition_fromProcessControl_hook, &CPed_UpdatePosition_fromProcessControl,
+		"Suppress CPed::UpdatePosition for remote peds");
+	REG_HOOK(Boot, CTaskSimplePlayerOnFoot_PlayerControlZelda, CTaskSimplePlayerOnFoot_PlayerControlZelda,
+		"Preserve remote ped m_fAimingRotation from camera");
 
 	// vehicles
-	HOOK_SYM(CAutomobile_ProcessControl, CAutomobile_ProcessControl);
-	HOOK_SYM(CBoat_ProcessControl, CBoat_ProcessControl);
-	HOOK_SYM(CBike_ProcessControl, CBike_ProcessControl);
-	HOOK_SYM(CPlane_ProcessControl, CPlane_ProcessControl);
-	HOOK_SYM(CHeli_ProcessControl, CHeli_ProcessControl);
-	HOOK_SYM(CBmx_ProcessControl, CBmx_ProcessControl);
-	HOOK_SYM(CMonsterTruck_ProcessControl, CMonsterTruck_ProcessControl);
-	HOOK_SYM(CQuadBike_ProcessControl, CQuadBike_ProcessControl);
-	HOOK_SYM(CTrain_ProcessControl, CTrain_ProcessControl);
-	HOOK_SYM(CTrailer_ProcessControl, CTrailer_ProcessControl);
+	REG_HOOK(Boot, CAutomobile_ProcessControl, CAutomobile_ProcessControl, "Remote automobile control context switch");
+	REG_HOOK(Boot, CBoat_ProcessControl, CBoat_ProcessControl, "Remote boat control context switch");
+	REG_HOOK(Boot, CBike_ProcessControl, CBike_ProcessControl, "Remote bike control context switch");
+	REG_HOOK(Boot, CPlane_ProcessControl, CPlane_ProcessControl, "Remote plane control context switch");
+	REG_HOOK(Boot, CHeli_ProcessControl, CHeli_ProcessControl, "Remote heli control context switch");
+	REG_HOOK(Boot, CBmx_ProcessControl, CBmx_ProcessControl, "Remote bmx control context switch");
+	REG_HOOK(Boot, CMonsterTruck_ProcessControl, CMonsterTruck_ProcessControl, "Remote monster truck control context switch");
+	REG_HOOK(Boot, CQuadBike_ProcessControl, CQuadBike_ProcessControl, "Remote quad bike control context switch");
+	REG_HOOK(Boot, CTrain_ProcessControl, CTrain_ProcessControl, "Remote train control context switch");
+	REG_HOOK(Boot, CTrailer_ProcessControl, CTrailer_ProcessControl, "Remote trailer control context switch");
 
-	HOOK_SYM(CPad_GetPedWalkLeftRight, CPad_GetPedWalkLeftRight);
-	HOOK_SYM(CPad_GetPedWalkUpDown, CPad_GetPedWalkUpDown);
+	REG_HOOK(Boot, CPad_GetPedWalkLeftRight, CPad_GetPedWalkLeftRight, "Pad walk left/right sync");
+	REG_HOOK(Boot, CPad_GetPedWalkUpDown, CPad_GetPedWalkUpDown, "Pad walk up/down sync");
 
-	HOOK_SYM(CPad_GetSprint, CPad_GetSprint);
+	REG_HOOK(Boot, CPad_GetSprint, CPad_GetSprint, "Pad sprint sync");
 
-	HOOK_SYM(CPad_GetJump, CPad_GetJump);
-	HOOK_SYM(CPad_JumpJustDown, CPad_JumpJustDown);
+	REG_HOOK(Boot, CPad_GetJump, CPad_GetJump, "Pad jump sync");
+	REG_HOOK(Boot, CPad_JumpJustDown, CPad_JumpJustDown, "Pad jump just-down sync");
 
-	HOOK_SYM(CPad_GetDuck, CPad_GetDuck);
-	HOOK_SYM(CPad_DuckJustDown, CPad_DuckJustDown);
+	REG_HOOK(Boot, CPad_GetDuck, CPad_GetDuck, "Pad duck sync");
+	REG_HOOK(Boot, CPad_DuckJustDown, CPad_DuckJustDown, "Pad duck just-down sync");
 
-	HOOK_SYM(CPad_MeleeAttackJustDown, CPad_MeleeAttackJustDown);
-	HOOK_SYM(CPad_GetBlock, CPad_GetBlock);
-	HOOK_SYM(CTaskSimplePlayerOnFoot_PlayerControlFighter, CTaskSimplePlayerOnFoot_PlayerControlFighter);
-	HOOK_SYM(CTouchInterface_Clear, CTouchInterface_Clear);
+	REG_HOOK(Boot, CPad_MeleeAttackJustDown, CPad_MeleeAttackJustDown, "Pad melee attack sync");
+	REG_HOOK(Boot, CPad_GetBlock, CPad_GetBlock, "Pad block widget override");
+	REG_HOOK(Boot, CTaskSimplePlayerOnFoot_PlayerControlFighter, CTaskSimplePlayerOnFoot_PlayerControlFighter, "Touch block timeout guard");
+	REG_HOOK(Boot, CTouchInterface_Clear, CTouchInterface_Clear, "Multi-touch pinch-zoom guard");
 
-	HOOK_SYM(CWidgetRegionMove_Update, CWidgetRegionMove_Update);
-	HOOK_SYM(CWidgetRegionMove_ClampInternalTouchAnchor, CWidgetRegionMove_ClampInternalTouchAnchor);
-	HOOK_SYM(CWidgetRegionMove_Draw, CWidgetRegionMove_Draw);
-	HOOK_SYM(CWidgetRegionMove_IsTouched, CWidgetRegionMove_IsTouched);
+	REG_HOOK(Boot, CWidgetRegionMove_Update, CWidgetRegionMove_Update, "Virtual joystick scale (Update)");
+	REG_HOOK(Boot, CWidgetRegionMove_ClampInternalTouchAnchor, CWidgetRegionMove_ClampInternalTouchAnchor, "Virtual joystick scale (Anchor)");
+	REG_HOOK(Boot, CWidgetRegionMove_Draw, CWidgetRegionMove_Draw, "Virtual joystick scale (Draw)");
+	REG_HOOK(Boot, CWidgetRegionMove_IsTouched, CWidgetRegionMove_IsTouched, "Virtual joystick scale (IsTouched)");
 
 #if VER_x32
-	HOOK_ADDR(g_saSym->Abs(addr::CPad_GetAbortClimb_arm32), CPad_GetAbortClimb, true);
+	REG_HOOK_ADDR(Boot, addr::CPad_GetAbortClimb_arm32, CPad_GetAbortClimb, true, "Pad abort climb sync (arm32)");
 #else
-	HOOK_SYM(CPad_GetAbortClimb, CPad_GetAbortClimb);
+	REG_HOOK(Boot, CPad_GetAbortClimb, CPad_GetAbortClimb, "Pad abort climb sync");
 #endif
-	HOOK_SYM(CPad_GetAutoClimb, CPad_GetAutoClimb);
+	REG_HOOK(Boot, CPad_GetAutoClimb, CPad_GetAutoClimb, "Pad auto climb sync");
 
-	HOOK_SYM(CPad_SwimJumpJustDown, CPad_SwimJumpJustDown);
-	HOOK_SYM(CPad_DiveJustDown, CPad_DiveJustDown);
+	REG_HOOK(Boot, CPad_SwimJumpJustDown, CPad_SwimJumpJustDown, "Pad swim jump sync");
+	REG_HOOK(Boot, CPad_DiveJustDown, CPad_DiveJustDown, "Pad dive sync");
 
-	HOOK_SYM(CPad_GetSteeringUpDown, CPad_GetSteeringUpDown);
-	HOOK_SYM(CPad_GetSteeringLeftRight, CPad_GetSteeringLeftRight);
+	REG_HOOK(Boot, CPad_GetSteeringUpDown, CPad_GetSteeringUpDown, "Pad vehicle steer up/down sync");
+	REG_HOOK(Boot, CPad_GetSteeringLeftRight, CPad_GetSteeringLeftRight, "Pad vehicle steer left/right sync");
 
-	HOOK_SYM(CPad_GetHandBrake, CPad_GetHandBrake);
-	HOOK_SYM(CPad_GetBrake, CPad_GetBrake);
-	HOOK_SYM(CPad_GetAccelerate, CPad_GetAccelerate);
-	HOOK_SYM(CPad_GetHorn, CPad_GetHorn);
+	REG_HOOK(Boot, CPad_GetHandBrake, CPad_GetHandBrake, "Pad handbrake sync");
+	REG_HOOK(Boot, CPad_GetBrake, CPad_GetBrake, "Pad brake sync");
+	REG_HOOK(Boot, CPad_GetAccelerate, CPad_GetAccelerate, "Pad accelerate sync");
+	REG_HOOK(Boot, CPad_GetHorn, CPad_GetHorn, "Pad horn sync");
 
-	HOOK_SYM(CPad_ExitVehicleJustDown, CPad_ExitVehicleJustDown);
+	REG_HOOK(Boot, CPad_ExitVehicleJustDown, CPad_ExitVehicleJustDown, "Pad exit vehicle sync");
 
-	HOOK_SYM(CPad_GetTurretRight, CPad_GetTurretRight);
-	HOOK_SYM(CPad_GetTurretLeft, CPad_GetTurretLeft);
+	REG_HOOK(Boot, CPad_GetTurretRight, CPad_GetTurretRight, "Pad turret right sync");
+	REG_HOOK(Boot, CPad_GetTurretLeft, CPad_GetTurretLeft, "Pad turret left sync");
 
-	HOOK_SYM(CPad_GetHydraulicJump, CPad_GetHydraulicJump);
-	HOOK_SYM(CPad_GetNitroFired, CPad_GetNitroFired);
+	REG_HOOK(Boot, CPad_GetHydraulicJump, CPad_GetHydraulicJump, "Pad hydraulic jump sync");
+	REG_HOOK(Boot, CPad_GetNitroFired, CPad_GetNitroFired, "Pad nitro sync");
 
-	Memory::hookBL(g_saSym->Abs(addr::CTaskComplexEnterCarAsDriver_Branch1), (void*) &CTaskComplexEnterCarAsDriver_hook, (void**) &CTaskComplexEnterCarAsDriver);
-	Memory::hookBL(g_saSym->Abs(addr::CTaskComplexLeaveCar_Branch1), (void*) &CTaskComplexLeaveCar_hook, (void**) &CTaskComplexLeaveCar);
-	Memory::hookBL(g_saSym->Abs(addr::CTaskComplexLeaveCar_Branch2), (void*) &CTaskComplexLeaveCar_hook, (void**) &CTaskComplexLeaveCar);
+	REG_HOOK_BL(Boot, addr::CTaskComplexEnterCarAsDriver_Branch1, "CTaskComplexEnterCarAsDriver.Branch1",
+		&CTaskComplexEnterCarAsDriver_hook, &CTaskComplexEnterCarAsDriver, "Notify server on vehicle enter");
+	REG_HOOK_BL(Boot, addr::CTaskComplexLeaveCar_Branch1, "CTaskComplexLeaveCar.Branch1",
+		&CTaskComplexLeaveCar_hook, &CTaskComplexLeaveCar, "Notify server on vehicle exit (branch 1)");
+	REG_HOOK_BL(Boot, addr::CTaskComplexLeaveCar_Branch2, "CTaskComplexLeaveCar.Branch2",
+		&CTaskComplexLeaveCar_hook, &CTaskComplexLeaveCar, "Notify server on vehicle exit (branch 2)");
 
-	HOOK_SYM(CTaskSimpleUseGun_SetPedPosition, CTaskSimpleUseGun_SetPedPosition);
-	HOOK_SYM(CPlayerInfo_Process, CPlayerInfo_Process);
-	HOOK_SYM(CTaskSimplePlayerOnFoot_MakeAbortable, CTaskSimplePlayerOnFoot_MakeAbortable);
+	REG_HOOK(Boot, CTaskSimpleUseGun_SetPedPosition, CTaskSimpleUseGun_SetPedPosition, "Remote player aim/gun context switch");
+	REG_HOOK(Boot, CPlayerInfo_Process, CPlayerInfo_Process, "Car-proximity hipfire abort guard");
+	REG_HOOK(Boot, CTaskSimplePlayerOnFoot_MakeAbortable, CTaskSimplePlayerOnFoot_MakeAbortable, "Protect UseGun from proximity probe");
 
-	HOOK_SYM(CPad_CycleWeaponRightJustDown, CPad_CycleWeaponRightJustDown);
-	HOOK_SYM(CPad_CycleWeaponLeftJustDown, CPad_CycleWeaponLeftJustDown);
-	HOOK_SYM(CPad_GetWeapon, CPad_GetWeapon);
-	HOOK_SYM(CPad_WeaponJustDown, CPad_WeaponJustDown);
-	HOOK_SYM(CCamera_IsTargetingActivePed, CCamera_IsTargetingActive);
-	HOOK_SYM(CPad_GetEnterTargeting, CPad_GetEnterTargeting);
-	HOOK_SYM(CPad_GetExitTargeting, CPad_GetExitTargeting);
+	REG_HOOK(Boot, CPad_CycleWeaponRightJustDown, CPad_CycleWeaponRightJustDown, "Pad weapon cycle right");
+	REG_HOOK(Boot, CPad_CycleWeaponLeftJustDown, CPad_CycleWeaponLeftJustDown, "Pad weapon cycle left");
+	REG_HOOK(Boot, CPad_GetWeapon, CPad_GetWeapon, "Pad weapon fire sync");
+	REG_HOOK(Boot, CPad_WeaponJustDown, CPad_WeaponJustDown, "Pad weapon just-down sync");
+	REG_HOOK(Boot, CCamera_IsTargetingActivePed, CCamera_IsTargetingActive, "Remote player targeting check");
+	REG_HOOK(Boot, CPad_GetEnterTargeting, CPad_GetEnterTargeting, "Touch aim button enter");
+	REG_HOOK(Boot, CPad_GetExitTargeting, CPad_GetExitTargeting, "Touch aim button exit");
 
-	Memory::hookBL(g_saSym->Abs(addr::CWeapon_FireInstantHit_branch1), (void*) &CWeapon_FireInstantHit_hook, (void**) &CWeapon_FireInstantHit);
-	Memory::hookBL(g_saSym->Abs(addr::CWeapon_FireInstantHit_branch2), (void*) &CWeapon_FireInstantHit_hook, (void**) &CWeapon_FireInstantHit);
+	REG_HOOK_BL(Boot, addr::CWeapon_FireInstantHit_branch1, "CWeapon_FireInstantHit.Branch1",
+		&CWeapon_FireInstantHit_hook, &CWeapon_FireInstantHit, "Bullet sync fire hook (branch 1)");
+	REG_HOOK_BL(Boot, addr::CWeapon_FireInstantHit_branch2, "CWeapon_FireInstantHit.Branch2",
+		&CWeapon_FireInstantHit_hook, &CWeapon_FireInstantHit, "Bullet sync fire hook (branch 2)");
 
-	HOOK_SYM(CWeapon_FireInstantHit, CWeapon_FireInstantHit_full);
-	HOOK_SYM(CWeapon_FireSniper, CWeapon_FireSniper);
+	REG_HOOK(Boot, CWeapon_FireInstantHit, CWeapon_FireInstantHit_full, "Lag-comp instant hit full hook");
+	REG_HOOK(Boot, CWeapon_FireSniper, CWeapon_FireSniper, "Sniper fire sync");
 
-	ghook_CWorld_ProcessLineOfSight = HOOK_SYM(CWorld_ProcessLineOfSight, CWorld_ProcessLineOfSight);
-	// Kept permanently enabled; gated by g_bEnableLineOfSightHook inside the hook
-	// instead of runtime GlossHookEnable/Disable self-modifying code.
+	ghook_CWorld_ProcessLineOfSight = REG_HOOK(Boot, CWorld_ProcessLineOfSight, CWorld_ProcessLineOfSight,
+		"Bullet raycast hit capture (gated in hook)");
 
-	HOOK_SYM(CBulletInfo_Update, CBulletInfo_Update);
-	HOOK_SYM(CPedDamageResponseCalculator_ComputeDamageResponse, CPedDamageResponseCalculator_ComputeDamageResponse);
-	HOOK_SYM(CBulletInfo_AddBullet, CBulletInfo_AddBullet);
-
+	REG_HOOK(Boot, CBulletInfo_Update, CBulletInfo_Update, "Projectile bullet update hook");
+	REG_HOOK(Boot, CPedDamageResponseCalculator_ComputeDamageResponse, CPedDamageResponseCalculator_ComputeDamageResponse,
+		"Give/take damage reporting");
+	REG_HOOK(Boot, CBulletInfo_AddBullet, CBulletInfo_AddBullet, "Bullet tracer sync");
 }

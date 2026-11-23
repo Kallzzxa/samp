@@ -2003,8 +2003,8 @@ void Hooks::installWidgetFixHooks()
 	GetTouchWidgets();
 
 	// HOOK("_ZN7CWidgetC2EPKcRK14WidgetPositionj10HIDMapping", CWidget);
-	HOOK_SYM(CWidget_Update, CWidget_Update);
-	HOOK_SYM(CWidget_SetEnabled, CWidget_SetEnabled);
+	REG_HOOK(Boot, CWidget_Update, CWidget_Update, "Touch widget layout & visibility fix");
+	REG_HOOK(Boot, CWidget_SetEnabled, CWidget_SetEnabled, "Suppress widget disable during remote ped control");
 }
 
 void Hooks::installCrosshairFixHooks()
@@ -2014,7 +2014,7 @@ void Hooks::installCrosshairFixHooks()
 	m_f3rdPersonCHairMultX = eng::as<float *>(eng::Sym::CCamera_m_f3rdPersonCHairMultX);
 	m_f3rdPersonCHairMultY = eng::as<float *>(eng::Sym::CCamera_m_f3rdPersonCHairMultY);
 
-	HOOK_SYM(CHud_DrawCrossHairs, DrawCrosshair);
+	REG_HOOK(Boot, CHud_DrawCrossHairs, DrawCrosshair, "Custom crosshair position & visibility");
 }
 
 DECL_HOOK(uint16_t*, CText_Get, void* _this, const char* key)
@@ -2066,82 +2066,82 @@ void Hooks::install()
 		curMS = *pCurMS;
 	}
 
-	HOOK_SYM(OS_FileOpen, OS_FileOpen);
-	HOOK_SYM(CStreaming_InitImageList, CStreaming_InitImageList);
-	HOOK_SYM(CModelInfoAccelerator_GetEntry, CModelInfoAccelerator_GetEntry);
-	HOOK_SYM(TextureDatabaseRuntime_Register, TextureDatabaseRuntime_Register);
-	HOOK_SYM(CStreaming_Init2, CStreaming_Init2);
-	HOOK_SYM(CTimer_StartUserPause, CTimer_StartUserPause);
-	HOOK_SYM(CTimer_EndUserPause, CTimer_EndUserPause);
-	HOOK_SYM(CGame_InitialiseRenderWare, CGame_InitialiseRenderWare);
-	HOOK_SYM(CModelInfo_AddPedModel, CModelInfo_AddPedModel);
-	HOOK_SYM(CModelInfo_AddAtomicModel, CModelInfo_AddAtomicModel);
-	HOOK_SYM(CPools_Initialise, CPools_Initialise);
-	HOOK_SYM(TextureDatabaseRuntime_Load, TextureDatabaseRuntime_Load);
-	HOOK_SYM(CTxdStore_TxdStoreFindCB, CTxdStore_TxdStoreFindCB);
+	REG_HOOK(Boot, OS_FileOpen, OS_FileOpen, "ModLoader & custom path file override");
+	REG_HOOK(Boot, CStreaming_InitImageList, CStreaming_InitImageList, "Register virtual modloader/models.img");
+	REG_HOOK(Boot, CModelInfoAccelerator_GetEntry, CModelInfoAccelerator_GetEntry, "Bypass stale MINFO.BIN for virtual models");
+	REG_HOOK(Boot, TextureDatabaseRuntime_Register, TextureDatabaseRuntime_Register, "Null-safe texture DB register");
+	REG_HOOK(Boot, CStreaming_Init2, CStreaming_Init2, "Expand streaming memory budget");
+	REG_HOOK(Boot, CTimer_StartUserPause, CTimer_StartUserPause, "Pause state tracking");
+	REG_HOOK(Boot, CTimer_EndUserPause, CTimer_EndUserPause, "Resume state tracking");
+	REG_HOOK(Boot, CGame_InitialiseRenderWare, CGame_InitialiseRenderWare, "Load extra texdbs & custom fonts");
+	REG_HOOK(Boot, CModelInfo_AddPedModel, CModelInfo_AddPedModel, "Ped model store override");
+	REG_HOOK(Boot, CModelInfo_AddAtomicModel, CModelInfo_AddAtomicModel, "Atomic model store override");
+	REG_HOOK(Boot, CPools_Initialise, CPools_Initialise, "Expanded entity pools");
+	REG_HOOK(Boot, TextureDatabaseRuntime_Load, TextureDatabaseRuntime_Load, "ModLoader texdb load intercept");
+	REG_HOOK(Boot, CTxdStore_TxdStoreFindCB, CTxdStore_TxdStoreFindCB, "Custom TXD lookup fallback");
 
 	// SAMP hooks //
 
 	// UI
-	HOOK_SYM(ANDRunThread, AND_RunThread);
-	HOOK_SYM(FrontendIdle, FrontendIdle);
-	HOOK_SYM(Render2dStuff, Render2dStuff);
-	HOOK_SYM(Idle, Idle);
-	HOOK_SYM(AND_TouchEvent, AND_TouchEvent);
-	HOOK_SYM(CLoadingScreen_DisplayPCScreen, DisplayScreen);
+	REG_HOOK(Boot, ANDRunThread, AND_RunThread, "Capture GameMain thread id");
+	REG_HOOK(Boot, FrontendIdle, FrontendIdle, "Auto-start game & adjustable HUD exit");
+	REG_HOOK(Boot, Render2dStuff, Render2dStuff, "ImGui HUD & SA-MP 2D overlay render");
+	REG_HOOK(Boot, Idle, Idle, "Main render frame & RwCameraEndUpdate");
+	REG_HOOK(Boot, AND_TouchEvent, AND_TouchEvent, "Touch routing (UI/CLEO/Monet/TextDraw)");
+	REG_HOOK(Boot, CLoadingScreen_DisplayPCScreen, DisplayScreen, "Custom loading splash screen");
 
 	// Game process
-	HOOK_SYM(CGame_Process, CGame_Process);
-	HOOK_SYM(CDraw_CalculateAspectRatio, CDraw_CalculateAspectRatio);
+	REG_HOOK(Boot, CGame_Process, CGame_Process, "Per-frame SA-MP client loop");
+	REG_HOOK(Boot, CDraw_CalculateAspectRatio, CDraw_CalculateAspectRatio, "Custom aspect ratio override");
 	if (CleoEngine::isEnabled())
 	{
-		HOOK_SYM(CText_Get, CText_Get);
+		REG_HOOK(Boot, CText_Get, CText_Get, "CLEO custom GXT text lookup");
 	}
 
 	// click map rpc
-	HOOK_SYM(CRadar_SetCoordBlip, CRadar_SetCoordBlip);
+	REG_HOOK(Boot, CRadar_SetCoordBlip, CRadar_SetCoordBlip, "Map click teleport/marker RPC");
 
 	// gangzone
-	HOOK_SYM(CRadar_DrawRadarGangOverlay, CRadar_DrawRadarGangOverlay);
+	REG_HOOK(Boot, CRadar_DrawRadarGangOverlay, CRadar_DrawRadarGangOverlay, "SA-MP gang zone radar overlay");
 
 	// radar color
-	HOOK_SYM(CHudColours_GetIntColour, CHudColours_GetIntColour);
+	REG_HOOK(Boot, CHudColours_GetIntColour, CHudColours_GetIntColour, "SA-MP radar blip RGBA colors");
 
 	// vehicle collisions
-	HOOK_SYM(CAutomobile_ProcessEntityCollision, CAutoMobile_ProcessEntityCollision);
-	HOOK_SYM(CBike_ProcessEntityCollision, CBike_ProcessEntityCollision);
-	HOOK_SYM(CMonsterTruck_ProcessEntityCollision, CMonsterTruck_ProcessEntityCollision);
-	HOOK_SYM(CTrailer_ProcessEntityCollision, CTrailer_ProcessEntityCollision);
-	HOOK_SYM(CTrailer_BreakTowLink, CTrailer_BreakTowLink);
+	REG_HOOK(Boot, CAutomobile_ProcessEntityCollision, CAutoMobile_ProcessEntityCollision, "DisableRemoteVehicleCollisions (automobile)");
+	REG_HOOK(Boot, CBike_ProcessEntityCollision, CBike_ProcessEntityCollision, "DisableRemoteVehicleCollisions (bike)");
+	REG_HOOK(Boot, CMonsterTruck_ProcessEntityCollision, CMonsterTruck_ProcessEntityCollision, "DisableRemoteVehicleCollisions (monster)");
+	REG_HOOK(Boot, CTrailer_ProcessEntityCollision, CTrailer_ProcessEntityCollision, "DisableRemoteVehicleCollisions (trailer)");
+	REG_HOOK(Boot, CTrailer_BreakTowLink, CTrailer_BreakTowLink, "Prevent spurious trailer detach");
 
 	// OOB entities: wrap bound rects so CPhysical::Add accepts them
-	HOOK_SYM(CPhysical_GetBoundRect, CPhysical_GetBoundRect);
+	REG_HOOK(Boot, CPhysical_GetBoundRect, CPhysical_GetBoundRect, "OOB (|x|>3000) sector bound remapping");
 
 	// obj material
-	HOOK_SYM(CObject_Render, CObject_Render);
+	REG_HOOK(Boot, CObject_Render, CObject_Render, "Object custom material/text & UVAnim");
 
 	// render objects 3000+- pos
-	HOOK_SYM(CRenderer_RenderEverythingBarRoads, CRenderer_RenderEverythingBarRoads);
+	REG_HOOK(Boot, CRenderer_RenderEverythingBarRoads, CRenderer_RenderEverythingBarRoads, "Force-render OOB objects");
 
 	// attched objects
-	HOOK_SYM(CWorld_ProcessPedsAfterPreRender, CWorld_ProcessPedsAfterPreRender);
+	REG_HOOK(Boot, CWorld_ProcessPedsAfterPreRender, CWorld_ProcessPedsAfterPreRender, "Render player attached objects");
 
 	// crash fixes
-	HOOK_SYM(CPlantMgr_ProcessEntryCollisionDataSections_AddLocTris, CPlantMgr_AddLocTris);
-	HOOK_SYM(CRadar_ClearBlip, CRadar_ClearBlip);
-	HOOK_SYM(CWorld_FindPlayerSlotWithPedPointer, CWorld_FindPlayerSlotWithPedPointer);
-	HOOK_SYM(MaterialUpdateUVAnimCB, MaterialUpdateUVAnimCB);
-	HOOK_SYM(rpMatFXOpenGLAllInOneRenderCB, rpMatFXOpenGLAllInOneRenderCB);
-	HOOK_SYM(CCustomBuildingDNPipeline_CustomPipeRenderCB, CustomPipeRenderCB);
-	HOOK_SYM(CCustomBuildingPipeline_CustomPipeRenderCB, CustomBuildingPipeRenderCB);
-	HOOK_SYM(rxOpenGLDefaultAllInOneRenderCB, rxOpenGLDefaultAllInOneRenderCB);
-	HOOK_SYM(RwTextureDestroy, _RwTextureDestroy);
-	HOOK_SYM(RwFrameAddChild, RwFrameAddChild);
-	HOOK_SYM(RLEDecompress, RLEDecompress);
-	HOOK_SYM(RwResourcesFreeResEntry, RwResourcesFreeResEntry);
-	HOOK_SYM(rxOpenGLDefaultAtomicAllInOneNode, rxOpenGLDefaultAtomicAllInOneNode);
-	HOOK_SYM(TextureDatabaseRuntime_GetEntry, TextureDatabaseRuntime_GetEntry);
-	HOOK_SYM(CPlayerPed_GetPlayerInfoForThisPlayerPed, GetPlayerInfoForThisPlayerPed);
+	REG_HOOK(Boot, CPlantMgr_ProcessEntryCollisionDataSections_AddLocTris, CPlantMgr_AddLocTris, "Guard bad col triangle indices");
+	REG_HOOK(Boot, CRadar_ClearBlip, CRadar_ClearBlip, "Guard invalid radar blip clear");
+	REG_HOOK(Boot, CWorld_FindPlayerSlotWithPedPointer, CWorld_FindPlayerSlotWithPedPointer, "Resolve remote player slot");
+	REG_HOOK(Boot, MaterialUpdateUVAnimCB, MaterialUpdateUVAnimCB, "World/object UVAnim material update");
+	REG_HOOK(Boot, rpMatFXOpenGLAllInOneRenderCB, rpMatFXOpenGLAllInOneRenderCB, "Null-safe MatFX render");
+	REG_HOOK(Boot, CCustomBuildingDNPipeline_CustomPipeRenderCB, CustomPipeRenderCB, "Custom building DN pipeline render");
+	REG_HOOK(Boot, CCustomBuildingPipeline_CustomPipeRenderCB, CustomBuildingPipeRenderCB, "Custom building pipeline render");
+	REG_HOOK(Boot, rxOpenGLDefaultAllInOneRenderCB, rxOpenGLDefaultAllInOneRenderCB, "OpenGL default render wrap/guard");
+	REG_HOOK(Boot, RwTextureDestroy, _RwTextureDestroy, "Guard RwTexture double-destroy");
+	REG_HOOK(Boot, RwFrameAddChild, RwFrameAddChild, "Guard RwFrameAddChild null/cycle");
+	REG_HOOK(Boot, RLEDecompress, RLEDecompress, "Bounds-safe RLEDecompress");
+	REG_HOOK(Boot, RwResourcesFreeResEntry, RwResourcesFreeResEntry, "Guard RwResourcesFreeResEntry");
+	REG_HOOK(Boot, rxOpenGLDefaultAtomicAllInOneNode, rxOpenGLDefaultAtomicAllInOneNode, "Guard OpenGL atomic node render");
+	REG_HOOK(Boot, TextureDatabaseRuntime_GetEntry, TextureDatabaseRuntime_GetEntry, "Texture DB entry lookup guard");
+	REG_HOOK(Boot, CPlayerPed_GetPlayerInfoForThisPlayerPed, GetPlayerInfoForThisPlayerPed, "Map ped to relocated WORLD_PLAYERS");
 
 	if (!eglGetProcAddress("glAlphaFuncQCOM"))
 	{
@@ -2150,19 +2150,21 @@ void Hooks::install()
 		{
 			// If "glAlphaFunc" is found, store the address in the global library
 			*((void **)(g_saSym->Abs(addr::glAlphaFuncQCOM_slot))) = (void *)eglGetProcAddress("glAlphaFunc");
+			patches::registerData("glAlphaFuncQCOM.fallback", "Bind glAlphaFunc into glAlphaFuncQCOM slot",
+				patches::Scope::Boot, g_saSym->Abs<uintptr_t>(addr::glAlphaFuncQCOM_slot));
 		}
 		else
 		{
 			// If neither function is available, hook the fallback symbol
-			HOOK_SYM(RQ_Command_rqSetAlphaTest, RQCommand_rqSetAlphaTest);
+			REG_HOOK(Boot, RQ_Command_rqSetAlphaTest, RQCommand_rqSetAlphaTest, "Fallback alpha test hook when glAlphaFunc absent");
 		}
 	}
 
 	// fix spin on keyboard/controller
-	HOOK_SYM(CHID_GetInputType, GetInputType);
-	HOOK_SYM(CHID_Replaces, CHID_Replaces);
-	HOOK_SYM(CHID_Implements, CHID_Implements);
-	HOOK_SYM(CTouchInterface_RepositionAdjustableWidgets, TI_RepositionAdjustableWidgets);
+	REG_HOOK(Boot, CHID_GetInputType, GetInputType, "Keyboard/controller input type override");
+	REG_HOOK(Boot, CHID_Replaces, CHID_Replaces, "HID mapping replaces override");
+	REG_HOOK(Boot, CHID_Implements, CHID_Implements, "HID mapping implements override");
+	REG_HOOK(Boot, CTouchInterface_RepositionAdjustableWidgets, TI_RepositionAdjustableWidgets, "Preserve custom buttons on HUD adjust");
 
 	Pickups::installHooks();
 	RemoveBuilding::installHooks();

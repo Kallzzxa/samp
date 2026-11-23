@@ -331,14 +331,14 @@ void Settings::applyFpsLimitPatch()
 	if (!g_saSym) return;
 	uint8_t targetFps = (m_fpslimit <= 0) ? 250 : (uint8_t) std::max(15, std::min(250, m_fpslimit));
 #if VER_x32
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch1_arm32), (uintptr_t) &targetFps, 1);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch2_arm32), (uintptr_t) &targetFps, 1);
+	patches::updateBytes("FpsLimit.patch1", "FPS cap immediate 1 (arm32)", g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch1_arm32), &targetFps, 1);
+	patches::updateBytes("FpsLimit.patch2", "FPS cap immediate 2 (arm32)", g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch2_arm32), &targetFps, 1);
 #else
 	uint32_t movW9 = 0x52800009u | ((uint32_t) targetFps << 5);
 	uint32_t movW8 = 0x52800008u | ((uint32_t) targetFps << 5);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch1_arm64), (uintptr_t) &movW9, 4);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch2_arm64), (uintptr_t) &movW8, 4);
-	Memory::writeMemory(g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch3_arm64), (uintptr_t) &movW9, 4);
+	patches::updateBytes("FpsLimit.patch1", "FPS cap mov w9 (arm64)", g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch1_arm64), &movW9, 4);
+	patches::updateBytes("FpsLimit.patch2", "FPS cap mov w8 (arm64)", g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch2_arm64), &movW8, 4);
+	patches::updateBytes("FpsLimit.patch3", "FPS cap mov w9 #2 (arm64)", g_saSym->Abs<uintptr_t>(addr::FpsLimit_patch3_arm64), &movW9, 4);
 #endif
 	if (sa::RsGlobal) {
 		sa::RsGlobal->maxFPS = targetFps;

@@ -38,3 +38,4 @@ static_assert(sizeof(sa::CVector) == 12, "sa::CVector must be 12 bytes");
 static_assert(sizeof(sa::CQuaternion) == 16, "sa::CQuaternion must be 16 bytes");
 static_assert(sizeof(sa::CPlayerInfo) == (VER_x32 ? 0x194 : 0x1D8), "sa::CPlayerInfo ABI size mismatch");
 static_assert(sizeof(sa::CObject) == (VER_x32 ? 0x184 : 0x1F8), "sa::CObject ABI size mismatch");
+static_assert(offsetof(sa::CPed, m_fAimingRotation) == (VER_x32 ? 1376 : 1736), "sa::CPed::m_fAimingRotation ABI offset mismatch");

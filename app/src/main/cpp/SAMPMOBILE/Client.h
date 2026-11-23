@@ -27,6 +27,7 @@
 
 #include "Addr.h"
 #include "Game/Engine/Symbols.h"
+#include "Game/Engine/PatchRegistry.h"
 
 class Client {
 public:

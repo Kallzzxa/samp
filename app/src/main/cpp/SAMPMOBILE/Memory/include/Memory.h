@@ -3,6 +3,7 @@
 #include "Gloss.h"
 #include "spdlog/spdlog.h"
 #include "SymUtils.h"
+#include <atomic>
 #include <mutex>
 
 extern SymUtils* g_saSym;
@@ -27,6 +28,8 @@ namespace Memory {
 inline std::mutex patchMapMutex;
 inline std::unordered_map<uintptr_t, std::vector<uint8_t>> nopOrigBytesMap;
 inline std::unordered_map<uintptr_t, std::vector<uint8_t>> retOrigBytesMap;
+inline std::atomic<uint64_t> g_nopCalls{0};
+inline std::atomic<uint64_t> g_restoreNopCalls{0};
 
 static std::string buffer2Str(const std::vector<uint8_t>& buffer)
 {
@@ -100,23 +103,22 @@ inline static void* hookSym(void* sym, void* hook_func, void** orig_func, const 
 	return h;
 }
 
-inline static void hook(void* addr, void* hook_func, void** orig_func, bool isShortFunc = false)
+inline static void* hook(void* addr, void* hook_func, void** orig_func, bool isShortFunc = false)
 {
 #ifdef __aarch64__
-	GlossHookAddr(addr, hook_func, orig_func, isShortFunc, $ARM64);
+	return GlossHookAddr(addr, hook_func, orig_func, isShortFunc, $ARM64);
 #else
-	GlossHookAddr((void*) (addr), (void*) (hook_func), (void**) (orig_func), isShortFunc, $THUMB);
+	return GlossHookAddr((void*) (addr), (void*) (hook_func), (void**) (orig_func), isShortFunc, $THUMB);
 #endif
-
 }
 
 // Hook a single call(branch) of a function
-static void hookBL(void* addr, void* hook_func, void** orig_func)
+static void* hookBL(void* addr, void* hook_func, void** orig_func)
 {
 #ifdef __aarch64__
-	GlossHookBranchBL((void*) (addr), (void*) (hook_func), (void**) (orig_func), $ARM64);
+	return GlossHookBranchBL((void*) (addr), (void*) (hook_func), (void**) (orig_func), $ARM64);
 #else
-	GlossHookBranchBL((void*) (addr), (void*) (hook_func), (void**) (orig_func), $THUMB);
+	return GlossHookBranchBL((void*) (addr), (void*) (hook_func), (void**) (orig_func), $THUMB);
 #endif
 }
 
@@ -134,6 +136,7 @@ static void saveBytesToMap(uintptr_t addr, uint32_t byte_count, std::unordered_m
 inline static void nop(uintptr_t addr, unsigned int word_count)
 {
 	if (!addr || word_count == 0) return;
+	g_nopCalls.fetch_add(1, std::memory_order_relaxed);
 	unsigned int byte_count = word_count * 2;
 	saveBytesToMap(addr, byte_count, nopOrigBytesMap);
 	// Write contiguous NOP instructions directly via writeMemory (flushes I-cache)
@@ -152,6 +155,7 @@ inline static void nop(uintptr_t addr, unsigned int word_count)
 inline static void restoreNop(uintptr_t addr)
 {
 	if (!addr) return;
+	g_restoreNopCalls.fetch_add(1, std::memory_order_relaxed);
 	std::vector<uint8_t> bytes;
 	{
 		std::lock_guard<std::mutex> lock(patchMapMutex);

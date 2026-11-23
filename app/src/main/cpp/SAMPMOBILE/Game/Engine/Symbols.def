@@ -297,6 +297,7 @@ SYM_FN(CTaskSimpleIKManager_Dtor_CTaskSimpleIKManager, "_ZN20CTaskSimpleIKManage
 SYM_FN(CTaskSimpleJetPack_Dtor_CTaskSimpleJetPack, "_ZN18CTaskSimpleJetPackD0Ev", void, Required) // CTaskSimpleJetPack::~CTaskSimpleJetPack()
 SYM_FN(CTaskSimplePlayerOnFoot_MakeAbortable, "_ZN23CTaskSimplePlayerOnFoot13MakeAbortableEP4CPediPK6CEvent", void, Required) // CTaskSimplePlayerOnFoot::MakeAbortable(CPed*, int, CEvent const*)
 SYM_FN(CTaskSimplePlayerOnFoot_PlayerControlFighter, "_ZN23CTaskSimplePlayerOnFoot20PlayerControlFighterEP10CPlayerPed", void, Required) // CTaskSimplePlayerOnFoot::PlayerControlFighter(CPlayerPed*)
+SYM_FN(CTaskSimplePlayerOnFoot_PlayerControlZelda, "_ZN23CTaskSimplePlayerOnFoot18PlayerControlZeldaEP10CPlayerPedb", void, Required) // CTaskSimplePlayerOnFoot::PlayerControlZelda(CPlayerPed*, bool)
 SYM_FN(CTaskSimplePlayerOnFoot_PlayIdleAnimations, "_ZN23CTaskSimplePlayerOnFoot18PlayIdleAnimationsEP10CPlayerPed", uintptr_t, Required) // CTaskSimplePlayerOnFoot::PlayIdleAnimations(CPlayerPed*)
 SYM_FN(CTaskSimpleUseGun_SetPedPosition, "_ZN17CTaskSimpleUseGun14SetPedPositionEP4CPed", void, Required) // CTaskSimpleUseGun::SetPedPosition(CPed*)
 SYM_FN(CText_Get, "_ZN5CText3GetEPKc", void, Required) // CText::Get(char const*)

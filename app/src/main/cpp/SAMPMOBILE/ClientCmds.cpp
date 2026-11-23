@@ -317,11 +317,24 @@ void cmdRpcStats(const std::string& params)
 	}
 }
 
+void cmdPatches(const std::string& params)
+{
+	if (!pUI) return;
+	patches::dumpToLog();
+	const auto s = patches::getSummary();
+	pUI->chat()->addInfoMessage("-> Patches: total=%zu active=%zu failed=%zu (hooks=%zu, byte=%zu, data=%zu)",
+		s.total, s.active, s.failed, s.hooks, s.bytePatches, s.dataPatches);
+	pUI->chat()->addInfoMessage("   nopCalls=%llu restoreNopCalls=%llu (full table in client log)",
+		static_cast<unsigned long long>(s.nopCalls),
+		static_cast<unsigned long long>(s.restoreNopCalls));
+}
+
 void ClientCmds::initialize()
 {
 	spdlog::info("Initializing client commands..");
 
 	pUI->chat()->addClientCommand("cleo", cmdCleo);
+	pUI->chat()->addClientCommand("patches", cmdPatches);
 
 	pUI->chat()->addClientCommand("ss", cmdScreenshot);
 	pUI->chat()->addClientCommand("screenshot", cmdScreenshot);

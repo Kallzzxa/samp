@@ -4,6 +4,7 @@
 
 #include "Game.h"
 #include "RemoveBuilding.h"
+#include "Engine/PatchRegistry.h"
 
 void RemoveBuilding::add(uint32_t model, sa::CVector pos, float radius)
 {
@@ -152,5 +153,5 @@ void RemoveBuilding::installHooks()
 	aOccluders = eng::as<COccluder*>(eng::Sym::COcclusion_aOccluders);
 	pNumOccludersOnMap = eng::as<int32_t*>(eng::Sym::COcclusion_NumOccludersOnMap);
 
-	HOOK_SYM(CFileLoader_LoadObjectInstance, CFileLoader_LoadObjectInstance);
+	REG_HOOK(Boot, CFileLoader_LoadObjectInstance, CFileLoader_LoadObjectInstance, "Filter RemoveBuildingForPlayer objects");
 }

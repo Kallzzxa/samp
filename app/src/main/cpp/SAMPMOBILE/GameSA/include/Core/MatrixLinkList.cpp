@@ -14,6 +14,8 @@ void CMatrixLinkList::Initialize()
 
 	Memory::protectAddr(g_saSym->Abs(addr::GOT_CMatrixLinkList_gMatrixList));
 	*g_saSym->Abs<CMatrixLinkList**>(addr::GOT_CMatrixLinkList_gMatrixList) = &gMatrixList;
+	patches::registerData("CMatrixLinkList::gMatrixList", "Relocate matrix link list pool",
+		patches::Scope::Boot, g_saSym->Abs<uintptr_t>(addr::GOT_CMatrixLinkList_gMatrixList));
 }
 
 CMatrixLinkList::CMatrixLinkList()

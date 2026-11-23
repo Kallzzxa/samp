@@ -119,34 +119,19 @@ void Game::RemoveModel(int iModel, bool bFromStreaming)
 
 void Game::ToggleThePassingOfTime(bool bOnOff)
 {
-	//spdlog::info("Game::ToggleThePassingOfTime: {}", bOnOff);
-
-	if (bOnOff) {
-		// CClock::Update(void)
-		Memory::restoreRet((uintptr_t) eng::ptr(eng::Sym::CClock_Update));
-		m_clockEnabled = true;
-	}
-	else {
-		Memory::ret((uintptr_t) eng::ptr(eng::Sym::CClock_Update));
-		m_clockEnabled = false;
-	}
+	patches::set("CClock::Update", !bOnOff);
+	m_clockEnabled = bOnOff;
 }
 
 void Game::EnableClock(bool bEnable)
 {
-	//spdlog::info("Game::EnableClock: {}", bEnable);
+	const char clockFmt[10] = {'%', '0', '2', 'd', ':', '%', '0', '2', 'd', 0};
+	const char emptyFmt[10] = {};
 
-	char byteClockData[] = {'%', '0', '2', 'd', ':', '%', '0', '2', 'd', 0};
-	Memory::protectAddr(g_saSym->Abs(addr::ClockFormat)); // %02d:%02d
-
-	if (bEnable) {
-		ToggleThePassingOfTime(true);
-		memcpy(g_saSym->Abs<void*>(addr::ClockFormat), byteClockData, 10);
-	}
-	else {
-		ToggleThePassingOfTime(false);
-		memset(g_saSym->Abs<void*>(addr::ClockFormat), 0, 10);
-	}
+	ToggleThePassingOfTime(bEnable);
+	patches::updateBytes("HUD.ClockFormat", "HUD clock printf format string",
+		g_saSym->Abs<uintptr_t>(addr::ClockFormat),
+		bEnable ? clockFmt : emptyFmt, sizeof(clockFmt));
 }
 
 void Game::EnableZoneNames(bool bEnable)
@@ -523,14 +508,7 @@ void Game::DisplayHUD(bool bDisp)
  */
 void Game::ToggleCJWalk(bool toggle)
 {
-	//spdlog::info("Game::ToggleCJWalk: {}", toggle);
-
-	if (toggle) {
-		Memory::restoreNop(g_saSym->Abs<uintptr_t>(addr::ToggleCJWalk));
-	}
-	else {
-		Memory::nop(g_saSym->Abs<uintptr_t>(addr::ToggleCJWalk), 2);
-	}
+	patches::set("ToggleCJWalk", !toggle);
 }
 
 void Game::DisableTrainTraffic()
@@ -587,10 +565,9 @@ void Game::PreloadObjectsAnims()
 
 void Game::DisableAutoAim()
 {
-	//spdlog::info("Game::DisableAutoAim");
-	Memory::ret(eng::addr(eng::Sym::CPlayerPed_FindWeaponLockOnTarget)); // CPed::FindWeaponLockOnTarget
-	Memory::ret(eng::addr(eng::Sym::CPlayerPed_FindNextWeaponLockOnTarget)); // CPed::FindNextWeaponLockOnTarget
-	Memory::ret(eng::addr(eng::Sym::CPed_SetWeaponLockOnTarget)); // CPed::SetWeaponLockOnTarget
+	patches::set("DisableAutoAim.FindTarget", true);
+	patches::set("DisableAutoAim.FindNextTarget", true);
+	patches::set("DisableAutoAim.SetTarget", true);
 }
 
 void Game::SetWantedLevel(uint8_t level)
