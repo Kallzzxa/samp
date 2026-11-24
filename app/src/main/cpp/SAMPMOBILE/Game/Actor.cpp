@@ -16,31 +16,35 @@ CActor::CActor(int iSkin, float fX, float fY, float fZ, float fAngle)
 
 	if (!IsValidPedModel(iSkin)) {
 		spdlog::error("CActor::CActor: Invalid skin model: {}", iSkin);
-		iSkin = 0;
+		iSkin = 29;
 	}
 
-	if (!pGame->IsModelLoaded(iSkin)) {
+	if (!pGame || !pGame->IsModelLoaded(iSkin)) {
+		if (!pGame) return;
 		pGame->RequestModel(iSkin);
 		pGame->LoadRequestedModels();
-
-		int iWaitLoad = 0;
-		while (!pGame->IsModelLoaded(iSkin)) {
-			usleep(1000);
-			if (++iWaitLoad > 2000) {
-				spdlog::error("CActor::CActor: model {} wouldn't load in time", iSkin);
-				return;
-			}
+		if (!pGame->IsModelLoaded(iSkin)) {
+			spdlog::error("CActor::CActor: model {} failed to load", iSkin);
+			return;
 		}
 	}
 
-	uint32_t dwRet;
+	uint32_t dwRet = 0;
 	ScriptCommand(&create_actor, 5, iSkin, fX, fY, fZ - 1.0f, &dwRet);
-	ScriptCommand(&set_actor_z_angle, dwRet, fAngle);
+	if (!dwRet) {
+		spdlog::error("CActor::CActor: create_actor failed for model {}", iSkin);
+		return;
+	}
 
 	m_gtaId = dwRet;
 	m_actor = GamePool_Ped_GetAt(m_gtaId);
 	m_entity = m_actor;
+	if (!m_actor) {
+		m_gtaId = 0;
+		return;
+	}
 
+	ScriptCommand(&set_actor_z_angle, m_gtaId, fAngle);
 	ScriptCommand(&set_actor_can_be_decapitated, m_gtaId, 0);
 	ScriptCommand(&set_actor_decision_marker, m_gtaId, 0x10006);
 }
@@ -102,6 +106,7 @@ void CActor::ApplyAnimation(const char* szAnimName, const char* szAnimLib, float
 
 	if (!pGame->IsAnimationLoaded(szAnimLib)) {
 		pGame->RequestAnimation(szAnimLib);
+		pGame->LoadRequestedModels();
 		while (!pGame->IsAnimationLoaded(szAnimLib)) {
 			usleep(1000);
 			iWaitAnimLoad++;
@@ -119,7 +124,7 @@ void CActor::ApplyAnimation(const char* szAnimName, const char* szAnimLib, float
 
 void CActor::ClearAnimation()
 {
-	if (m_actor) {
+	if (m_actor && GamePool_Ped_GetAt(m_gtaId) == m_actor && m_actor->m_pIntelligence) {
 		// CPedIntelligence::FlushImmediately
 		eng::fn::CPedIntelligence_FlushImmediately( m_actor->m_pIntelligence, true);
 	}
@@ -127,7 +132,10 @@ void CActor::ClearAnimation()
 
 void CActor::SetFacingAngle(float fAngle)
 {
-	if (m_actor && GamePool_Ped_GetAt(m_gtaId)) {
-		m_actor->m_fAimingRotation = DegToRad(fAngle);
+	if (m_actor && GamePool_Ped_GetAt(m_gtaId) == m_actor) {
+		const float rad = DegToRad(fAngle);
+		m_actor->m_fCurrentRotation = rad;
+		m_actor->m_fAimingRotation = rad;
+		ScriptCommand(&set_actor_z_angle, m_gtaId, fAngle);
 	}
 }

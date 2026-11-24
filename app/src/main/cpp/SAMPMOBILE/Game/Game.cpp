@@ -35,8 +35,12 @@ Game::Game()
 	m_gameCamera = nullptr;
 	m_gamePlayer = nullptr;
 	m_checkpointsEnabled = false;
+	m_checkpointMarker = 0;
 	m_raceCheckpointsEnabled = false;
+	m_raceCheckpointMarker = 0;
 	m_raceCheckpointHandle = 0;
+	m_imguiGameTextExpire = 0;
+	m_imguiGameTextSize = 0;
 
 	m_clockEnabled = false;
 	m_gameInput = true;
@@ -54,10 +58,14 @@ void Game::Initialize()
 {
 	//spdlog::info("Game::Initialize");
 
-	szGameTextMessage = (char*) malloc(512 + 1);
+	szGameTextMessage = static_cast<char*>(calloc(512 + 1, sizeof(uint16_t)));
 	GameResetRadarColors();
 
 	InitScripting();
+
+	if (!Client::offlineMode()) {
+		EnableStuntBonus(false);
+	}
 }
 
 void Game::StartGame()
@@ -215,10 +223,12 @@ void Game::UpdateCheckpoints()
 			}
 		}
 	}
-	else if (m_raceCheckpointMarker) {
-		DisableMarker(m_raceCheckpointMarker);
+	else if (m_raceCheckpointMarker || m_raceCheckpointHandle) {
+		if (m_raceCheckpointMarker) {
+			DisableMarker(m_raceCheckpointMarker);
+			m_raceCheckpointMarker = 0;
+		}
 		DisableRaceCheckpoint();
-		m_raceCheckpointMarker = 0;
 	}
 }
 
@@ -314,7 +324,8 @@ void Game::DisplayGameText(const char* szStr, int iTime, int iSize)
 	std::string utf8 = Encoding::cp2utf(szStr);
 
 	if (StringHasNonAscii(utf8.c_str())) {
-		// The engine font cannot draw these characters; show via ImGui instead.
+		// Clear any lingering engine ASCII big message before showing ImGui GameText.
+		ScriptCommand(&text_clear_all);
 		m_imguiGameText = GxtToImGuiColors(ReplaceKey(utf8), "{FFFFFF}");
 		m_imguiGameTextExpire = GetTickCount() + iTime;
 		m_imguiGameTextSize = iSize;
@@ -325,9 +336,9 @@ void Game::DisplayGameText(const char* szStr, int iTime, int iSize)
 
 	ScriptCommand(&text_clear_all);
 
-	uint16_t m_szAscii[801];
-	CFont::StringToAscii(utf8.c_str(), m_szAscii);
-	CFont::AsciiToGxtCharU8(m_szAscii, (uint16_t*) szGameTextMessage);
+	uint16_t m_szAscii[513];
+	CFont::StringToAscii(utf8.c_str(), m_szAscii, sizeof(m_szAscii) / sizeof(m_szAscii[0]));
+	CFont::AsciiToGxtCharU8(m_szAscii, reinterpret_cast<uint16_t*>(szGameTextMessage), 513);
 
 	// CMessages::AddBigMesssage
 	eng::fn::CMessages_AddBigMessage( szGameTextMessage, iTime, iSize);
@@ -336,19 +347,62 @@ void Game::DisplayGameText(const char* szStr, int iTime, int iSize)
 void Game::DrawImGuiGameText(ImGuiRenderer* renderer)
 {
 	if (m_imguiGameText.empty()) return;
-	if (GetTickCount() >= m_imguiGameTextExpire) {
+	if (static_cast<int32_t>(GetTickCount() - m_imguiGameTextExpire) >= 0) {
 		m_imguiGameText.clear();
 		return;
 	}
 
-	float fontSize = (UISettings::fontSize() / 2.0f) * (1.0f + (float) m_imguiGameTextSize * 0.15f);
-	ImVec2 textSize = renderer->calculateTextSize(m_imguiGameText, fontSize);
+	// Map SA-MP GameText styles 0..6 to distinct screen vertical anchors and scales.
+	float yRatio = 0.50f;
+	float scale = 1.25f;
+	bool alignRight = false;
+	switch (m_imguiGameTextSize) {
+		case 0: yRatio = 0.45f; scale = 1.60f; break; // Big center-middle
+		case 1: yRatio = 0.78f; scale = 1.30f; alignRight = true; break; // Lower-right mission text
+		case 2: yRatio = 0.42f; scale = 1.75f; break; // Wasted/Mission title
+		case 3: yRatio = 0.50f; scale = 1.15f; break; // Center small
+		case 4: yRatio = 0.35f; scale = 1.15f; break; // Upper-middle
+		case 5: yRatio = 0.52f; scale = 1.05f; break; // Center status
+		case 6: yRatio = 0.25f; scale = 1.25f; break; // Top-center
+		default: break;
+	}
 
-	ImVec2 pos;
-	pos.x = ((float) sa::RsGlobal->screenWidth - textSize.x) * 0.5f;
-	pos.y = (float) sa::RsGlobal->screenHeight * 0.72f;
+	const float fontSize = (UISettings::fontSize() / 2.0f) * scale;
+	std::vector<std::string> lines;
+	{
+		std::stringstream ss(m_imguiGameText);
+		std::string row;
+		std::string carryColor;
+		while (std::getline(ss, row, '\n')) {
+			if (!carryColor.empty()) {
+				row = carryColor + row;
+			}
+			// Track last {RRGGBB} color code to carry across newlines
+			for (size_t i = 0; i + 7 < row.size(); ++i) {
+				if (row[i] == '{' && row[i + 7] == '}') {
+					bool hex = true;
+					for (size_t k = 1; k <= 6; ++k) {
+						if (!std::isxdigit(static_cast<unsigned char>(row[i + k]))) { hex = false; break; }
+					}
+					if (hex) {
+						carryColor = row.substr(i, 8);
+						i += 7;
+					}
+				}
+			}
+			lines.push_back(std::move(row));
+		}
+	}
 
-	renderer->drawText(pos, ImColor(1.0f, 1.0f, 1.0f), m_imguiGameText, true, fontSize);
+	const float totalHeight = static_cast<float>(lines.size()) * fontSize * 1.15f;
+	float curY = (float) sa::RsGlobal->screenHeight * yRatio - totalHeight * 0.5f;
+	const float screenW = (float) sa::RsGlobal->screenWidth;
+	for (const auto& line : lines) {
+		ImVec2 sz = renderer->calculateTextSize(line, fontSize);
+		float posX = alignRight ? (screenW * 0.94f - sz.x) : ((screenW - sz.x) * 0.5f);
+		renderer->drawText(ImVec2(posX, curY), ImColor(1.0f, 1.0f, 1.0f), line, true, fontSize);
+		curY += fontSize * 1.15f;
+	}
 }
 
 /**
@@ -447,26 +501,45 @@ void Game::UpdateGlobalTimer(uint32_t dwTimer)
 void Game::SetWorldWeather(int byteWeatherID)
 {
 	//spdlog::info("Game::SetWorldWeather: {}", byteWeatherID);
-
-	*eng::as<uint8_t*>(eng::Sym::CWeather_ForcedWeatherType) = byteWeatherID;
-	if (!m_clockEnabled) {
-		*eng::as<uint8_t*>(eng::Sym::CWeather_NewWeatherType) = byteWeatherID;
-		*eng::as<uint8_t*>(eng::Sym::CWeather_OldWeatherType) = byteWeatherID;
+	// CWeather::ForcedWeatherType / NewWeatherType / OldWeatherType are int16_t.
+	// CWeather::Update is patched to ret in multiplayer, so update all three
+	// unconditionally even when TogglePlayerClock(true) is active.
+	const int16_t weather = static_cast<int16_t>(byteWeatherID);
+	if (auto* pForced = eng::as<int16_t*>(eng::Sym::CWeather_ForcedWeatherType)) {
+		*pForced = weather;
 	}
+	if (auto* pNew = eng::as<int16_t*>(eng::Sym::CWeather_NewWeatherType)) {
+		*pNew = weather;
+	}
+	if (auto* pOld = eng::as<int16_t*>(eng::Sym::CWeather_OldWeatherType)) {
+		*pOld = weather;
+	}
+}
+
+void Game::SetHudHidden(uint32_t reasonBit, bool hidden)
+{
+	if (hidden) {
+		m_hudHideMask |= reasonBit;
+	}
+	else {
+		m_hudHideMask &= ~reasonBit;
+	}
+
+	const bool show = (m_hudHideMask == 0);
+	*g_saSym->Abs<uint8_t*>(addr::CTheScripts_bDisplayHud) = show ? 1 : 0;
+	*g_saSym->Abs<uint8_t*>(addr::CHud_bScriptDontDisplayRadar) = show ? 0 : 1;
+}
+
+void Game::ClearAllHudHideReasons()
+{
+	m_hudHideMask = 0;
+	*g_saSym->Abs<uint8_t*>(addr::CTheScripts_bDisplayHud) = 1;
+	*g_saSym->Abs<uint8_t*>(addr::CHud_bScriptDontDisplayRadar) = 0;
 }
 
 void Game::DisplayHUD(bool bDisp)
 {
-	//spdlog::info("Game::DisplayHUD: {}", bDisp);
-
-	if (bDisp) {
-		*g_saSym->Abs<uint8_t*>(addr::CTheScripts_bDisplayHud) = 1;
-		*g_saSym->Abs<uint8_t*>(addr::CHud_bScriptDontDisplayRadar) = 0;
-	}
-	else {
-		*g_saSym->Abs<uint8_t*>(addr::CTheScripts_bDisplayHud) = 0;
-		*g_saSym->Abs<uint8_t*>(addr::CHud_bScriptDontDisplayRadar) = 1;
-	}
+	SetHudHidden(HUD_HIDE_GENERAL, !bDisp);
 }
 
 /**
@@ -733,24 +806,17 @@ uint32_t Game::CreatePickup(int iModel, int iType, float x, float y, float z, in
 	if (!IsModelLoaded(iModel)) {
 		RequestModel(iModel);
 		LoadRequestedModels();
-
-		int iWaitLoad = 0;
-		while (!IsModelLoaded(iModel)) {
-			usleep(5000);
-			if (++iWaitLoad > 2000) {
-				spdlog::error("Game::CreatePickup: model {} wouldn't load in time", iModel);
-				if (pdwIndex) *pdwIndex = 0;
-				return 0;
-			}
+		if (!IsModelLoaded(iModel)) {
+			spdlog::error("Game::CreatePickup: model {} failed to load", iModel);
+			if (pdwIndex) *pdwIndex = -1;
+			return 0;
 		}
 	}
 
 	uint32_t hnd = 0;
 	ScriptCommand(&create_pickup, iModel, iType, x, y, z, &hnd);
-	int offset = 32 * (hnd & 0xFFFF);
-	if (offset) offset /= 32;
 	if (pdwIndex) {
-		*pdwIndex = offset;
+		*pdwIndex = (hnd != 0) ? static_cast<int>(hnd & 0xFFFFu) : -1;
 	}
 
 	return hnd;
@@ -765,14 +831,9 @@ uint32_t Game::CreateWeaponPickup(int iModel, int iAmmo, float x, float y, float
 	if (!IsModelLoaded(iModel)) {
 		RequestModel(iModel);
 		LoadRequestedModels();
-
-		int iWaitLoad = 0;
-		while (!IsModelLoaded(iModel)) {
-			usleep(5000);
-			if (++iWaitLoad > 400) {
-				spdlog::error("Game::CreateWeaponPickup: model {} wouldn't load in time", iModel);
-				return 0;
-			}
+		if (!IsModelLoaded(iModel)) {
+			spdlog::error("Game::CreateWeaponPickup: model {} failed to load", iModel);
+			return 0;
 		}
 	}
 

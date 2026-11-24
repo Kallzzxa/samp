@@ -8,6 +8,8 @@
 #include "Proto/Sync.h"
 #include <RakNet/SAMP/NetCapHook.h>
 #include "../UI/UI.h"
+#include "../Java/EditObject.h"
+#include "../Game/Animation.h"
 #include "RakNet/SAMP/samp_auth.h"
 #include "../Game/AudioStream.h"
 #include "../Voice/SpeakerList.h"
@@ -424,11 +426,31 @@ void NetGame::ShutdownForGameModeRestart(SessionState::ResetReason reason)
 
 	m_session.reset(reason);
 
+	if (EditObject::m_visible) {
+		EditObject::cancelEdit();
+	}
+	if (pUI && pUI->spawn()) {
+		pUI->spawn()->setVisible(false);
+	}
+	ResetLocalPedQueuedAnim();
+
 	if (pGame) {
+		pGame->ClearImGuiGameText();
+		pGame->ClearAllHudHideReasons();
 		pGame->EnableCheckpoints(false);
 		pGame->EnableRaceCheckpoints(false);
 
 		if (CPlayerPed* pLocalPed = pGame->FindPlayerPed()) {
+			if (pLocalPed->IsDancing()) pLocalPed->StopDancing();
+			if (pLocalPed->IsCellphoneEnabled()) pLocalPed->ToggleCellphone(false);
+			if (pLocalPed->IsPissing()) pLocalPed->TogglePissing(false);
+			if (pLocalPed->IsCuffed()) pLocalPed->ToggleCuffed(false);
+			if (pLocalPed->IsCarry()) pLocalPed->ToggleCarry(false);
+			if (pLocalPed->IsInJetpack()) pLocalPed->StopJetpack();
+			if (pLocalPed->GetStuff() != STUFF_TYPE_NONE) pLocalPed->DropStuff();
+			if (pLocalPed->HasAttachedObject()) pLocalPed->RemoveAllAttachedObjects();
+			pLocalPed->SetDrunkLevel(0);
+			pLocalPed->DrunkProcess();
 			pLocalPed->SetInterior(0, true);
 			pLocalPed->SetDead();
 			pLocalPed->SetArmour(0.0f);
@@ -439,6 +461,7 @@ void NetGame::ShutdownForGameModeRestart(SessionState::ResetReason reason)
 		pGame->SetGravity(m_netSet->gravity);
 		pGame->SetWantedLevel(0);
 		pGame->EnableClock(false);
+		ScriptCommand(&toggle_widescreen, 0);
 	}
 
 	if (Settings::voice()) {
@@ -696,6 +719,15 @@ void NetGame::Packet_ConnectionLost(Packet* pkt)
 	SetGameState(GAMESTATE_WAIT_CONNECT);
 }
 
+namespace {
+inline bool isFiniteVec3(float x, float y, float z) {
+	return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+}
+inline bool isFiniteQuat(float x, float y, float z, float w) {
+	return std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(w);
+}
+}
+
 void NetGame::Packet_PlayerSync(Packet* pkt)
 {
 	if (GetGameState() != GAMESTATE_CONNECTED) return;
@@ -704,6 +736,11 @@ void NetGame::Packet_PlayerSync(Packet* pkt)
 	proto::Reader reader(pkt->data, pkt->length * 8);
 	proto::InboundPlayerSync p{};
 	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
+	if (!isFiniteVec3(p.position.x, p.position.y, p.position.z)
+			|| !isFiniteQuat(p.quat.x, p.quat.y, p.quat.z, p.quat.w)
+			|| !isFiniteVec3(p.moveSpeed.x, p.moveSpeed.y, p.moveSpeed.z)) {
+		return;
+	}
 
 	ONFOOT_SYNC_DATA ofSync{};
 	ofSync.lrAnalog = p.hasLR ? p.lrAnalog : 0;
@@ -736,6 +773,11 @@ void NetGame::Packet_VehicleSync(Packet* pkt)
 	proto::Reader reader(pkt->data, pkt->length * 8);
 	proto::InboundVehicleSync p{};
 	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
+	if (!isFiniteVec3(p.position.x, p.position.y, p.position.z)
+			|| !isFiniteQuat(p.quat.x, p.quat.y, p.quat.z, p.quat.w)
+			|| !isFiniteVec3(p.moveSpeed.x, p.moveSpeed.y, p.moveSpeed.z)) {
+		return;
+	}
 
 	INCAR_SYNC_DATA icSync{};
 	icSync.VehicleID = p.vehicleId;
@@ -773,6 +815,11 @@ void NetGame::Packet_AimSync(Packet* pkt)
 	proto::Reader reader(pkt->data, pkt->length * 8);
 	proto::InboundAimSync p{};
 	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
+	if (!isFiniteVec3(p.aimF1.x, p.aimF1.y, p.aimF1.z)
+			|| !isFiniteVec3(p.aimPos.x, p.aimPos.y, p.aimPos.z)
+			|| !std::isfinite(p.aimZ)) {
+		return;
+	}
 
 	AIM_SYNC_DATA aimSync{};
 	aimSync.byteCamMode = p.camMode;
@@ -872,6 +919,12 @@ void NetGame::Packet_TrailerSync(Packet* pkt)
 	proto::Reader reader(pkt->data, pkt->length * 8);
 	proto::InboundTrailerSync p{};
 	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
+	if (!isFiniteVec3(p.position.x, p.position.y, p.position.z)
+			|| !isFiniteQuat(p.quat.x, p.quat.y, p.quat.z, p.quat.w)
+			|| !isFiniteVec3(p.moveSpeed.x, p.moveSpeed.y, p.moveSpeed.z)
+			|| !isFiniteVec3(p.turnSpeed.x, p.turnSpeed.y, p.turnSpeed.z)) {
+		return;
+	}
 
 	TRAILER_SYNC_DATA trSync{};
 	trSync.trailerId = p.trailerId;
@@ -1021,11 +1074,13 @@ void NetGame::ResetActorPool()
 
 void NetGame::ResetTextDrawPool()
 {
+	// Reset in-place (never delete/reallocate while NVEvent/Java threads may access it)
 	if (m_pools->textDrawPool) {
-		delete m_pools->textDrawPool;
+		m_pools->textDrawPool->Reset();
 	}
-
-	m_pools->textDrawPool = new CTextDrawPool();
+	else {
+		m_pools->textDrawPool = new CTextDrawPool();
+	}
 }
 
 void NetGame::ResetPlayerBubblePool()
@@ -1076,20 +1131,24 @@ void NetGame::ResetPickupPool()
 
 void NetGame::ResetObjectPool()
 {
+	// Reset in-place (never delete/reallocate while NVEvent/Java threads may access it)
 	if (m_pools->objectPool) {
-		delete m_pools->objectPool;
+		m_pools->objectPool->Reset();
 	}
-
-	m_pools->objectPool = new CObjectPool();
+	else {
+		m_pools->objectPool = new CObjectPool();
+	}
 }
 
 void NetGame::ResetMenuPool()
 {
+	// Reset in-place (never delete/reallocate while NVEvent/Java threads may access it)
 	if (m_pools->menuPool) {
-		delete m_pools->menuPool;
+		m_pools->menuPool->Reset();
 	}
-
-	m_pools->menuPool = new CMenuPool();
+	else {
+		m_pools->menuPool = new CMenuPool();
+	}
 }
 
 void NetGame::InitGameLogic()

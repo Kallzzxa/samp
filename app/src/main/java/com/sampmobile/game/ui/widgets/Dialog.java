@@ -226,6 +226,10 @@ public class Dialog {
     }
 
     public void SendDialogResponse(int i, int i2, String str) {
+        if (!isShow) {
+            return;
+        }
+        isShow = false;
         if (i2 == -1) {
             int i3 = mDialogStyle;
             if (i3 == 2 || i3 == 4 || i3 == 5) {
@@ -277,22 +281,17 @@ public class Dialog {
             mDialogText.setText(Utils.getColoredString(mText));
             return;
         }
-        if (i != 2) {
-            StringBuilder sb = new StringBuilder(mText);
-            for (int i2 = 0; i2 < sb.length(); i2++) {
-                if (sb.charAt(i2) == '\t') {
-                    while (i2 + 1 < sb.length() && sb.charAt(i2 + 1) == '\t') {
-                        sb.deleteCharAt(i2 + 1);
-                    }
-                }
-            }
-            mText = sb.toString();
-        }
         mCurrentListitem = 0;
-        String[] split = mText.split("\n");
+        String listText = mText != null ? mText : "";
+        if (listText.endsWith("\r\n")) {
+            listText = listText.substring(0, listText.length() - 2);
+        } else if (listText.endsWith("\n")) {
+            listText = listText.substring(0, listText.length() - 1);
+        }
+        String[] split = listText.split("\n", -1);
         for (int i4 = 0; i4 < split.length; i4++) {
             if (i4 == 0 && mDialogStyle == 5) {
-                String[] split2 = split[i4].split("\t");
+                String[] split2 = split[i4].split("\t", -1);
                 int length = split2.length;
                 if (length > 4) {
                     length = 4;

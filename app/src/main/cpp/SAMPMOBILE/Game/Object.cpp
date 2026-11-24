@@ -44,6 +44,7 @@ CObject::CObject(int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDraw
 	spdlog::debug("CObject::CObject({}, [{} {} {}], [{} {} {}], {}, {}).", iModel, vecPos.x, vecPos.y, vecPos.z, vecRot.x, vecRot.y, vecRot.z, fDrawDistance, bAttached);
 	m_AttachedVehicleID = INVALID_VEHICLE_ID;
 	m_AttachedObjectID = INVALID_OBJECT_ID;
+	m_AttachedPlayerID = INVALID_PLAYER_ID;
 	m_bAttachedToPed = bAttached;
 
 	m_entity = nullptr;
@@ -499,7 +500,8 @@ void CObject::EnsureRepeatSector()
 	}
 	bool bWant = bOob && m_entity->m_pRwObject
 			&& m_AttachedVehicleID == INVALID_VEHICLE_ID
-			&& m_AttachedObjectID == INVALID_OBJECT_ID;
+			&& m_AttachedObjectID == INVALID_OBJECT_ID
+			&& m_AttachedPlayerID == INVALID_PLAYER_ID;
 	// engine passes (Remove/RemoveAndAdd/streaming) can strip our records
 	// at any time — if the first one is gone from m_pCollisionList, the
 	// whole set is stale and must be re-injected; never touch the stale
@@ -665,6 +667,33 @@ void ProcessOobVehicleSectors()
 	}
 }
 
+void CObject::Detach()
+{
+	if (m_entity && m_gtaId && GamePool_Object_GetAt(m_gtaId) == reinterpret_cast<sa::CObject*>(m_entity)) {
+		if (ScriptCommand(&is_object_attached, m_gtaId)) {
+			ScriptCommand(&disassociate_object, m_gtaId, 0.0f, 0.0f, 0.0f, 0);
+		}
+	}
+}
+
+void CObject::AttachToPlayer(CPlayerPed* pPlayerPed)
+{
+	if (!m_entity || !m_gtaId || !pPlayerPed || !pPlayerPed->m_ped || !pPlayerPed->m_gtaId) {
+		return;
+	}
+	if (!ScriptCommand(&is_object_attached, m_gtaId)) {
+		ScriptCommand(&attach_object_to_actor,
+				m_gtaId,
+				pPlayerPed->m_gtaId,
+				m_vecAttachedPos.x,
+				m_vecAttachedPos.y,
+				m_vecAttachedPos.z,
+				m_vecAttachedRot.x,
+				m_vecAttachedRot.y,
+				m_vecAttachedRot.z);
+	}
+}
+
 /**
  * @param pVehicle
  */
@@ -692,7 +721,7 @@ void CObject::AttachToVehicle(CVehicle* pVehicle)
  */
 void CObject::AttachToObject(CObject* pObject)
 {
-	if (!m_entity || !m_gtaId || !pObject || !pObject->m_entity || !pObject->m_gtaId
+	if (!m_entity || !m_gtaId || !pObject || pObject == this || !pObject->m_entity || !pObject->m_gtaId
 			|| GamePool_Object_GetAt(pObject->m_gtaId) != reinterpret_cast<sa::CObject*>(pObject->m_entity)) {
 		return;
 	}
@@ -833,6 +862,23 @@ void CObject::Process(float fElapsedTime)
 			}
 		}
 	}
+	else if (m_AttachedPlayerID != INVALID_PLAYER_ID) {
+		if (pNetGame && pNetGame->GetPlayerPool()) {
+			CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
+			CPlayerPed* pTargetPed = nullptr;
+			if (pPlayerPool->GetLocalPlayerID() == m_AttachedPlayerID) {
+				if (CLocalPlayer* pLocal = pPlayerPool->GetLocalPlayer()) {
+					pTargetPed = pLocal->GetPlayerPed();
+				}
+			}
+			else if (CRemotePlayer* pRemote = pPlayerPool->GetAt(m_AttachedPlayerID)) {
+				pTargetPed = pRemote->GetPlayerPed();
+			}
+			if (pTargetPed) {
+				AttachToPlayer(pTargetPed);
+			}
+		}
+	}
 	else if (m_entity && (m_byteMoving & 1)) {
 		sa::CVector vecSpeed = {0.0f, 0.0f, 0.0f};
 
@@ -956,6 +1002,9 @@ void CObject::Process(float fElapsedTime)
  */
 void CObject::SetAttachedObject(uint16_t ObjectID, sa::CVector* vecPos, sa::CVector* vecRot, bool bSyncRotation)
 {
+	Detach();
+	m_AttachedVehicleID = INVALID_VEHICLE_ID;
+	m_AttachedPlayerID = INVALID_PLAYER_ID;
 	if (ObjectID == INVALID_OBJECT_ID) {
 		m_AttachedObjectID = INVALID_OBJECT_ID;
 		m_vecAttachedPos.x = 0.0f;
@@ -1054,6 +1103,9 @@ void CObject::TeleportTo(float fX, float fY, float fZ)
  */
 void CObject::SetAttachedVehicle(uint16_t VehicleID, sa::CVector* vecPos, sa::CVector* vecRot)
 {
+	Detach();
+	m_AttachedObjectID = INVALID_OBJECT_ID;
+	m_AttachedPlayerID = INVALID_PLAYER_ID;
 	if (VehicleID == INVALID_VEHICLE_ID) {
 		m_AttachedVehicleID = INVALID_VEHICLE_ID;
 		m_vecAttachedPos.x = 0.0f;
@@ -1071,6 +1123,23 @@ void CObject::SetAttachedVehicle(uint16_t VehicleID, sa::CVector* vecPos, sa::CV
 		m_vecAttachedRot.x = vecRot->x;
 		m_vecAttachedRot.y = vecRot->y;
 		m_vecAttachedRot.z = vecRot->z;
+	}
+}
+
+void CObject::SetAttachedPlayer(uint16_t PlayerID, sa::CVector* vecPos, sa::CVector* vecRot)
+{
+	Detach();
+	m_AttachedVehicleID = INVALID_VEHICLE_ID;
+	m_AttachedObjectID = INVALID_OBJECT_ID;
+	if (PlayerID == INVALID_PLAYER_ID) {
+		m_AttachedPlayerID = INVALID_PLAYER_ID;
+		m_vecAttachedPos = sa::CVector{0.0f, 0.0f, 0.0f};
+		m_vecAttachedRot = sa::CVector{0.0f, 0.0f, 0.0f};
+	}
+	else {
+		m_AttachedPlayerID = PlayerID;
+		m_vecAttachedPos = *vecPos;
+		m_vecAttachedRot = *vecRot;
 	}
 }
 
@@ -1100,6 +1169,7 @@ void CObject::MoveTo(float fX, float fY, float fZ, float fSpeed, float fRotX, fl
 	// reached so the object creeps forever (the !fSpeed>0 test also catches
 	// NaN speeds). Snap to the target instead.
 	if (!(fSpeed > 0.0f)) {
+		StopMoving();
 		TeleportTo(fX, fY, fZ);
 		return;
 	}
@@ -1126,7 +1196,8 @@ void CObject::MoveTo(float fX, float fY, float fZ, float fSpeed, float fRotX, fl
 	m_matTarget.pos.z = fZ;
 	m_byteMoving |= 1;
 
-	if (fRotX <= -999.0f || fRotY <= -999.0f || fRotZ <= -999.0f) {
+	if (!std::isfinite(fRotX) || !std::isfinite(fRotY) || !std::isfinite(fRotZ)
+			|| fRotX <= -999.0f || fRotY <= -999.0f || fRotZ <= -999.0f) {
 		m_bNeedRotate = false;
 	}
 	else {
@@ -1296,7 +1367,10 @@ void CObject::SetMaterialText(uint8_t byteMaterialIndex, uint8_t byteMaterialSiz
 	spdlog::debug("CObject::SetMaterialText({}, {}, {}, {}, {}, 0x{:X}, 0x{:X}, {}, {}).", byteMaterialIndex, byteMaterialSize, szFontName ? szFontName : "", byteFontSize, byteFontBold, dwFontColor, dwBackgroundColor, byteAlign, szText ? szText : "");
 
 	if (byteMaterialIndex < MAX_MATERIALS) {
-		if (!szText || !strlen(szText)) {
+		if (!szText) {
+			return;
+		}
+		if (szText[0] == '\0' && dwBackgroundColor == 0) {
 			return;
 		}
 
@@ -1354,7 +1428,7 @@ void CObject::ProcessMaterialText()
 			continue;
 		}
 
-		if (!strlen(m_Material[i].TextInfo.szText)) {
+		if (m_Material[i].TextInfo.szText[0] == '\0' && m_Material[i].TextInfo.dwBackgroundColor == 0) {
 			continue;
 		}
 

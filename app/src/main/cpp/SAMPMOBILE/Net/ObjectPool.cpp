@@ -23,9 +23,21 @@ CObjectPool::CObjectPool()
 
 CObjectPool::~CObjectPool()
 {
+	Reset();
+}
+
+void CObjectPool::Reset()
+{
+	SetSelectState(false);
 	for (OBJECTID ObjectID = 0; ObjectID < MAX_OBJECTS; ObjectID++) {
 		Delete(ObjectID);
 	}
+	m_mapGtaPtrToID.clear();
+	m_iObjectCount = 0;
+	m_dwLastTick = 0;
+	std::lock_guard<std::mutex> lock(m_touchMutex);
+	m_pendingTouches.clear();
+	m_cancelRectValid = false;
 }
 
 /**
@@ -74,6 +86,13 @@ bool CObjectPool::Delete(OBJECTID ObjectID)
 
 	CObject* pObject = m_pObjects[ObjectID];
 	if (pObject) {
+		// Detach any child objects attached to this parent before destroying its GTA entity
+		for (OBJECTID childId = 0; childId < MAX_OBJECTS; ++childId) {
+			if (childId != ObjectID && m_bObjectSlotState[childId] && m_pObjects[childId]
+					&& m_pObjects[childId]->m_AttachedObjectID == ObjectID) {
+				m_pObjects[childId]->Detach();
+			}
+		}
 		if (EditObject::m_visible && EditObject::m_type == EditObject::TYPE_OBJECT
 				&& EditObject::m_id == (int) ObjectID) {
 			EditObject::cancelEdit();

@@ -626,12 +626,12 @@ struct SetPlayerDrunkLevel {
 	static constexpr uint8_t kVersionMask = kVerAll;
 	static constexpr const char* kName = "SetPlayerDrunkLevel";
 
-	uint32_t level = 0;
+	int32_t level = 0;
 
 	template <typename S>
 	bool serialize(S& s, ProtoVersion)
 	{
-		return s.u32(level);
+		return s.i32(level);
 	}
 };
 

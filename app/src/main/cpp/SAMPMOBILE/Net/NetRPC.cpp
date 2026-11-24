@@ -42,14 +42,14 @@ void RpcHandlers::OnInitGame(const proto::InitGame& p)
 	sess.settings.showPlayerMarkers = p.showPlayerMarkers;
 	sess.settings.worldTime_Hour = p.worldTimeHour;
 	sess.settings.weather = p.weather;
-	sess.settings.gravity = p.gravity;
+	sess.settings.gravity = std::isfinite(p.gravity) ? p.gravity : 0.008f;
 	sess.settings.deathDropMoney = p.deathDropMoney;
 	sess.settings.instagib = p.instagib;
 
-	sess.onFootSendRate = p.onFootSendRate;
-	sess.inCarSendRate = p.inCarSendRate;
-	sess.firingSendRate = p.firingSendRate;
-	sess.sendMultiplier = p.sendMultiplier;
+	sess.onFootSendRate = std::clamp(p.onFootSendRate, 10, 5000);
+	sess.inCarSendRate = std::clamp(p.inCarSendRate, 10, 5000);
+	sess.firingSendRate = std::clamp(p.firingSendRate, 10, 5000);
+	sess.sendMultiplier = std::clamp(p.sendMultiplier, 1, 20);
 
 	switch (p.lagCompensation) {
 		case 1: sess.lagCompensationMode = 0;
@@ -71,16 +71,21 @@ void RpcHandlers::OnInitGame(const proto::InitGame& p)
 	// pGame->PreloadVehicleModels(p.vehicleModels.data());
 
 	sess.settings.vehicleFriendlyFire = p.vehicleFriendlyFire;
-	pPlayerPool->SetLocalPlayerID(p.myPlayerId);
-	pGame->EnableStuntBonus(p.stuntBonus);
+	if (p.myPlayerId < MAX_PLAYERS) {
+		pPlayerPool->SetLocalPlayerID(p.myPlayerId);
+	}
+	if (pGame) {
+		pGame->EnableStuntBonus(p.stuntBonus);
+	}
 
 	sess.lanMode = p.lanMode;
 
 	pNetGame->InitGameLogic();
-	pGame->SetGravity(sess.settings.gravity);
-
-	if (sess.settings.disableInteriorEnterExits) {
-		pGame->DisableEnterExits();
+	if (pGame) {
+		pGame->SetGravity(sess.settings.gravity);
+		if (sess.settings.disableInteriorEnterExits) {
+			pGame->DisableEnterExits();
+		}
 	}
 
 	pGame->SetWorldWeather(sess.settings.weather);
@@ -263,6 +268,9 @@ void RpcHandlers::OnWorldTime(const proto::WorldTime& p)
 	spdlog::debug("byteWorldTIme {}", p.hour);
 
 	pNetGame->m_netSet->worldTime_Hour = p.hour;
+	if (pGame) {
+		pGame->SetWorldTime(p.hour, pNetGame->m_netSet->worldTime_Minute);
+	}
 }
 
 void RpcHandlers::OnConnectionRejected(const proto::ConnectionRejected& p)
@@ -431,7 +439,9 @@ void RpcHandlers::OnWorldVehicleAdd(const proto::WorldVehicleAdd& p)
 	VehicleInfo.byteTireDamageStatus = p.tireDamageStatus;
 	VehicleInfo.byteAddSiren = p.addSiren;
 
-	pVehiclePool->New(&VehicleInfo);
+	if (!pVehiclePool->New(&VehicleInfo)) {
+		return;
+	}
 	CVehicle* pVehicle = pVehiclePool->GetAt(VehicleInfo.VehicleID);
 	if (!pVehicle) {
 		return;
@@ -493,13 +503,13 @@ void RpcHandlers::OnWorldVehicleRemove(const proto::WorldVehicleRemove& p)
 	}
 
 	int iModel = pVehicle->GetModelIndex();
-	pVehiclePool->Delete(p.vehicleId);
-
+	// Evict and delete train carriages BEFORE destroying the locomotive (which frees all GTA carriages).
 	if (iModel == 537 || iModel == 538) {
 		pVehiclePool->Delete(p.vehicleId + 1);
 		pVehiclePool->Delete(p.vehicleId + 2);
 		pVehiclePool->Delete(p.vehicleId + 3);
 	}
+	pVehiclePool->Delete(p.vehicleId);
 }
 
 void RpcHandlers::OnTimerUpdate(const proto::TimerUpdate& p)
@@ -582,7 +592,11 @@ void RpcHandlers::OnDestroyWeaponPickup(const proto::DestroyWeaponPickup& p)
 //   computed against Android binaries; answer well-formed replies with result 0.
 void RpcHandlers::OnClientCheck(const proto::ClientCheckRequest& p)
 {
-	if (p.offset > 256 || p.length > 256 || p.length < 2) return;
+	// Types 0x48 (uptime) and 0x02 (physical flags) do not use offset/length;
+	// anti-cheat scripts commonly pass offset=0, length=0.
+	if (p.type != 0x48 && p.type != 0x02) {
+		if (p.offset > 256 || p.length > 256 || p.length < 2) return;
+	}
 
 	uint32_t dwArgument = p.argument;
 	uint8_t byteResult = 0;
@@ -748,6 +762,14 @@ void RpcHandlers::OnDamageVehicle(const proto::DamageVehicle& p)
 	if (pVehicle) {
 		pVehicle->SetDamageStatus(p.panelDamageStatus, p.doorDamageStatus, p.lightDamageStatus);
 		pVehicle->SetTireDamageStatus(p.tireDamageStatus);
+		if (pNetGame && pNetGame->GetPlayerPool()) {
+			if (CLocalPlayer* pLocalPlayer = pNetGame->GetPlayerPool()->GetLocalPlayer()) {
+				uint32_t panels = 0, doors = 0;
+				uint8_t lights = 0, tires = 0;
+				pVehicle->GetDamageStatus(&panels, &doors, &lights, &tires);
+				pLocalPlayer->SyncVehicleDamageCache(p.vehicleId, panels, doors, lights, tires);
+			}
+		}
 	}
 }
 
@@ -813,7 +835,11 @@ void RpcHandlers::OnVehicleParamsEx(const proto::VehicleParamsEx& p)
 	}
 	//vehicle object
 	if (p.objective <= 1) {
-		pVehicle->m_byteObjectiveVehicle = p.objective == 1;
+		uint8_t newObjective = (p.objective == 1) ? 1 : 0;
+		if (pVehicle->m_byteObjectiveVehicle != newObjective) {
+			pVehicle->m_byteObjectiveVehicle = newObjective;
+			pVehicle->m_bSpecialMarkerEnabled = false;
+		}
 	}
 
 	if (p.boot <= 1) {
@@ -948,7 +974,7 @@ void RpcHandlers::OnEditAttachedObject(const proto::EditAttachedObject& p)
 		pObjPool->SetSelectState(false);
 	}
 	if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
-		pTdPool->SetSelectState(false, 0, false);
+		pTdPool->SetSelectState(false, 0, true);
 	}
 	EditObject::startEditAttachedObject(p.index);
 }
@@ -962,7 +988,7 @@ void RpcHandlers::OnEditObject(const proto::EditObject& p)
 		pObjPool->SetSelectState(false);
 	}
 	if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
-		pTdPool->SetSelectState(false, 0, false);
+		pTdPool->SetSelectState(false, 0, true);
 	}
 
 	// SA-MP shares a single client CObjectPool for both global and player objects;
@@ -979,7 +1005,7 @@ void RpcHandlers::OnEnterEditObject(const proto::EnterEditObject&)
 		EditObject::cancelEdit();
 	}
 	if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
-		pTdPool->SetSelectState(false, 0, false);
+		pTdPool->SetSelectState(false, 0, true);
 	}
 	if (CObjectPool* pObjPool = pNetGame->GetObjectPool()) {
 		pObjPool->SetSelectState(true);

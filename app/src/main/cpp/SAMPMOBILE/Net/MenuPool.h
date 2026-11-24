@@ -23,6 +23,7 @@ public:
 	void InitMenu(const proto::InitMenu& p);
 	void ShowMenu(uint8_t menuId);
 	void HideMenu(uint8_t menuId);
+	void Reset();
 
 	bool IsVisible() const { return m_visible.load(std::memory_order_acquire); }
 
@@ -54,11 +55,7 @@ private:
 
 		uint8_t rowCount() const
 		{
-			uint8_t n = columnItemCount[0];
-			if (columns > 1 && columnItemCount[1] > n) {
-				n = columnItemCount[1];
-			}
-			return n;
+			return columnItemCount[0];
 		}
 	};
 

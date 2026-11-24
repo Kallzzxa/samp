@@ -18,6 +18,8 @@ CVehiclePool::CVehiclePool()
 		m_bIsActive[i] = false;
 		m_bIsWasted[i] = false;
 		m_dwWastedTime[i] = 0;
+		m_bDeathNotified[i] = false;
+		m_dwLastUnoccupiedSyncTick[i] = 0;
 	}
 }
 
@@ -31,6 +33,7 @@ CVehiclePool::~CVehiclePool()
 void CVehiclePool::Process()
 {
 	uint32_t dwThisTick = GetTickCount();
+	int unoccupiedSent = 0;
 
 	for (VEHICLEID VehicleID = 0; VehicleID <= m_iLastVehicleID; VehicleID++) {
 		if (m_bVehicleSlotState[VehicleID] && m_bIsActive[VehicleID]) {
@@ -41,27 +44,21 @@ void CVehiclePool::Process()
 				CVehicle* pVehicle = m_pVehicles[VehicleID];
 				float fDistanceToLocal = pVehicle->GetDistanceFromLocalPlayerPed();
 
-				if (fDistanceToLocal < 200.0f) {
-					if (!pVehicle->IsAdded()) {
-						spdlog::debug("Vehicle {} is added", VehicleID);
-						pVehicle->Add();
-						if (pVehicle->m_bHaveColor) {
-							pVehicle->SetColor(pVehicle->m_byteColor1, pVehicle->m_byteColor2);
-						}
-					}
-
-					CVehicle* pTrailer = pVehicle->GetTrailer();
-					if (pTrailer && !pTrailer->IsAdded() && pVehicle->m_pVehicle) {
-						RwMatrix matPos = pVehicle->m_pVehicle->GetMatrix().ToRwMatrix();
-						pTrailer->TeleportTo(matPos.pos.x, matPos.pos.y, matPos.pos.z);
-						pTrailer->Add();
+				// Server controls vehicle streaming (stream_distance up to 300m+);
+				// do not remove vehicles client-side at 200m.
+				if (!pVehicle->IsAdded()) {
+					spdlog::debug("Vehicle {} is added", VehicleID);
+					pVehicle->Add();
+					if (pVehicle->m_bHaveColor) {
+						pVehicle->SetColor(pVehicle->m_byteColor1, pVehicle->m_byteColor2);
 					}
 				}
-				else {
-					if (pVehicle->IsAdded()) {
-						spdlog::debug("Vehicle {} is removed", VehicleID);
-						pVehicle->Remove();
-					}
+
+				CVehicle* pTrailer = pVehicle->GetTrailer();
+				if (pTrailer && !pTrailer->IsAdded() && pVehicle->m_pVehicle) {
+					RwMatrix matPos = pVehicle->m_pVehicle->GetMatrix().ToRwMatrix();
+					pTrailer->TeleportTo(matPos.pos.x, matPos.pos.y, matPos.pos.z);
+					pTrailer->Add();
 				}
 
 				if (pVehicle->IsDriverLocalPlayer()) {
@@ -85,26 +82,44 @@ void CVehiclePool::Process()
 						NotifyVehicleDeath(VehicleID);
 					}
 					else {
-						if (pNetGame && pNetGame->GetPlayerPool()) {
+						if (unoccupiedSent < 3 && (dwThisTick - m_dwLastUnoccupiedSyncTick[VehicleID]) > 100
+								&& pNetGame && pNetGame->GetPlayerPool()) {
 							CLocalPlayer* pLocalPlayer = pNetGame->GetPlayerPool()->GetLocalPlayer();
-							if (pLocalPlayer) {
-								pLocalPlayer->ProcessUnoccupiedSync(VehicleID, pVehicle);
+							if (pLocalPlayer && pLocalPlayer->ProcessUnoccupiedSync(VehicleID, pVehicle)) {
+								m_dwLastUnoccupiedSyncTick[VehicleID] = dwThisTick;
+								++unoccupiedSent;
 							}
 						}
 
 						if (pNetGame && pNetGame->m_netSet->manualVehicleEngineAndLight) {
-							// T21: server drives engine/lights: re-apply stored states so GTA cannot auto-start on enter
-							if (static_cast<bool>(pVehicle->GetEngineState()) != pVehicle->m_bEngineState) {
-								pVehicle->SetEngineState(pVehicle->m_bEngineState);
+							// Match PC vehiclepool.cpp:152-156: when manual mode is ON, all vehicles
+							// (including trains) have engine/lights OFF unless explicitly set > 0.
+							const bool wantEngine = pVehicle->m_iEngineState > 0;
+							if (static_cast<bool>(pVehicle->GetEngineState()) != wantEngine) {
+								pVehicle->ApplyEngineStatus(wantEngine);
 							}
-							pVehicle->SetLightState(pVehicle->GetLightState());
+							const bool wantLight = pVehicle->m_iLightState > 0;
+							pVehicle->ApplyLightStatus(wantLight);
 						}
 						else {
-							if (!pVehicle->GetEngineState() && pVehicle->HasADriver()) {
-								pVehicle->SetEngineState(true);
+							// Match PC vehiclepool.cpp:159-164: auto-mode (-1) follows driver occupancy
+							// WITHOUT mutating m_iEngineState; explicit 0/1 overrides are respected.
+							if (pVehicle->m_iEngineState == -1) {
+								const bool wantEngine = pVehicle->HasADriver();
+								if (static_cast<bool>(pVehicle->GetEngineState()) != wantEngine) {
+									pVehicle->ApplyEngineStatus(wantEngine);
+								}
+							}
+							else {
+								const bool wantEngine = pVehicle->m_iEngineState != 0;
+								if (static_cast<bool>(pVehicle->GetEngineState()) != wantEngine) {
+									pVehicle->ApplyEngineStatus(wantEngine);
+								}
 							}
 
-							pVehicle->SetLightState(pVehicle->GetLightState());
+							if (pVehicle->m_iLightState >= 0) {
+								pVehicle->ApplyLightStatus(pVehicle->m_iLightState != 0);
+							}
 						}
 
 						if (pVehicle->m_pVehicle != m_pGTAVehicles[VehicleID]) {
@@ -155,7 +170,10 @@ bool CVehiclePool::New(NEW_VEHICLE* new_veh)
 			new_veh->fRotation,
 			new_veh->byteAddSiren);
 
-	if (!pNewVehicle) return false;
+	if (!pNewVehicle || !pNewVehicle->m_pVehicle) {
+		delete pNewVehicle;
+		return false;
+	}
 
 	m_pVehicles[new_veh->VehicleID] = pNewVehicle;
 
@@ -184,6 +202,8 @@ bool CVehiclePool::New(NEW_VEHICLE* new_veh)
 	m_bIsActive[new_veh->VehicleID] = true;
 	m_bIsWasted[new_veh->VehicleID] = false;
 	m_dwWastedTime[new_veh->VehicleID] = 0;
+	m_bDeathNotified[new_veh->VehicleID] = false;
+	m_dwLastUnoccupiedSyncTick[new_veh->VehicleID] = 0;
 
 	if ((int) new_veh->VehicleID > m_iLastVehicleID) {
 		m_iLastVehicleID = new_veh->VehicleID;
@@ -210,8 +230,11 @@ bool CVehiclePool::Delete(VEHICLEID VehicleID)
 						&& pLocalPlayer->m_surfSync.dwSurfVehID == (int) VehicleID) {
 					pLocalPlayer->DisableSurfing();
 				}
-				if (pLocalPlayer->IsSpectating() && pLocalPlayer->m_SpectateID == VehicleID) {
-					pLocalPlayer->ToggleSpectating(false);
+				if (pLocalPlayer->IsSpectating()
+						&& pLocalPlayer->m_byteSpectateType == SPECTATE_TYPE_VEHICLE
+						&& pLocalPlayer->m_SpectateID == VehicleID) {
+					pLocalPlayer->m_byteSpectateType = SPECTATE_TYPE_NONE;
+					pLocalPlayer->m_bSpectateProcessed = false;
 				}
 			}
 
@@ -258,6 +281,8 @@ bool CVehiclePool::Delete(VEHICLEID VehicleID)
 	m_bIsActive[VehicleID] = false;
 	m_bIsWasted[VehicleID] = false;
 	m_dwWastedTime[VehicleID] = 0;
+	m_bDeathNotified[VehicleID] = false;
+	m_dwLastUnoccupiedSyncTick[VehicleID] = 0;
 
 	delete pVehicle;
 
@@ -293,19 +318,29 @@ uint32_t CVehiclePool::FindGtaIDFromID(VEHICLEID VehicleID)
  */
 void CVehiclePool::NotifyVehicleDeath(VEHICLEID VehicleID)
 {
-	if (!pNetGame) return;
+	if (!pNetGame || VehicleID >= MAX_VEHICLES || m_bDeathNotified[VehicleID]) return;
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) return;
 	CLocalPlayer* pLocalPlayer = pPlayerPool->GetLocalPlayer();
 	if (!pLocalPlayer) return;
+	CVehicle* pVehicle = GetAt(VehicleID);
+	if (!pVehicle) return;
 
+	// Match PC vehiclepool.cpp:246-257: only report vehicle death if local player
+	// is currently driving it or was its last driver (do not claim unrelated nearby cars).
+	const bool bEligible = pVehicle->IsDriverLocalPlayer()
+		|| pLocalPlayer->m_LastVehicle == VehicleID;
+	if (!bEligible) return;
+
+	m_bDeathNotified[VehicleID] = true;
+
+	RakNet::BitStream bsVehicleDeath;
+	proto::Writer writer(bsVehicleDeath);
+	proto::VehicleDestroyedReq req{};
+	req.vehicleId = VehicleID;
+	req.serialize(writer, proto::ProtoVersion::V037);
+	pNetGame->GetRakClient()->RPC(&RPC_VehicleDestroyed, &bsVehicleDeath, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 	if (pLocalPlayer->m_LastVehicle == VehicleID) {
-		RakNet::BitStream bsVehicleDeath;
-		proto::Writer writer(bsVehicleDeath);
-		proto::VehicleDestroyedReq req{};
-		req.vehicleId = VehicleID;
-		req.serialize(writer, proto::ProtoVersion::V037);
-		pNetGame->GetRakClient()->RPC(&RPC_VehicleDestroyed, &bsVehicleDeath, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 		pLocalPlayer->m_LastVehicle = INVALID_VEHICLE_ID;
 	}
 }

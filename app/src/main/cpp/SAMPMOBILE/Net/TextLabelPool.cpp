@@ -190,6 +190,9 @@ void CTextLabelPool::Render(ImGuiRenderer* renderer)
  */
 void CTextLabelPool::Draw(ImGuiRenderer* renderer, sa::CVector vecPos, const char* text, uint32_t dwColor)
 {
+	const uint8_t alpha = static_cast<uint8_t>(dwColor & 0xFF);
+	if (alpha == 0) return;
+
 	RwV3d vPos = vecPos;
 	RwV3d vecOut;
 
@@ -197,11 +200,29 @@ void CTextLabelPool::Draw(ImGuiRenderer* renderer, sa::CVector vecPos, const cha
 	if (vecOut.z < 1.0f) return;
 
 	const float labelFontSize = (UISettings::fontSize() / 2.0f) * Settings::textlabelScale();
+	const uint32_t abgr = __builtin_bswap32(dwColor);
+	const bool bOutline = (alpha == 0xFF);
 	std::stringstream ss_data(text);
 	std::string s_row;
+	std::string carryColor;
 	while (std::getline(ss_data, s_row, '\n')) {
+		if (!carryColor.empty()) {
+			s_row = carryColor + s_row;
+		}
+		for (size_t i = 0; i + 7 < s_row.size(); ++i) {
+			if (s_row[i] == '{' && s_row[i + 7] == '}') {
+				bool hex = true;
+				for (size_t k = 1; k <= 6; ++k) {
+					if (!std::isxdigit(static_cast<unsigned char>(s_row[i + k]))) { hex = false; break; }
+				}
+				if (hex) {
+					carryColor = s_row.substr(i, 8);
+					i += 7;
+				}
+			}
+		}
 		ImVec2 sz = renderer->calculateTextSize(s_row, labelFontSize);
-		renderer->drawText(ImVec2(vecOut.x - (sz.x / 2), vecOut.y), __builtin_bswap32(dwColor | (0x000000FF)), s_row, true, labelFontSize);
+		renderer->drawText(ImVec2(vecOut.x - (sz.x / 2), vecOut.y), abgr, s_row, bOutline, labelFontSize);
 		vecOut.y += labelFontSize;
 	}
 }

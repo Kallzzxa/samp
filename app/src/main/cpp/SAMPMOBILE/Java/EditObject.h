@@ -40,6 +40,7 @@ public:
 	static void startEditObject(uint16_t objectId);
 	static void showGui(bool show);
 	static void cancelEdit();
+	static void exitEdit();
 
 	/**
 	 * JNI callbacks run on the Java UI thread — they must NOT touch GTA
@@ -55,12 +56,14 @@ private:
 		uint8_t kind;
 		int32_t button;
 		uint8_t state;
+		uint32_t sessionGen;
 	};
 
 	static constexpr uint32_t OP_CAPACITY = 32;
 	static inline PendingOp s_ops[OP_CAPACITY] = {};
 	static inline std::atomic<uint32_t> s_opPush{0};
 	static inline std::atomic<uint32_t> s_opPop{0};
+	static inline std::atomic<uint32_t> s_sessionGen{0};
 
 	static void applyClick(int button, bool state);
 	static void applyExit();

@@ -61,11 +61,16 @@ RwTexture* SnapShotHelper::CreatePedSnapShot(int iModel, uint32_t dwColor, sa::C
 	if (!raster) return nullptr;
 
 	RwTexture* bufferTexture = RwTextureCreate(raster);
-	if (!bufferTexture) return nullptr;
+	if (!bufferTexture) {
+		RwRasterDestroy(raster);
+		return nullptr;
+	}
 
 	auto pPed = new CActor(0, 0.0f, 0.0f, 0.0f, 0.0f);
-	if (!pPed) {
+	if (!pPed || !pPed->m_actor) {
 		spdlog::error("CreatePedSnapShot: Failed to create ped");
+		delete pPed;
+		eng::fn::RwTextureDestroy(bufferTexture);
 		return nullptr;
 	}
 
@@ -112,16 +117,15 @@ RwTexture* SnapShotHelper::CreatePedSnapShot(int iModel, uint32_t dwColor, sa::C
 	pPed->Render();
 
 	RwCameraEndUpdate(m_camera);
+	m_camera->frameBuffer = nullptr;
 
 	rpWorldRemoveLight(m_light);
 
 	pPed->Remove();
-	if (pPed) {
-		delete pPed;
-		pPed = nullptr;
-	}
+	delete pPed;
+	pPed = nullptr;
 
-	++bufferTexture->refCount;
+	// RwTextureCreate already sets refCount = 1; do not increment again (avoids permanent GPU leak).
 	return bufferTexture;
 }
 
@@ -142,14 +146,19 @@ RwTexture* SnapShotHelper::CreateVehicleSnapShot(int iModel, uint32_t dwColor, s
 	if (!raster) return nullptr;
 
 	RwTexture* bufferTexture = RwTextureCreate(raster);
-	if (!bufferTexture) return nullptr;
+	if (!bufferTexture) {
+		RwRasterDestroy(raster);
+		return nullptr;
+	}
 
 	if (iModel == 570) { iModel = 538; }
 	else if (iModel == 569) iModel = 537;
 
 	auto pVehicle = new CVehicle(iModel, 0.0f, 0.0f, 50.0f, 0.0f, false, false);
-	if (!pVehicle) {
+	if (!pVehicle || !pVehicle->m_pVehicle) {
 		spdlog::error("CreateVehicleSnapShot: Failed to create vehicle");
+		delete pVehicle;
+		eng::fn::RwTextureDestroy(bufferTexture);
 		return nullptr;
 	}
 
@@ -197,16 +206,14 @@ RwTexture* SnapShotHelper::CreateVehicleSnapShot(int iModel, uint32_t dwColor, s
 	pVehicle->Render();
 
 	RwCameraEndUpdate(m_camera);
+	m_camera->frameBuffer = nullptr;
 
 	rpWorldRemoveLight(m_light);
 
 	pVehicle->Remove();
-	if (pVehicle) {
-		delete pVehicle;
-		pVehicle = nullptr;
-	}
+	delete pVehicle;
+	pVehicle = nullptr;
 
-	++bufferTexture->refCount;
 	return bufferTexture;
 }
 
@@ -225,7 +232,10 @@ RwTexture* SnapShotHelper::CreateObjectSnapShot(int iModel, uint32_t dwColor, sa
 	if (!raster) return nullptr;
 
 	RwTexture* bufferTexture = RwTextureCreate(raster);
-	if (!bufferTexture) return nullptr;
+	if (!bufferTexture) {
+		RwRasterDestroy(raster);
+		return nullptr;
+	}
 
 	if (iModel == 1373 || iModel == 3118 || iModel == 3552 || iModel == 3553) {
 		iModel = 18631;
@@ -236,12 +246,20 @@ RwTexture* SnapShotHelper::CreateObjectSnapShot(int iModel, uint32_t dwColor, sa
 		bNeedRemoveModel = true;
 		pGame->RequestModel(iModel);
 		pGame->LoadRequestedModels();
-		while (!pGame->IsModelLoaded(iModel)) usleep(1);
+		if (!pGame->IsModelLoaded(iModel)) {
+			spdlog::warn("CreateObjectSnapShot: Model {} failed to load", iModel);
+			eng::fn::RwTextureDestroy(bufferTexture);
+			return nullptr;
+		}
 	}
 
 	auto pRwObject = reinterpret_cast<RwObject*>(ModelInfoCreateInstance(iModel));
 	if (!pRwObject) {
 		spdlog::error("CreateObjectSnapShot: Failed to create object");
+		if (bNeedRemoveModel) {
+			pGame->RemoveModel(iModel, false);
+		}
+		eng::fn::RwTextureDestroy(bufferTexture);
 		return nullptr;
 	}
 
@@ -251,7 +269,14 @@ RwTexture* SnapShotHelper::CreateObjectSnapShot(int iModel, uint32_t dwColor, sa
 	GetModelColSphereVecCenter(iModel, &vecCenter);
 
 	auto parent = static_cast<RwFrame*>(pRwObject->parent);
-	if (!parent) return nullptr;
+	if (!parent) {
+		DestroyAtomicOrClump(pRwObject);
+		if (bNeedRemoveModel) {
+			pGame->RemoveModel(iModel, false);
+		}
+		eng::fn::RwTextureDestroy(bufferTexture);
+		return nullptr;
+	}
 
 	sa::CVector v = {-vecCenter.x, (-0.1f - fRadius * 2.25f) * fZoom, 50.0f - vecCenter.z};
 	RwFrameTranslate(parent, &v, rwCOMBINEPRECONCAT);
@@ -304,6 +329,7 @@ RwTexture* SnapShotHelper::CreateObjectSnapShot(int iModel, uint32_t dwColor, sa
 	RenderClumpOrAtomic(reinterpret_cast<uintptr_t>(pRwObject));
 
 	RwCameraEndUpdate(m_camera);
+	m_camera->frameBuffer = nullptr;
 
 	rpWorldRemoveLight(m_light);
 
@@ -313,6 +339,5 @@ RwTexture* SnapShotHelper::CreateObjectSnapShot(int iModel, uint32_t dwColor, sa
 		pGame->RemoveModel(iModel, false);
 	}
 
-	++bufferTexture->refCount;
 	return bufferTexture;
 }

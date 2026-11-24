@@ -3,6 +3,8 @@
 #include "../Game/CleoEngine.h"
 #include "../Net/NetGame.h"
 #include "UI.h"
+#include "../Java/Java.h"
+#include "../Java/EditObject.h"
 #include "../Net/PlayerBubblePool.h"
 #include "../UI/SAMPWidgets/VoiceButton.h"
 #include "../Voice/SpeakerList.h"
@@ -140,8 +142,28 @@ void UI::processPendingTouchEvents()
 
 void UI::updateTouchSnapshot()
 {
-	const bool modalOpen = (m_keyboard && m_keyboard->visible());
+	const bool scoreboardOpen = (m_scoreboard && m_scoreboard->visible());
+	if (pGame) {
+		pGame->SetHudHidden(Game::HUD_HIDE_SCOREBOARD, scoreboardOpen);
+	}
+
+	const bool keyboardOpen = (m_keyboard && m_keyboard->visible());
+	const bool modalOpen = keyboardOpen || scoreboardOpen || Java::isJavaKeyboardVisible();
 	m_snapModalOpen.store(modalOpen, std::memory_order_release);
+
+	bool hasNativeModal = keyboardOpen || scoreboardOpen || EditObject::m_visible.load(std::memory_order_acquire);
+	if (!hasNativeModal && pNetGame) {
+		if (CMenuPool* pMenuPool = pNetGame->GetMenuPool(); pMenuPool && pMenuPool->IsVisible()) {
+			hasNativeModal = true;
+		}
+		else if (CObjectPool* pObjPool = pNetGame->GetObjectPool(); pObjPool && pObjPool->IsSelectState()) {
+			hasNativeModal = true;
+		}
+		else if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
+			hasNativeModal = true;
+		}
+	}
+	Java::setNativeModalActive(hasNativeModal);
 
 	std::lock_guard<std::mutex> lock(m_touchMutex);
 	m_snapDisplaySize = size();
@@ -179,13 +201,16 @@ void UI::drawList()
 {
 	if (!visible()) return;
 
-	if (pPlayerTags && Settings::showNameTags()) pPlayerTags->Render(renderer());
-	if (pNetGame && pNetGame->GetTextLabelPool()) pNetGame->GetTextLabelPool()->Render(renderer());
-	if (pNetGame && pNetGame->GetPlayerBubblePool()) pNetGame->GetPlayerBubblePool()->Render(renderer());
-	if (pNetGame && pNetGame->GetTextDrawPool()) pNetGame->GetTextDrawPool()->DrawImGui(renderer());
-	if (pNetGame && pNetGame->GetObjectPool()) pNetGame->GetObjectPool()->DrawSelectOverlay(renderer());
-	if (pNetGame && pNetGame->GetMenuPool()) pNetGame->GetMenuPool()->Render(renderer());
-	if (pGame) pGame->DrawImGuiGameText(renderer());
+	const bool scoreboardOpen = (m_scoreboard && m_scoreboard->visible());
+	if (!scoreboardOpen) {
+		if (pPlayerTags && Settings::showNameTags()) pPlayerTags->Render(renderer());
+		if (pNetGame && pNetGame->GetTextLabelPool()) pNetGame->GetTextLabelPool()->Render(renderer());
+		if (pNetGame && pNetGame->GetPlayerBubblePool()) pNetGame->GetPlayerBubblePool()->Render(renderer());
+		if (pNetGame && pNetGame->GetTextDrawPool()) pNetGame->GetTextDrawPool()->DrawImGui(renderer());
+		if (pNetGame && pNetGame->GetObjectPool()) pNetGame->GetObjectPool()->DrawSelectOverlay(renderer());
+		if (pNetGame && pNetGame->GetMenuPool()) pNetGame->GetMenuPool()->Render(renderer());
+		if (pGame) pGame->DrawImGuiGameText(renderer());
+	}
 
 	// Custom crosshair styles (1=精简十字, 2=中心圆点, 3=十字加圆点)
 	int chStyle = Settings::crosshairStyle();

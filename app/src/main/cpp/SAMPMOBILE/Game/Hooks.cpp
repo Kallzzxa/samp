@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "Game.h"
+#include "Animation.h"
 #include "../Net/Proto/RpcOutbound.h"
 #include "../GameSA/include/Enums/WidgetIDs.h"
 #include "Core/Rect.h"
@@ -141,6 +142,21 @@ DECL_HOOK(void, AND_TouchEvent, int type, int num, int posX, int posY)
 
 	if (pUI != nullptr)
 	{
+		const bool tdSelecting = !pUI->isModalOpenSnapshot()
+			&& pNetGame && pNetGame->GetTextDrawPool() && pNetGame->GetTextDrawPool()->GetState();
+		const bool hitBtnPanel = pUI->isButtonPanelHitSnapshot(ImVec2(posX, posY));
+
+		// Give selectable TextDraws priority over background ImGui widgets (chat/etc.)
+		// while still letting the player tap ButtonPanel (e.g. ESC) to cancel selection.
+		if (tdSelecting && !hitBtnPanel)
+		{
+			if (!pNetGame->GetTextDrawPool()->enqueueTouchEvent(type, posX, posY))
+			{
+				releaseGtaPointer(num);
+				return;
+			}
+		}
+
 		switch (type)
 		{
 		case 2: // push
@@ -172,6 +188,12 @@ DECL_HOOK(void, AND_TouchEvent, int type, int num, int posX, int posY)
 				}
 			}
 
+			if (hitBtnPanel)
+			{
+				releaseGtaPointer(num);
+				return;
+			}
+
 			if (pNetGame && pNetGame->GetTextDrawPool())
 			{
 				if (!pNetGame->GetTextDrawPool()->enqueueTouchEvent(type, posX, posY))
@@ -179,12 +201,6 @@ DECL_HOOK(void, AND_TouchEvent, int type, int num, int posX, int posY)
 					releaseGtaPointer(num);
 					return;
 				}
-			}
-
-			if (pUI->isButtonPanelHitSnapshot(ImVec2(posX, posY)))
-			{
-				releaseGtaPointer(num);
-				return;
 			}
 
 			if (pNetGame && pNetGame->GetObjectPool())
@@ -1771,11 +1787,12 @@ DECL_HOOK(void, CGame_Process)
 
 	Settings::applyDynamicCameraAndFreeCam();
 
+	const bool hudHiddenByGame = (pGame && pGame->IsHudHidden());
 	if (auto* pDrawHud = eng::as<bool*>(eng::Sym::CHud_m_Wants_To_Draw_Hud)) {
-		*pDrawHud = Settings::showGtaHud();
+		*pDrawHud = Settings::showGtaHud() && !hudHiddenByGame;
 	}
 	if (auto* pHideRadar = eng::as<bool*>(eng::Sym::CHud_bScriptDontDisplayRadar)) {
-		*pHideRadar = (!Settings::showRadar() || !Settings::showGtaHud());
+		*pHideRadar = (!Settings::showRadar() || !Settings::showGtaHud() || hudHiddenByGame);
 	}
 
 	if (pNetGame && pGame && pGame->FindPlayerPed()) {
@@ -1905,66 +1922,102 @@ DECL_HOOK(uint32_t, CHudColours_GetIntColour, uintptr_t _this, uint32_t index)
 }
 #endif
 
-DECL_HOOK(uint32_t, CAutoMobile_ProcessEntityCollision, sa::CVehicle *_this, sa::CVehicle *pCollidedVehicle, uintptr_t a3)
+DECL_HOOK(uint32_t, CAutoMobile_ProcessEntityCollision, sa::CVehicle *_this, sa::CEntity *pCollided, uintptr_t a3)
 {
 	if (!pNetGame || !pNetGame->m_netSet || !pNetGame->m_netSet->disableVehicleCollisions ||
-		!_this || !pCollidedVehicle ||
-		pCollidedVehicle->m_nModelIndex < 400 || pCollidedVehicle->m_nModelIndex > 611 ||
-		!_this->pDriver || !pCollidedVehicle->pDriver)
+		!_this || !pCollided || !pCollided->IsVehicle() ||
+		pCollided->m_nModelIndex < 400 || pCollided->m_nModelIndex > 611 ||
+		!_this->pDriver || !reinterpret_cast<sa::CVehicle*>(pCollided)->pDriver)
 	{
-		return CAutoMobile_ProcessEntityCollision(_this, pCollidedVehicle, a3);
+		return CAutoMobile_ProcessEntityCollision(_this, pCollided, a3);
 	}
 
 	return 0;
 }
 
-DECL_HOOK(uint32_t, CBike_ProcessEntityCollision, sa::CVehicle *_this, sa::CVehicle *pCollidedVehicle, uintptr_t a3)
+DECL_HOOK(uint32_t, CBike_ProcessEntityCollision, sa::CVehicle *_this, sa::CEntity *pCollided, uintptr_t a3)
 {
 	if (!pNetGame || !pNetGame->m_netSet || !pNetGame->m_netSet->disableVehicleCollisions ||
-		!_this || !pCollidedVehicle ||
-		pCollidedVehicle->m_nModelIndex < 400 || pCollidedVehicle->m_nModelIndex > 611 ||
-		!_this->pDriver || !pCollidedVehicle->pDriver)
+		!_this || !pCollided || !pCollided->IsVehicle() ||
+		pCollided->m_nModelIndex < 400 || pCollided->m_nModelIndex > 611 ||
+		!_this->pDriver || !reinterpret_cast<sa::CVehicle*>(pCollided)->pDriver)
 	{
-		return CBike_ProcessEntityCollision(_this, pCollidedVehicle, a3);
+		return CBike_ProcessEntityCollision(_this, pCollided, a3);
 	}
 
 	return 0;
 }
 
-DECL_HOOK(uint32_t, CMonsterTruck_ProcessEntityCollision, sa::CVehicle *_this, sa::CVehicle *pCollidedVehicle, uintptr_t a3)
+DECL_HOOK(uint32_t, CMonsterTruck_ProcessEntityCollision, sa::CVehicle *_this, sa::CEntity *pCollided, uintptr_t a3)
 {
 	if (!pNetGame || !pNetGame->m_netSet || !pNetGame->m_netSet->disableVehicleCollisions ||
-		!_this || !pCollidedVehicle ||
-		pCollidedVehicle->m_nModelIndex < 400 || pCollidedVehicle->m_nModelIndex > 611 ||
-		!_this->pDriver || !pCollidedVehicle->pDriver)
+		!_this || !pCollided || !pCollided->IsVehicle() ||
+		pCollided->m_nModelIndex < 400 || pCollided->m_nModelIndex > 611 ||
+		!_this->pDriver || !reinterpret_cast<sa::CVehicle*>(pCollided)->pDriver)
 	{
-		return CMonsterTruck_ProcessEntityCollision(_this, pCollidedVehicle, a3);
+		return CMonsterTruck_ProcessEntityCollision(_this, pCollided, a3);
 	}
 
 	return 0;
 }
 
-DECL_HOOK(uint32_t, CTrailer_ProcessEntityCollision, sa::CVehicle *_this, sa::CVehicle *pCollidedVehicle, uintptr_t a3)
+DECL_HOOK(uint32_t, CTrailer_ProcessEntityCollision, sa::CVehicle *_this, sa::CEntity *pCollided, uintptr_t a3)
 {
 	if (!pNetGame || !pNetGame->m_netSet || !pNetGame->m_netSet->disableVehicleCollisions ||
-		!_this || !pCollidedVehicle ||
-		pCollidedVehicle->m_nModelIndex < 400 || pCollidedVehicle->m_nModelIndex > 611 ||
-		!_this->pDriver || !pCollidedVehicle->pDriver)
+		!_this || !pCollided || !pCollided->IsVehicle() ||
+		pCollided->m_nModelIndex < 400 || pCollided->m_nModelIndex > 611 ||
+		!_this->pDriver || !reinterpret_cast<sa::CVehicle*>(pCollided)->pDriver)
 	{
-		if (pCollidedVehicle
-				&& pCollidedVehicle->m_nModelIndex >= 400
-				&& pCollidedVehicle->m_nModelIndex <= 611
-				&& !pCollidedVehicle->pDriver
-				&& pCollidedVehicle->m_pTowingVehicle)
+		if (_this && pCollided && pCollided->IsVehicle()
+			&& _this->m_pTowingVehicle == reinterpret_cast<sa::CVehicle*>(pCollided))
 		{
-			// trailer collided with an already-attached trailer: skip
+			// skip self-collision between trailer and its own tractor
 			return 0;
 		}
 
-		return CTrailer_ProcessEntityCollision(_this, pCollidedVehicle, a3);
+		return CTrailer_ProcessEntityCollision(_this, pCollided, a3);
 	}
 
 	return 0;
+}
+
+DECL_HOOK(uint32_t, CPhysical_ProcessEntityCollision, sa::CPhysical *_this, sa::CEntity *pCollided, uintptr_t a3)
+{
+	if (pNetGame && pNetGame->m_netSet && pNetGame->m_netSet->disableVehicleCollisions
+		&& _this && pCollided && _this->IsVehicle() && pCollided->IsVehicle()
+		&& _this->m_nModelIndex >= 400 && _this->m_nModelIndex <= 611
+		&& pCollided->m_nModelIndex >= 400 && pCollided->m_nModelIndex <= 611)
+	{
+		auto* pVehA = reinterpret_cast<sa::CVehicle*>(_this);
+		auto* pVehB = reinterpret_cast<sa::CVehicle*>(pCollided);
+		if (pVehA->pDriver && pVehB->pDriver) {
+			return 0;
+		}
+	}
+
+	return CPhysical_ProcessEntityCollision(_this, pCollided, a3);
+}
+
+bool g_bCreatingSirenVehicle = false;
+
+DECL_HOOK(bool, CVehicle_UsesSiren, sa::CVehicle *_this)
+{
+	if (g_bCreatingSirenVehicle) {
+		return true;
+	}
+	if (CVehicle_UsesSiren(_this)) {
+		return true;
+	}
+	if (_this && pNetGame && pNetGame->GetVehiclePool()) {
+		VEHICLEID vid = pNetGame->GetVehiclePool()->FindIDFromGtaPtr(_this);
+		if (vid != INVALID_VEHICLE_ID) {
+			CVehicle* pVeh = pNetGame->GetVehiclePool()->GetAt(vid);
+			if (pVeh && pVeh->m_bSiren) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 // sector coords are floor(pos/50 + 60); CPhysical::Add rejects any bound
@@ -2135,6 +2188,30 @@ DECL_HOOK(int, CPlantMgr_AddLocTris, void* entry, const sa::CVector* camPos, int
 	return CPlantMgr_AddLocTris(entry, camPos, a3, startTri, endTri);
 }
 
+DECL_HOOK(void*, CAnimManager_AddAnimation, void* pClump, int groupId, int animId)
+{
+	void* pRes = CAnimManager_AddAnimation(pClump, groupId, animId);
+	if (pRes && pClump) {
+		sa::CPed* pLocal = GamePool_FindPlayerPed();
+		if (pLocal && pLocal->m_pRwObject == pClump) {
+			RecordLocalPedQueuedAnim(groupId, animId, 4.0f);
+		}
+	}
+	return pRes;
+}
+
+DECL_HOOK(void*, CAnimManager_BlendAnimation, void* pClump, int groupId, int animId, float blendDelta)
+{
+	void* pRes = CAnimManager_BlendAnimation(pClump, groupId, animId, blendDelta);
+	if (pRes && pClump) {
+		sa::CPed* pLocal = GamePool_FindPlayerPed();
+		if (pLocal && pLocal->m_pRwObject == pClump) {
+			RecordLocalPedQueuedAnim(groupId, animId, blendDelta);
+		}
+	}
+	return pRes;
+}
+
 void Hooks::install()
 {
 	spdlog::info("Installing hooks...");
@@ -2186,12 +2263,18 @@ void Hooks::install()
 	// radar color
 	REG_HOOK(Boot, CHudColours_GetIntColour, CHudColours_GetIntColour, "SA-MP radar blip RGBA colors");
 
-	// vehicle collisions
+	// local ped blended movement animation capture (PC parity)
+	REG_HOOK(Boot, CAnimManager_AddAnimation, CAnimManager_AddAnimation, "Capture local ped AddAnimation for OnFootSync");
+	REG_HOOK(Boot, CAnimManager_BlendAnimation, CAnimManager_BlendAnimation, "Capture local ped BlendAnimation for OnFootSync");
+
+	// vehicle collisions & siren
 	REG_HOOK(Boot, CAutomobile_ProcessEntityCollision, CAutoMobile_ProcessEntityCollision, "DisableRemoteVehicleCollisions (automobile)");
 	REG_HOOK(Boot, CBike_ProcessEntityCollision, CBike_ProcessEntityCollision, "DisableRemoteVehicleCollisions (bike)");
 	REG_HOOK(Boot, CMonsterTruck_ProcessEntityCollision, CMonsterTruck_ProcessEntityCollision, "DisableRemoteVehicleCollisions (monster)");
 	REG_HOOK(Boot, CTrailer_ProcessEntityCollision, CTrailer_ProcessEntityCollision, "DisableRemoteVehicleCollisions (trailer)");
+	REG_HOOK(Boot, CPhysical_ProcessEntityCollision, CPhysical_ProcessEntityCollision, "DisableRemoteVehicleCollisions (boats/other)");
 	REG_HOOK(Boot, CTrailer_BreakTowLink, CTrailer_BreakTowLink, "Prevent spurious trailer detach");
+	REG_HOOK(Boot, CVehicle_UsesSiren, CVehicle_UsesSiren, "Enable horn-siren on non-emergency vehicles with addSiren");
 
 	// OOB entities: wrap bound rects so CPhysical::Add accepts them
 	REG_HOOK(Boot, CPhysical_GetBoundRect, CPhysical_GetBoundRect, "OOB (|x|>3000) sector bound remapping");

@@ -22,6 +22,7 @@
 #include "SnapShotHelper.h"
 #include "MaterialTextGenerator.h"
 #include "RemoveBuilding.h"
+#include <atomic>
 #include "RGBA.h"
 #include "../Java/EditObject.h"
 
@@ -44,7 +45,19 @@ public:
 	void GetWorldTime(int* iHour, int* iMinute);
 	void PreloadObjectsAnims();
 	void SetWorldWeather(int iWeatherID);
+	enum HudHideReason : uint32_t {
+		HUD_HIDE_GENERAL         = 1u << 0,
+		HUD_HIDE_CLASS_SELECT    = 1u << 1,
+		HUD_HIDE_SPECTATE        = 1u << 2,
+		HUD_HIDE_TEXTDRAW_SELECT = 1u << 3,
+		HUD_HIDE_DRUNK           = 1u << 4,
+		HUD_HIDE_SCOREBOARD      = 1u << 5,
+	};
+
 	void DisplayHUD(bool bDisp);
+	void SetHudHidden(uint32_t reasonBit, bool hidden);
+	void ClearAllHudHideReasons();
+	[[nodiscard]] bool IsHudHidden() const { return m_hudHideMask != 0; }
 	void UpdateCheckpoints();
 	uint8_t GetActiveInterior();
 	uint8_t GetPedSlotsUsed();
@@ -113,8 +126,8 @@ public:
 	void MakeRaceCheckpoint();
 	void DisableRaceCheckpoint();
 
-	void EnableGameInput(bool enable) { m_gameInput = enable; };
-	[[nodiscard]] bool IsGameInputEnabled() const { return m_gameInput; }
+	void EnableGameInput(bool enable) { m_gameInput.store(enable, std::memory_order_release); };
+	[[nodiscard]] bool IsGameInputEnabled() const { return m_gameInput.load(std::memory_order_acquire); }
 
 	void ToggleCJWalk(bool bUseCJWalk);
 
@@ -127,6 +140,7 @@ public:
 	// GameText containing characters the engine font cannot render is
 	// redirected here and drawn by ImGui during the UI pass.
 	void DrawImGuiGameText(ImGuiRenderer* renderer);
+	void ClearImGuiGameText() { m_imguiGameText.clear(); m_imguiGameTextExpire = 0; }
 
 	// T06: SA-MP PlayerPlaySound segmented handler & mission audio polling
 	void PlaySoundEx(int iSound, float fX, float fY, float fZ);
@@ -136,7 +150,8 @@ private:
 	CCamera* m_gameCamera;
 	CPlayerPed* m_gamePlayer;
 
-	bool m_gameInput;
+	std::atomic<bool> m_gameInput{true};
+	uint32_t m_hudHideMask = 0;
 	bool m_clockEnabled;
 	bool m_preloadedVehicleModels[212];
 

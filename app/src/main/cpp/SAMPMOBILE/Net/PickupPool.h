@@ -37,4 +37,7 @@ public:
 	int m_iTimer[MAX_PICKUPS];
 	DROPPED_WEAPON m_droppedWeapon[MAX_PICKUPS];
 	PICKUP m_Pickups[MAX_PICKUPS];
+	static constexpr int kMaxGtaPickups = 620;
+	int m_gtaIdToSampId[kMaxGtaPickups];
+	int m_highestActiveSlot = -1;
 };

@@ -415,11 +415,19 @@ void CTextDraw::DrawTextured()
 
 	m_TextDrawData.bHasRectArea = true;
 
+	if (m_TextDrawData.iTextureSlot < 0 || m_TextDrawData.iTextureSlot >= 200) {
+		return;
+	}
+	RwTexture* tex = TextDrawTexture[m_TextDrawData.iTextureSlot];
+	if (!tex) {
+		return;
+	}
+
 	if (m_bHovered) {
-		DrawTextureUV(TextDrawTexture[m_TextDrawData.iTextureSlot], &m_rectArea, m_dwHoverColor | 0xFF000000u, m_TextDrawData.dwStyle == 5 ? uv_reflected : uv_normal);
+		DrawTextureUV(tex, &m_rectArea, m_dwHoverColor | 0xFF000000u, m_TextDrawData.dwStyle == 5 ? uv_reflected : uv_normal);
 	}
 	else {
-		DrawTextureUV(TextDrawTexture[m_TextDrawData.iTextureSlot], &m_rectArea, m_TextDrawData.dwLetterColor, m_TextDrawData.dwStyle == 5 ? uv_reflected : uv_normal);
+		DrawTextureUV(tex, &m_rectArea, m_TextDrawData.dwLetterColor, m_TextDrawData.dwStyle == 5 ? uv_reflected : uv_normal);
 	}
 }
 
@@ -482,7 +490,13 @@ void CTextDraw::SnapshotProcess()
 	}
 
 	if (snapshot) {
-		m_TextDrawData.iTextureSlot = GetFreeTextDrawTextureSlot();
-		TextDrawTexture[m_TextDrawData.iTextureSlot] = snapshot;
+		const int slot = GetFreeTextDrawTextureSlot();
+		if (slot >= 0 && slot < 200) {
+			m_TextDrawData.iTextureSlot = slot;
+			TextDrawTexture[slot] = snapshot;
+		}
+		else {
+			eng::fn::RwTextureDestroy(snapshot);
+		}
 	}
 }

@@ -1,61 +1,76 @@
 #include "../Client.h"
 #include "Font.h"
 
-void CFont::StringToAscii(const char* str, uint16_t* ascii)
+void CFont::StringToAscii(const char* str, uint16_t* ascii, size_t maxOut)
 {
-	const char* ptr = str;
-	while (*ptr) {
+	if (!ascii || maxOut == 0) {
+		return;
+	}
+	if (!str) {
+		*ascii = 0;
+		return;
+	}
+
+	const unsigned char* ptr = reinterpret_cast<const unsigned char*>(str);
+	size_t written = 0;
+	while (*ptr && written + 1 < maxOut) {
 		unsigned char ch1 = *ptr;
 		if (ch1 < 0x80) {
-			*ascii++ = ch1;
+			ascii[written++] = ch1;
+			ptr += 1;
 		}
-		else if (ch1 >= 0xC0 && ch1 <= 0xDF) {
-			unsigned char ch2 = ptr[1];
-			*ascii++ = ((ch1 & 0x1F) << 6) | (ch2 & 0x3F);
-			ptr++;
-		}
-		else if (ch1 >= 0xE0 && ch1 <= 0xEF) {
-			unsigned char ch2 = ptr[1];
-			unsigned char ch3 = ptr[2];
-			*ascii++ = ((ch1 & 0x0F) << 12) | ((ch2 & 0x3F) << 6) | (ch3 & 0x3F);
+		else if (ch1 >= 0xC2 && ch1 <= 0xDF && (ptr[1] & 0xC0) == 0x80) {
+			ascii[written++] = static_cast<uint16_t>(((ch1 & 0x1F) << 6) | (ptr[1] & 0x3F));
 			ptr += 2;
 		}
-		else if (ch1 >= 0xF0 && ch1 <= 0xF7) {
-			// Supplementary-plane characters cannot be represented in the
-			// 16-bit output buffer; replace with '?'.
-			*ascii++ = 63;
+		else if (ch1 >= 0xE0 && ch1 <= 0xEF && (ptr[1] & 0xC0) == 0x80 && (ptr[2] & 0xC0) == 0x80) {
+			ascii[written++] = static_cast<uint16_t>(((ch1 & 0x0F) << 12) | ((ptr[1] & 0x3F) << 6) | (ptr[2] & 0x3F));
 			ptr += 3;
 		}
-		else {
-			// Invalid character
-			ptr++;
+		else if (ch1 >= 0xF0 && ch1 <= 0xF4 && (ptr[1] & 0xC0) == 0x80 && (ptr[2] & 0xC0) == 0x80 && (ptr[3] & 0xC0) == 0x80) {
+			// Supplementary-plane characters cannot be represented in the
+			// 16-bit output buffer; replace with '?'.
+			ascii[written++] = 63;
+			ptr += 4;
 		}
-		ptr++;
+		else {
+			// Invalid/truncated UTF-8 byte: advance exactly 1 byte so we never skip NUL.
+			ptr += 1;
+		}
 	}
-	*ascii = 0; // Terminate with zero
+	ascii[written] = 0; // Terminate with zero
 }
 
-void CFont::AsciiToGxtCharU8(uint16_t* ascii, uint16_t* gxt)
+void CFont::AsciiToGxtCharU8(uint16_t* ascii, uint16_t* gxt, size_t maxOut)
 {
-	while (*ascii) {
+	if (!gxt || maxOut == 0) {
+		return;
+	}
+	if (!ascii) {
+		*gxt = 0;
+		return;
+	}
+
+	size_t written = 0;
+	while (*ascii && written + 1 < maxOut) {
 		int asciiValue = static_cast<int>(*ascii);
 
 		bool found = false;
 		for (auto& i : g_asciiMap) {
 			if (i[0] == asciiValue) {
-				*gxt++ = static_cast<uint16_t>(i[1]);
+				gxt[written++] = static_cast<uint16_t>(i[1]);
 				found = true;
 				break;
 			}
 		}
 		if (!found) {
 			// handle unknown characters
-			*gxt++ = 63; // Fill unsupported text with question marks
+			gxt[written++] = 63; // Fill unsupported text with question marks
 		}
 
 		ascii++;
 	}
-	*gxt = 0; // Terminate with zero
+	gxt[written] = 0; // Terminate with zero
 }
 
 void CFont::AsciiToGxtChar(const char* ascii, uint16_t* gxt)

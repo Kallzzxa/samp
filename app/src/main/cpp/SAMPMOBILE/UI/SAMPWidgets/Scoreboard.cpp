@@ -138,7 +138,12 @@ void Scoreboard::draw(ImGuiRenderer* renderer)
 					req.serialize(writer, proto::ProtoVersion::V037);
 					pNetGame->GetRakClient()->RPC(&RPC_ClickPlayer, &bsSend, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
 
-					if (visible()) setVisible(false);
+					if (visible()) {
+						m_lastSelectedItem = -1;
+						m_selectedItem = -1;
+						setVisible(false);
+						break;
+					}
 				}
 
 				m_lastSelectedItem = line;

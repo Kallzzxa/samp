@@ -60,6 +60,8 @@ public class UI implements ButtonPanel.Listener, Voice.Listener, Dialog.Listener
 
     private native void chatSend(String str);
 
+    private native boolean handleNativeBackPressed();
+
     public UI(SAMP samp) {
         this.samp = samp;
     }
@@ -88,7 +90,14 @@ public class UI implements ButtonPanel.Listener, Voice.Listener, Dialog.Listener
             return true;
         }
         if (isDialogVisible()) {
+            dialog.SendDialogResponse(0, dialog.mCurrentListitem, dialog.mCurrentInputtext);
             return true;
+        }
+        try {
+            if (handleNativeBackPressed()) {
+                return true;
+            }
+        } catch (UnsatisfiedLinkError ignored) {
         }
         return false;
     }

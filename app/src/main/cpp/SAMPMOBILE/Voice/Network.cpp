@@ -378,6 +378,11 @@ bool Network::OnRaknetReceive(Packet* packet) noexcept
 			serverAddress.sin_addr.s_addr = inet_addr(Network::serverIp.c_str());
 			serverAddress.sin_port = htons(stData.serverPort);
 
+			if (Network::voiceThread.joinable()) {
+				Network::voiceEpoch++;
+				Network::voiceThread.join();
+			}
+
 			if (connect(Network::socketHandle, reinterpret_cast<const sockaddr*>(&serverAddress),
 					sizeof(serverAddress)) == SOCKET_ERROR) {
 				LogVoice("[sv:err:network:serverInfo] : connect error.");
@@ -397,11 +402,6 @@ bool Network::OnRaknetReceive(Packet* packet) noexcept
 			Network::outputVoicePacket->CalcHash();
 
 			Network::connectionStatus = ConnectionStatus::SVConnecting;
-
-			if (Network::voiceThread.joinable()) {
-				Network::voiceEpoch++;
-				Network::voiceThread.join();
-			}
 
 			Network::voiceThread = std::thread(Network::VoiceThread, Network::voiceEpoch.load());
 

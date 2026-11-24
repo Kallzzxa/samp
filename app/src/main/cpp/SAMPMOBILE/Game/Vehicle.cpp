@@ -3,6 +3,7 @@
 //
 
 #include "Game.h"
+#include "VehicleComponentTable.h"
 #include "../Client.h"
 #include "../UI/UI.h"
 #include "../Net/NetGame.h"
@@ -15,12 +16,13 @@ extern Game* pGame;
 extern NetGame* pNetGame;
 extern MaterialTextGenerator* pMaterialTextGenerator;
 
+static sa::CVehicle* pCreatedTrain = nullptr;
+
 CVehicle::CVehicle(int iType, float fX, float fY, float fZ, float fRotation, bool bPreloaded, bool bSiren)
 {
 	spdlog::debug("CVehicle::CVehicle({}, {}, {}, {}, {}, {}, {})", iType, fX, fY, fZ, fRotation, bPreloaded, bSiren);
 	uint32_t dwRetID = 0;
 	RwMatrix mat;
-	static sa::CVehicle* pCreatedTrain = nullptr;
 
 	m_pVehicle = nullptr;
 	m_gtaId = 0;
@@ -28,8 +30,8 @@ CVehicle::CVehicle(int iType, float fX, float fY, float fZ, float fRotation, boo
 	m_bPreloaded = bPreloaded;
 	m_bIsInvulnerable = false;
 	m_bIsLocked = false;
-	m_bEngineState = false;
-	m_bLightState = false;
+	m_iEngineState = -1;
+	m_iLightState = -1;
 	m_bDoorsLocked = false;
 	m_byteObjectiveVehicle = 0;
 	m_bSpecialMarkerEnabled = false;
@@ -67,7 +69,10 @@ CVehicle::CVehicle(int iType, float fX, float fY, float fZ, float fRotation, boo
 			}
 		}
 
+		extern bool g_bCreatingSirenVehicle;
+		g_bCreatingSirenVehicle = bSiren;
 		ScriptCommand(&create_car, iType, fX, fY, fZ, &dwRetID);
+		g_bCreatingSirenVehicle = false;
 		if (!dwRetID) {
 			spdlog::error("CVehicle::CVehicle: create_car failed for model {}", iType);
 			return;
@@ -90,9 +95,8 @@ CVehicle::CVehicle(int iType, float fX, float fY, float fZ, float fRotation, boo
 		if (m_pVehicle) {
 			m_pVehicle->m_nDoorLock = sa::CARLOCK_NOT_USED;
 			m_pVehicle->m_fDirtLevel = 0.0f;
-			if (bSiren) {
-				m_pVehicle->m_nVehicleFlags.bSirenOrAlarm = 1;
-			}
+			// Note: bSiren (CreateVehicle addsiren=1) enables horn-toggled siren via CVehicle::UsesSiren hook;
+			// do NOT auto-activate bSirenOrAlarm on spawn.
 			if (pNetGame && pNetGame->m_netSet && pNetGame->m_netSet->manualVehicleEngineAndLight) {
 				SetEngineState(false);
 				SetLightState(false);
@@ -166,7 +170,7 @@ CVehicle::CVehicle(int iType, float fX, float fY, float fZ, float fRotation, boo
 			return;
 		}
 
-		m_pVehicle = ((sa::CTrain*) pCreatedTrain)->pLinkedToForward; // todo check this?
+		m_pVehicle = ((sa::CTrain*) pCreatedTrain)->pLinkedToBackward;
 		if (!m_pVehicle) {
 			if (pUI) pUI->chat()->addDebugMessage("Warning: bad train carriages");
 			m_entity = nullptr;
@@ -183,6 +187,9 @@ CVehicle::CVehicle(int iType, float fX, float fY, float fZ, float fRotation, boo
 
 CVehicle::~CVehicle()
 {
+	if (pCreatedTrain == m_pVehicle) {
+		pCreatedTrain = nullptr;
+	}
 	if (m_dwMarkerID) {
 		spdlog::debug("remove vehicle radar marker: {}", m_dwMarkerID);
 		pGame->DisableMarker(m_dwMarkerID);
@@ -198,10 +205,10 @@ CVehicle::~CVehicle()
 		}
 
 		int iModel = m_pVehicle->m_nModelIndex;
-		if (iModel == 538 || iModel == 537) {
+		if (iModel == 538 || iModel == 537 || iModel == 449) {
 			ScriptCommand(&destroy_train, m_gtaId);
 		}
-		else {
+		else if (iModel != 569 && iModel != 570) {
 			ScriptCommand(&destroy_car, m_gtaId);
 			int iRefs = GetModelRefCounts(iModel);
 			spdlog::debug("Destroy car({}): Refs: {}", iModel, iRefs);
@@ -250,27 +257,32 @@ float CVehicle::GetHealth()
  */
 void CVehicle::SetColor(uint8_t byteColor1, uint8_t byteColor2)
 {
+	if (byteColor1 != 0xFF) {
+		m_byteColor1 = byteColor1;
+	}
+	if (byteColor2 != 0xFF) {
+		m_byteColor2 = byteColor2;
+	}
+
 	if (m_pVehicle && VerifyInstance()) {
-		if (byteColor1 != 0xFF) {
-			m_pVehicle->m_nPrimaryColor = byteColor1;
+		if (m_byteColor1 != 0xFF) {
+			m_pVehicle->m_nPrimaryColor = m_byteColor1;
 		}
-		if (byteColor2 != 0xFF) {
-			m_pVehicle->m_nSecondaryColor = byteColor2;
+		if (m_byteColor2 != 0xFF) {
+			m_pVehicle->m_nSecondaryColor = m_byteColor2;
 		}
 	}
 
-	m_byteColor1 = byteColor1;
-	m_byteColor2 = byteColor2;
-	// 0xFF means "unset" (NEW_VEHICLE semantics): don't arm UpdateColor for it
-	m_bHaveColor = (byteColor1 != 0xFF && byteColor2 != 0xFF);
+	m_bHaveColor = (m_byteColor1 != 0xFF || m_byteColor2 != 0xFF);
 }
 
 void CVehicle::UpdateColor()
 {
 	if (m_pVehicle && VerifyInstance() && m_bHaveColor) {
-		if (m_pVehicle->m_nPrimaryColor != m_byteColor1
-				|| m_pVehicle->m_nSecondaryColor != m_byteColor2) {
+		if (m_byteColor1 != 0xFF && m_pVehicle->m_nPrimaryColor != m_byteColor1) {
 			m_pVehicle->m_nPrimaryColor = m_byteColor1;
+		}
+		if (m_byteColor2 != 0xFF && m_pVehicle->m_nSecondaryColor != m_byteColor2) {
 			m_pVehicle->m_nSecondaryColor = m_byteColor2;
 		}
 	}
@@ -292,14 +304,15 @@ void CVehicle::LinkToInterior(int iInterior)
 void CVehicle::SetTireDamageStatus(uint8_t byteTireDamageStatus)
 {
 	if (m_pVehicle && VerifyInstance()) {
-		if (GetVehicleSubtype() == VEHICLE_SUBTYPE_CAR) {
+		const int iSubType = GetVehicleSubtype();
+		if (iSubType == VEHICLE_SUBTYPE_CAR || iSubType == VEHICLE_SUBTYPE_PLANE) {
 			// SA-MP tire damage byte is packed MSB-first: bit 3 -> wheel 0
 			((sa::CAutomobile*) m_pVehicle)->Damage.m_Wheel[0] = (byteTireDamageStatus >> 3) & 1;
 			((sa::CAutomobile*) m_pVehicle)->Damage.m_Wheel[1] = (byteTireDamageStatus >> 2) & 1;
 			((sa::CAutomobile*) m_pVehicle)->Damage.m_Wheel[2] = (byteTireDamageStatus >> 1) & 1;
 			((sa::CAutomobile*) m_pVehicle)->Damage.m_Wheel[3] = byteTireDamageStatus & 1;
 		}
-		else if (GetVehicleSubtype() == VEHICLE_SUBTYPE_BIKE) {
+		else if (iSubType == VEHICLE_SUBTYPE_BIKE) {
 			((sa::CBike*) m_pVehicle)->m_nWheelStatus[0] = (byteTireDamageStatus >> 1) & 1;
 			((sa::CBike*) m_pVehicle)->m_nWheelStatus[1] = byteTireDamageStatus & 1;
 		}
@@ -316,7 +329,7 @@ void CVehicle::GetDamageStatus(uint32_t* pdwPanels, uint32_t* pdwDoors, uint8_t*
 	if (!m_pVehicle || !VerifyInstance()) return;
 
 	int iSubType = GetVehicleSubtype();
-	if (iSubType == VEHICLE_SUBTYPE_CAR) {
+	if (iSubType == VEHICLE_SUBTYPE_CAR || iSubType == VEHICLE_SUBTYPE_PLANE) {
 		sa::CAutomobile* pAuto = (sa::CAutomobile*) m_pVehicle;
 		*pdwPanels = pAuto->Damage.m_Panels;
 		*pdwDoors = (uint32_t) (pAuto->Damage.m_Door[0] | (pAuto->Damage.m_Door[1] << 8) |
@@ -342,7 +355,8 @@ void CVehicle::GetDamageStatus(uint32_t* pdwPanels, uint32_t* pdwDoors, uint8_t*
 void CVehicle::SetDamageStatus(uint32_t dwPanelDamageStatus, uint32_t dwDoorDamageStatus, uint8_t byteLightDamageStatus)
 {
 	if (m_pVehicle && VerifyInstance()) {
-		if (GetVehicleSubtype() == VEHICLE_SUBTYPE_CAR) {
+		const int iSubType = GetVehicleSubtype();
+		if (iSubType == VEHICLE_SUBTYPE_CAR || iSubType == VEHICLE_SUBTYPE_PLANE) {
 			if (!dwPanelDamageStatus && !dwDoorDamageStatus && !byteLightDamageStatus) {
 				uint32_t dwDoorStatus = (((sa::CAutomobile*) m_pVehicle)->Damage.m_Door[0] | (((sa::CAutomobile*) m_pVehicle)->Damage.m_Door[1] << 8) | (((sa::CAutomobile*) m_pVehicle)->Damage.m_Door[2] << 16) | (((sa::CAutomobile*) m_pVehicle)->Damage.m_Door[3] << 24));
 				if (((sa::CAutomobile*) m_pVehicle)->Damage.m_Panels || dwDoorStatus || ((sa::CAutomobile*) m_pVehicle)->Damage.m_Lights) {
@@ -357,11 +371,11 @@ void CVehicle::SetDamageStatus(uint32_t dwPanelDamageStatus, uint32_t dwDoorDama
 			// panel
 			((sa::CAutomobile*) m_pVehicle)->Damage.m_Panels = dwPanelDamageStatus;
 
-			// door
-			((sa::CAutomobile*) m_pVehicle)->Damage.m_Door[0] = dwDoorDamageStatus & 7;
-			((sa::CAutomobile*) m_pVehicle)->Damage.m_Door[1] = (dwDoorDamageStatus >> 8) & 7;
-			((sa::CAutomobile*) m_pVehicle)->Damage.m_Door[2] = (dwDoorDamageStatus >> 16) & 7;
-			((sa::CAutomobile*) m_pVehicle)->Damage.m_Door[3] = (dwDoorDamageStatus >> 24) & 7;
+			// door (preserve full byte per door to match PC & GetDamageStatus)
+			((sa::CAutomobile*) m_pVehicle)->Damage.m_Door[0] = static_cast<uint8_t>(dwDoorDamageStatus & 0xFF);
+			((sa::CAutomobile*) m_pVehicle)->Damage.m_Door[1] = static_cast<uint8_t>((dwDoorDamageStatus >> 8) & 0xFF);
+			((sa::CAutomobile*) m_pVehicle)->Damage.m_Door[2] = static_cast<uint8_t>((dwDoorDamageStatus >> 16) & 0xFF);
+			((sa::CAutomobile*) m_pVehicle)->Damage.m_Door[3] = static_cast<uint8_t>((dwDoorDamageStatus >> 24) & 0xFF);
 
 			// light
 			((sa::CAutomobile*) m_pVehicle)->Damage.m_Lights = (uint32_t) byteLightDamageStatus;
@@ -425,8 +439,9 @@ void CVehicle::AddComponent(int iComponentID)
 	if (!m_pVehicle || !VerifyInstance()) return;
 	if (GetVehicleSubtype() != VEHICLE_SUBTYPE_CAR) return;
 
-	if (iComponentID < 1000 || iComponentID > 1193) {
-		spdlog::error("CVehicle::AddComponent: Invalid component ID {}", iComponentID);
+	if (iComponentID < 1000 || iComponentID > 1193
+			|| !VehicleComponents::isValidForModel(m_pVehicle->m_nModelIndex, iComponentID)) {
+		spdlog::debug("CVehicle::AddComponent: Incompatible component {} for model {}", iComponentID, m_pVehicle->m_nModelIndex);
 		return;
 	}
 
@@ -441,8 +456,8 @@ void CVehicle::AddComponent(int iComponentID)
 		int waitPreloaded = 0;
 		while (!HasVehicleUpgradeLoaded) {
 			usleep(1000);
-			if (++waitPreloaded > 200) {
-				spdlog::error("CVehicle::AddComponent: component {} wouldn't load in time", iComponentID);
+			if (++waitPreloaded > 30) {
+				spdlog::debug("CVehicle::AddComponent: component {} wouldn't load in time", iComponentID);
 				return;
 			}
 			HasVehicleUpgradeLoaded = eng::fn::CStreaming_HasVehicleUpgradeLoaded( iComponentID);
@@ -767,7 +782,7 @@ void CVehicle::SetZAngle(float fAngle)
  */
 void CVehicle::ProcessMarkers()
 {
-	if (!VerifyInstance() || m_pVehicle->pDriver) return;
+	if (!VerifyInstance()) return;
 
 	if (m_byteObjectiveVehicle) {
 		if (!m_bSpecialMarkerEnabled) {
@@ -848,13 +863,20 @@ void CVehicle::AttachTrailer()
 	}
 }
 
+void CVehicle::ApplyLightStatus(bool state)
+{
+	if (m_pVehicle && VerifyInstance()) {
+		const uint8_t desired = state ? 2 : 1;
+		if (m_pVehicle->m_nOverrideLights != desired) {
+			ScriptCommand(&force_car_lights, m_gtaId, desired);
+		}
+	}
+}
+
 void CVehicle::SetLightState(bool state)
 {
-	//m_pVehicle->SetLightsStatus(state);
-	m_bLightState = state;
-	if (m_pVehicle && VerifyInstance()) {
-		ScriptCommand(&force_car_lights, m_gtaId, state ? 2 : 1);
-	}
+	m_iLightState = state ? 1 : 0;
+	ApplyLightStatus(state);
 }
 
 /**

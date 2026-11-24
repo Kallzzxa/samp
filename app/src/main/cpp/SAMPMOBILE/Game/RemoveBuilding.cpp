@@ -14,11 +14,23 @@ void RemoveBuilding::add(uint32_t model, sa::CVector pos, float radius)
 		return;
 	}
 
-	if (m_buildingToRemoveCount >= 1000) {
-		return;
+	// Deduplicate BEFORE scanning 60k pool slots so repeated GMX removals are O(1)
+	for (uint32_t i = 0; i < m_buildingToRemoveCount; ++i) {
+		const auto& e = m_buildingToRemove[i];
+		if (e.model == model
+				&& fabsf(e.pos.x - pos.x) < 0.01f
+				&& fabsf(e.pos.y - pos.y) < 0.01f
+				&& fabsf(e.pos.z - pos.z) < 0.01f
+				&& fabsf(e.radius - radius) < 0.01f) {
+			return;
+		}
 	}
 
 	removeObjectInRange(model, pos, radius);
+
+	if (m_buildingToRemoveCount >= 1000) {
+		return;
+	}
 
 	m_buildingToRemove[m_buildingToRemoveCount].model = model;
 	m_buildingToRemove[m_buildingToRemoveCount].pos = pos;
@@ -28,7 +40,9 @@ void RemoveBuilding::add(uint32_t model, sa::CVector pos, float radius)
 
 void RemoveBuilding::removeObjectInRange(uint32_t model, sa::CVector pos, float radius)
 {
-	removeOccludersInRadius(pos, radius);
+	// Match PC building_removal.cpp:79 — remove occluders within 500.0f so small-radius
+	// removals don't leave occluders culling replacement custom objects.
+	removeOccludersInRadius(pos, 500.0f);
 
 	typedef sa::CPool<uint8_t, uint8_t> RawPool;
 
@@ -50,12 +64,12 @@ void RemoveBuilding::removeObjectInRange(uint32_t model, sa::CVector pos, float 
 				float fDistance = sa::DistanceBetweenPoints(pEntity->GetPosition(), pos);
 				if (fDistance <= radius) {
 					eng::fn::CPlantMgr_ColEntityCache_Remove( pEntity);
+					// Match PC GameHideObjectEntity: drop BOTH m_placement and m_matrix, and set interior area code = 1
+					pEntity->m_placement.m_vPosn.z -= 2000.0f;
 					if (pEntity->m_matrix) {
 						pEntity->m_matrix->m_pos.z -= 2000.0f;
 					}
-					else {
-						pEntity->m_placement.m_vPosn.z -= 2000.0f;
-					}
+					pEntity->m_nAreaCode = static_cast<sa::eAreaCodes>(1);
 				}
 			}
 		}
@@ -137,7 +151,7 @@ DECL_HOOK(void, CFileLoader_LoadObjectInstance, sa::CFileObjectInstance* instanc
 		sa::CVector* pos = &instance->m_vecPosition;
 		int* model = &instance->m_nModelId;
 
-		if (RemoveBuilding::needsRemove(*model, pos)) {
+		if (RemoveBuilding::needsRemove(*model, *pos)) {
 			spdlog::info("RemoveBuilding hook: model {}", *model);
 			*model = 19300;
 		}

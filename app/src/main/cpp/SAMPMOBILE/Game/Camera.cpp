@@ -15,6 +15,7 @@ void CCamera::SetBehindPlayer()
 {
 	m_pAttachedTo = nullptr;
 	ScriptCommand(&lock_camera_position, 0);
+	ScriptCommand(&lock_camera_target_point, 0);
 	ScriptCommand(&restore_camera_to_user);
 	ScriptCommand(&set_camera_behind_player);
 	ScriptCommand(&restore_camera_jumpcut);
@@ -23,6 +24,8 @@ void CCamera::SetBehindPlayer()
 void CCamera::SetPosition(float fX, float fY, float fZ, float fRotationX, float fRotationY, float fRotationZ)
 {
 	m_pAttachedTo = nullptr;
+	ScriptCommand(&lock_camera_position, 0);
+	ScriptCommand(&lock_camera_target_point, 0);
 	ScriptCommand(&restore_camera_to_user);
 	ScriptCommand(&set_camera_position, fX, fY, fZ, fRotationX, fRotationY, fRotationZ);
 }
@@ -30,6 +33,8 @@ void CCamera::SetPosition(float fX, float fY, float fZ, float fRotationX, float 
 void CCamera::LookAtPoint(float fX, float fY, float fZ, int iType)
 {
 	m_pAttachedTo = nullptr;
+	ScriptCommand(&lock_camera_position, 0);
+	ScriptCommand(&lock_camera_target_point, 0);
 	ScriptCommand(&restore_camera_to_user);
 	ScriptCommand(&point_camera, fX, fY, fZ, iType);
 }
@@ -62,6 +67,9 @@ void CCamera::InterpolateCameraLookAt(sa::CVector* vecFrom, sa::CVector* vecTo, 
 void CCamera::Restore()
 {
 	m_pAttachedTo = nullptr;
+	ScriptCommand(&lock_camera_position, 0);
+	ScriptCommand(&lock_camera_target_point, 0);
+	ScriptCommand(&restore_camera_to_user);
 	ScriptCommand(&restore_camera_jumpcut);
 }
 

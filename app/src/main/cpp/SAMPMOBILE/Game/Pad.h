@@ -29,6 +29,7 @@ typedef struct {
 	uint16_t wKeyUD;
 	bool bKeys[ePadKeys::SIZE];
 	bool bIgnoreJump;
+	bool bIgnoreDuck;
 } PAD_KEYS;
 
 extern PAD_KEYS LocalPlayerKeys;

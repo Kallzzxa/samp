@@ -125,7 +125,9 @@ public:
 	sa::CVector m_vecPos[MAX_VEHICLES];
 	bool m_bIsActive[MAX_VEHICLES];
 	bool m_bIsWasted[MAX_VEHICLES];
+	bool m_bDeathNotified[MAX_VEHICLES];
 	uint32_t m_dwWastedTime[MAX_VEHICLES];
+	uint32_t m_dwLastUnoccupiedSyncTick[MAX_VEHICLES];
 	int m_iLastVehicleID;
 	std::unordered_map<sa::CVehicle*, VEHICLEID> m_mapGtaToId;
 };

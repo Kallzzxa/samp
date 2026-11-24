@@ -13,6 +13,13 @@
 extern UI* pUI;
 extern NetGame* pNetGame;
 
+namespace {
+bool g_hasOrigSnapshot = false;
+sa::CVector g_origObjPos{};
+sa::CVector g_origObjRot{};
+NEW_ATTACHED_OBJECT g_origAttach{};
+}
+
 void EditObject::startEditAttachedObject(int slot)
 {
 	if (!pNetGame || !pNetGame->GetPlayerPool() || !pNetGame->GetPlayerPool()->GetLocalPlayer()) return;
@@ -23,6 +30,10 @@ void EditObject::startEditAttachedObject(int slot)
 		return;
 	}
 
+	g_origAttach = pPlayerPed->m_attachedObjects[slot].info;
+	g_hasOrigSnapshot = true;
+
+	s_sessionGen.fetch_add(1, std::memory_order_acq_rel);
 	EditObject::m_id = slot;
 	EditObject::m_type = TYPE_ATTACHED_OBJECT;
 	EditObject::showGui(true);
@@ -38,6 +49,14 @@ void EditObject::startEditObject(uint16_t objectId)
 		return;
 	}
 
+	g_hasOrigSnapshot = false;
+	if (pObject->m_entity) {
+		g_origObjPos = pObject->m_entity->GetPosition();
+		pObject->GetRotation(&g_origObjRot.x, &g_origObjRot.y, &g_origObjRot.z);
+		g_hasOrigSnapshot = true;
+	}
+
+	s_sessionGen.fetch_add(1, std::memory_order_acq_rel);
 	EditObject::m_id = objectId;
 	EditObject::m_type = TYPE_OBJECT;
 	EditObject::showGui(true);
@@ -45,15 +64,26 @@ void EditObject::startEditObject(uint16_t objectId)
 
 void EditObject::showGui(bool show)
 {
-	g_java->showEditObject(show);
+	if (g_java) {
+		g_java->showEditObject(show);
+	}
 	m_visible = show;
 }
 
 void EditObject::cancelEdit()
 {
+	s_sessionGen.fetch_add(1, std::memory_order_acq_rel);
+	g_hasOrigSnapshot = false;
 	EditObject::m_id = -1;
 	EditObject::m_type = TYPE_NONE;
 	EditObject::showGui(false);
+}
+
+void EditObject::exitEdit()
+{
+	s_sessionGen.fetch_add(1, std::memory_order_acq_rel);
+	applyExit();
+	showGui(false);
 }
 
 /**
@@ -69,7 +99,8 @@ void EditObject::enqueueOp(int kind, int button, bool state)
 	if (uPush - uPop >= OP_CAPACITY) {
 		return;
 	}
-	s_ops[uPush % OP_CAPACITY] = {(uint8_t) kind, (int32_t) button, (uint8_t) state};
+	const uint32_t gen = s_sessionGen.load(std::memory_order_acquire);
+	s_ops[uPush % OP_CAPACITY] = {(uint8_t) kind, (int32_t) button, (uint8_t) state, gen};
 	s_opPush.store(uPush + 1, std::memory_order_release);
 }
 
@@ -82,6 +113,11 @@ void EditObject::processPending()
 		}
 		PendingOp op = s_ops[uPop % OP_CAPACITY];
 		s_opPop.store(uPop + 1, std::memory_order_release);
+
+		// Discard stale ops queued from a prior edit session
+		if (op.sessionGen != s_sessionGen.load(std::memory_order_acquire)) {
+			continue;
+		}
 
 		switch (op.kind) {
 			case OP_CLICK: applyClick(op.button, op.state != 0); break;
@@ -104,7 +140,7 @@ void EditObject::applyClick(int button, bool state)
 
 	if (EditObject::m_type == EditObject::TYPE_ATTACHED_OBJECT) {
 		if (!pPlayer->IsValidAttach(EditObject::m_id)) {
-			EditObject::showGui(false);
+			EditObject::cancelEdit();
 			return;
 		}
 	}
@@ -113,7 +149,7 @@ void EditObject::applyClick(int button, bool state)
 
 	if (EditObject::m_type == EditObject::TYPE_OBJECT) {
 		if (!pNetGame->GetObjectPool() || EditObject::m_id < 0) {
-			EditObject::showGui(false);
+			EditObject::cancelEdit();
 			return;
 		}
 		pObject = pNetGame->GetObjectPool()->GetAt(EditObject::m_id);
@@ -127,7 +163,7 @@ void EditObject::applyClick(int button, bool state)
 	NEW_ATTACHED_OBJECT* pAttach = nullptr;
 	if (EditObject::m_type == EditObject::TYPE_ATTACHED_OBJECT) {
 		if (EditObject::m_id < 0 || EditObject::m_id >= 10) {
-			EditObject::showGui(false);
+			EditObject::cancelEdit();
 			return;
 		}
 		pAttach = &pPlayer->m_attachedObjects[EditObject::m_id].info;
@@ -180,15 +216,15 @@ void EditObject::applyClick(int button, bool state)
 	}
 	if (button == BUTTON_SCALE) {
 		if (EditObject::m_type == EditObject::TYPE_ATTACHED_OBJECT) {
-			pAttach->vecScale.x += value;
-			pAttach->vecScale.y += value;
-			pAttach->vecScale.z += value;
+			pAttach->vecScale.x = std::max(0.05f, pAttach->vecScale.x + value);
+			pAttach->vecScale.y = std::max(0.05f, pAttach->vecScale.y + value);
+			pAttach->vecScale.z = std::max(0.05f, pAttach->vecScale.z + value);
 		}
 		if (EditObject::m_type == EditObject::TYPE_OBJECT) {
 			sa::CVector vecScale = pObject->GetScale();
-			vecScale.x += value;
-			vecScale.y += value;
-			vecScale.z += value;
+			vecScale.x = std::max(0.05f, vecScale.x + value);
+			vecScale.y = std::max(0.05f, vecScale.y + value);
+			vecScale.z = std::max(0.05f, vecScale.z + value);
 			pObject->SetScale(vecScale);
 		}
 	}
@@ -259,6 +295,10 @@ void EditObject::applyExit()
 				pNetGame->GetObjectPool()) {
 			CObject* pObject = pNetGame->GetObjectPool()->GetAt(EditObject::m_id);
 			if (pObject && pObject->m_entity) {
+				if (g_hasOrigSnapshot) {
+					pObject->TeleportTo(g_origObjPos.x, g_origObjPos.y, g_origObjPos.z);
+					pObject->SetRotation(&g_origObjRot);
+				}
 				RwMatrix matrix = pObject->m_entity->GetMatrix().ToRwMatrix();
 				sa::CVector rot;
 				pObject->GetRotation(&rot.x, &rot.y, &rot.z);
@@ -277,27 +317,32 @@ void EditObject::applyExit()
 		}
 		else if (EditObject::m_type == EditObject::TYPE_ATTACHED_OBJECT &&
 				EditObject::m_id >= 0 && EditObject::m_id < 10 &&
-				pNetGame->GetPlayerPool() && pNetGame->GetPlayerPool()->GetLocalPlayer() &&
-				pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed()) {
-			NEW_ATTACHED_OBJECT* pAttach =
-					&pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed()->m_attachedObjects[EditObject::m_id].info;
+				pNetGame->GetPlayerPool() && pNetGame->GetPlayerPool()->GetLocalPlayer()) {
+			CPlayerPed* pPlayer = pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed();
+			if (pPlayer && pPlayer->IsValidAttach(EditObject::m_id)) {
+				NEW_ATTACHED_OBJECT* pAttach = &pPlayer->m_attachedObjects[EditObject::m_id].info;
+				if (g_hasOrigSnapshot) {
+					*pAttach = g_origAttach;
+				}
 
-			RakNet::BitStream bsSend;
-			proto::Writer writer(bsSend);
-			proto::EditAttachedObjectReply reply{};
-			reply.response = static_cast<uint32_t>(EditObject::eResponse::EDIT_RESPONSE_CANCEL);
-			reply.index = EditObject::m_id;
-			reply.modelId = pAttach->iModel;
-			reply.boneId = pAttach->iBoneID;
-			reply.offset = {pAttach->vecOffset.x, pAttach->vecOffset.y, pAttach->vecOffset.z};
-			reply.rotation = {pAttach->vecRot.x, pAttach->vecRot.y, pAttach->vecRot.z};
-			reply.scale = {pAttach->vecScale.x, pAttach->vecScale.y, pAttach->vecScale.z};
-			reply.color1 = pAttach->dwMaterialColor1;
-			reply.color2 = pAttach->dwMaterialColor2;
-			reply.serialize(writer, proto::ProtoVersion::V037);
-			pNetGame->GetRakClient()->RPC(&RPC_EditAttachedObject, &bsSend, HIGH_PRIORITY, RELIABLE, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
+				RakNet::BitStream bsSend;
+				proto::Writer writer(bsSend);
+				proto::EditAttachedObjectReply reply{};
+				reply.response = static_cast<uint32_t>(EditObject::eResponse::EDIT_RESPONSE_CANCEL);
+				reply.index = EditObject::m_id;
+				reply.modelId = pAttach->iModel;
+				reply.boneId = pAttach->iBoneID;
+				reply.offset = {pAttach->vecOffset.x, pAttach->vecOffset.y, pAttach->vecOffset.z};
+				reply.rotation = {pAttach->vecRot.x, pAttach->vecRot.y, pAttach->vecRot.z};
+				reply.scale = {pAttach->vecScale.x, pAttach->vecScale.y, pAttach->vecScale.z};
+				reply.color1 = pAttach->dwMaterialColor1;
+				reply.color2 = pAttach->dwMaterialColor2;
+				reply.serialize(writer, proto::ProtoVersion::V037);
+				pNetGame->GetRakClient()->RPC(&RPC_EditAttachedObject, &bsSend, HIGH_PRIORITY, RELIABLE, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
+			}
 		}
 	}
+	g_hasOrigSnapshot = false;
 	EditObject::m_id = -1;
 	EditObject::m_type = TYPE_NONE;
 	EditObject::m_visible = false;
@@ -310,7 +355,7 @@ void EditObject::applySave()
 			if (pNetGame->GetPlayerPool() && pNetGame->GetPlayerPool()->GetLocalPlayer() &&
 					EditObject::m_id >= 0 && EditObject::m_id < 10) {
 				CPlayerPed* pPlayer = pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed();
-				if (pPlayer) {
+				if (pPlayer && pPlayer->IsValidAttach(EditObject::m_id)) {
 					auto& attach = pPlayer->m_attachedObjects[EditObject::m_id].info;
 
 					RakNet::BitStream bsSend;
@@ -355,6 +400,7 @@ void EditObject::applySave()
 			}
 		}
 	}
+	g_hasOrigSnapshot = false;
 	EditObject::m_id = -1;
 	EditObject::m_type = TYPE_NONE;
 	EditObject::m_visible = false;

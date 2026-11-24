@@ -20,7 +20,7 @@ public:
 		y = rwVec.y;
 		z = rwVec.z;
 	}
-	constexpr CVector(const CVector* rhs)
+	constexpr explicit CVector(const CVector* rhs)
 	{
 		x = rhs->x;
 		y = rhs->y;

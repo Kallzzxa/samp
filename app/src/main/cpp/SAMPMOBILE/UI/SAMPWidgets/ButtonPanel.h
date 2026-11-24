@@ -14,6 +14,7 @@ public:
 
 	void applyHeldKeys();
 	void handleHardwareKey(int androidKeyCode, bool isDown);
+	static void dismissTopModal();
 
 private:
 	bool m_extended;

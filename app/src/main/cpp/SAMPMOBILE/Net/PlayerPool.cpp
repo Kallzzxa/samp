@@ -1,6 +1,8 @@
 #include "../Game/Game.h"
 #include "NetGame.h"
 
+extern NetGame* pNetGame;
+
 CPlayerPool::CPlayerPool()
 {
 	for (PLAYERID playerId = 0; playerId < MAX_PLAYERS; playerId++) {
@@ -81,8 +83,14 @@ bool CPlayerPool::Delete(PLAYERID playerId, uint8_t byteReason)
 		return false;
 	}
 
-	if (m_pLocalPlayer && m_pLocalPlayer->IsSpectating() && m_pLocalPlayer->m_SpectateID == playerId) {
-		m_pLocalPlayer->ToggleSpectating(false);
+	if (m_pLocalPlayer && m_pLocalPlayer->IsSpectating()
+			&& m_pLocalPlayer->m_byteSpectateType == SPECTATE_TYPE_PLAYER
+			&& m_pLocalPlayer->m_SpectateID == playerId) {
+		m_pLocalPlayer->m_byteSpectateType = SPECTATE_TYPE_NONE;
+		m_pLocalPlayer->m_bSpectateProcessed = false;
+	}
+	if (pNetGame && pNetGame->GetPlayerBubblePool()) {
+		pNetGame->GetPlayerBubblePool()->Delete(playerId);
 	}
 	m_bPlayerSlotState[playerId] = false;
 

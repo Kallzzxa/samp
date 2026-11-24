@@ -16,14 +16,14 @@ CRemotePlayer::CRemotePlayer()
 	m_byteUpdateFromNetwork = UPDATE_TYPE_NONE;
 	m_byteTeam = NO_TEAM;
 	m_bShowNameTag = true;
-	// field_C = 0;
-	// field_14 = 0;
+	m_bGlobalMarkerShown = false;
 	m_dwMarker = 0;
 	m_byteSpecialAction = SPECIAL_ACTION_NONE;
 	m_bIsNPC = false;
-	// field_1E1 = GetTickCount();
-	// field_1E5 = GetTickCount();
 	m_dwLastRecvTick = GetTickCount();
+	m_dwLastHeadUpdate = 0;
+	m_dwLastStoredSyncDataTime = 0;
+	m_quat = sa::CQuaternion(0.0f, 0.0f, 0.0f, 1.0f);
 
 	m_bWasAnimSettedFlag = false;
 	m_dwPlayingAnim = 0;
@@ -64,7 +64,6 @@ void CRemotePlayer::Process()
 			}
 			else {
 				UpdateOnFootPositionAndSpeed(&m_onFootSync.vecPos, &m_onFootSync.vecMoveSpeed);
-				ProcessSurfing();
 			}
 
 			// update weapons
@@ -175,6 +174,13 @@ void CRemotePlayer::Process()
 		if (GetState() == PLAYER_STATE_ONFOOT && !m_pPlayerPed->IsInVehicle()) {
 			m_bPassengerDriveByMode = false;
 
+			if (IsSurfing()) {
+				ProcessSurfing();
+			}
+			else if (m_pPlayerPed->m_ped && !m_pPlayerPed->m_ped->m_bUsesCollision) {
+				m_pPlayerPed->SetCollisionChecking(1);
+			}
+
 			InterpolateAndRotate();
 
 			ProcessSpecialAction(m_onFootSync.byteSpecialAction);
@@ -183,12 +189,15 @@ void CRemotePlayer::Process()
 
 			m_pPlayerPed->SetKeys(m_onFootSync.lrAnalog, m_onFootSync.udAnalog, m_onFootSync.wKeys);
 
-			if (m_onFootSync.vecMoveSpeed.x == 0.0f && m_onFootSync.vecMoveSpeed.y == 0.0f && m_onFootSync.vecMoveSpeed.z == 0.0f) {
+			const bool bMoving = m_onFootSync.vecMoveSpeed.x != 0.0f
+				|| m_onFootSync.vecMoveSpeed.y != 0.0f
+				|| m_onFootSync.vecMoveSpeed.z != 0.0f;
+			if (!bMoving) {
 				m_pPlayerPed->m_ped->SetVelocity(m_onFootSync.vecMoveSpeed);
 			}
-			//If the packet reception time exceeds 1.5 seconds
-			if ((GetTickCount() - m_dwLastRecvTick) > 1500) {
-				//is afk
+			// Match PC AFK thresholds: 1500ms moving, 3000ms stationary
+			const uint32_t afkThreshold = bMoving ? 1500u : 3000u;
+			if ((GetTickCount() - m_dwLastRecvTick) > afkThreshold) {
 				m_bIsAFK = true;
 			}
 			//Lock player position during afk
@@ -206,7 +215,7 @@ void CRemotePlayer::Process()
 				matPlayer.pos.z = m_onFootSync.vecPos.z;
 				m_pPlayerPed->m_ped->SetMatrix((sa::CMatrix&) matPlayer);
 			}
-			if (IsSurfing()) {
+			if (SurfingOnVehicle()) {
 				m_pPlayerPed->SetGravityProcessing(false);
 				m_pPlayerPed->SetCollisionChecking(false);
 			}
@@ -245,6 +254,20 @@ void CRemotePlayer::Process()
 			m_pPlayerPed->SetKeys(m_inCarSync.lrAnalog, m_inCarSync.udAnalog, m_inCarSync.wKeys);
 			m_pPlayerPed->ProcessVehicleHorn();
 
+			if (!m_bIsNPC && m_pPlayerPed->IsAdded() && Settings::headMove()
+					&& m_pPlayerPed->GetStuff() == STUFF_TYPE_NONE && (GetTickCount() - m_dwLastHeadUpdate) > 500) {
+				CAMERA_AIM* Aim = GameGetRemotePlayerAim(m_pPlayerPed->m_bytePlayerNumber);
+				if (Aim && m_pPlayerPed->m_ped) {
+					RwMatrix matHead = m_pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
+					sa::CVector LookAt;
+					LookAt.x = matHead.pos.x + (Aim->f1x * 20.0f);
+					LookAt.y = matHead.pos.y + (Aim->f1y * 20.0f);
+					LookAt.z = matHead.pos.z + (Aim->f1z * 20.0f);
+					m_pPlayerPed->ApplyCommandTask("FollowPedSA", nullptr, 2000, -1, &LookAt, 0, 0.1f, 500, 3, 0);
+				}
+				m_dwLastHeadUpdate = GetTickCount();
+			}
+
 			if (m_inCarSync.vecMoveSpeed.x != 0.0f || m_inCarSync.vecMoveSpeed.y != 0.0f || m_inCarSync.vecMoveSpeed.z != 0.0f) {
 				if (!m_bIsAFK) {
 					if ((GetTickCount() - m_dwLastRecvTick) > 1500) {
@@ -266,14 +289,16 @@ void CRemotePlayer::Process()
 				m_pPlayerPed->ProcessCuff();
 			}
 
-			if (!m_bPassengerDriveByMode && m_pPlayerPed->IsAdded() && Settings::headMove()) {
+			if (!m_bIsNPC && !m_bPassengerDriveByMode && m_pPlayerPed->IsAdded() && Settings::headMove()
+					&& m_pPlayerPed->GetStuff() == STUFF_TYPE_NONE) {
 				if ((GetTickCount() - m_dwLastHeadUpdate) > 500) {
 					sa::CVector LookAt;
 					CAMERA_AIM* Aim = GameGetRemotePlayerAim(m_pPlayerPed->m_bytePlayerNumber);
-					if (Aim) {
-						LookAt.x = Aim->pos1x + (Aim->f1x * 20.0f);
-						LookAt.y = Aim->pos1y + (Aim->f1y * 20.0f);
-						LookAt.z = Aim->pos1z + (Aim->f1z * 20.0f);
+					if (Aim && m_pPlayerPed->m_ped) {
+						RwMatrix matHead = m_pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
+						LookAt.x = matHead.pos.x + (Aim->f1x * 20.0f);
+						LookAt.y = matHead.pos.y + (Aim->f1y * 20.0f);
+						LookAt.z = matHead.pos.z + (Aim->f1z * 20.0f);
 						m_pPlayerPed->ApplyCommandTask("FollowPedSA", nullptr, 2000, -1, &LookAt, 0, 0.1f, 500, 3, 0);
 					}
 					m_dwLastHeadUpdate = GetTickCount();
@@ -355,7 +380,7 @@ void CRemotePlayer::UpdateOnFootTargetPosition()
 	m_vecPositionInaccuracy.z = FloatOffset(m_vecOnFootTargetPos.z, mat.pos.z);
 
 	if (m_vecPositionInaccuracy.x > 0.00001f || m_vecPositionInaccuracy.y > 0.00001f || m_vecPositionInaccuracy.z > 0.00001f) {
-		if (m_vecPositionInaccuracy.x > 1.0f || m_vecPositionInaccuracy.y > 1.0f || m_vecPositionInaccuracy.z > 1.0f) {
+		if (m_vecPositionInaccuracy.x > 2.0f || m_vecPositionInaccuracy.y > 2.0f || m_vecPositionInaccuracy.z > 1.0f) {
 			mat.pos.x = m_vecOnFootTargetPos.x;
 			mat.pos.y = m_vecOnFootTargetPos.y;
 			mat.pos.z = m_vecOnFootTargetPos.z;
@@ -401,6 +426,11 @@ void CRemotePlayer::ResetAllSyncAttributes()
 	m_byteSeatID = 0;
 	m_bPassengerDriveByMode = false;
 	m_byteSpecialAction = SPECIAL_ACTION_NONE;
+	m_byteUpdateFromNetwork = UPDATE_TYPE_NONE;
+	m_dwPlayingAnim = 0;
+	m_bWasAnimSettedFlag = false;
+	m_bGlobalMarkerShown = false;
+	m_quat = sa::CQuaternion(0.0f, 0.0f, 0.0f, 1.0f);
 	m_bIsAFK = true;
 
 	memset(&m_onFootSync, 0, sizeof(ONFOOT_SYNC_DATA));
@@ -412,9 +442,9 @@ void CRemotePlayer::ResetAllSyncAttributes()
 		m_dwMarker = 0;
 	}
 
-	if (pNetGame) {
-		m_dwLastStoredSyncDataTime = GetTickCount();
-	}
+	// RakNet ID_TIMESTAMP uses RakNet::GetTime() (process uptime ms), NOT wall-clock GetTickCount().
+	// Initialize to 0 so the first timestamped packet always establishes the baseline.
+	m_dwLastStoredSyncDataTime = 0;
 }
 
 void CRemotePlayer::SetPlayerColor(uint32_t dwColor)
@@ -446,6 +476,7 @@ bool CRemotePlayer::Spawn(uint8_t byteTeam, int iSkin, sa::CVector* vecPos, floa
 		pGame->RemovePlayer(m_pPlayerPed);
 		m_pPlayerPed = nullptr;
 	}
+	ResetAllSyncAttributes();
 
 	spdlog::info("CRemotePlayer::Spawn: {} {} {} {} {} {} {}", m_PlayerID, byteTeam, iSkin, vecPos->x, vecPos->y, vecPos->z, fRotation);
 	CPlayerPed* pPlayerPed = pGame->NewPlayer(iSkin, vecPos->x, vecPos->y, vecPos->z, fRotation, true, m_bIsNPC);
@@ -463,6 +494,7 @@ bool CRemotePlayer::Spawn(uint8_t byteTeam, int iSkin, sa::CVector* vecPos, floa
 			pPlayerPed->ShowMarker(m_PlayerID);
 		}
 
+		m_byteTeam = byteTeam;
 		m_pPlayerPed = pPlayerPed;
 		m_fReportedHealth = pPlayerPed->GetHealth();
 		pPlayerPed->SetKeys(0, 0, 0);
@@ -506,23 +538,25 @@ void CRemotePlayer::HandleDeath()
 //walk sync
 void CRemotePlayer::StoreOnFootFullSyncData(ONFOOT_SYNC_DATA* ofSync, uint32_t dwTime)
 {
-	m_pCurrentVehicle = nullptr;
-	if (dwTime == 0 || static_cast<int32_t>(dwTime - m_dwLastStoredSyncDataTime) >= 0) {
-		m_dwLastStoredSyncDataTime = dwTime;
-		memcpy(&m_onFootSync, ofSync, sizeof(ONFOOT_SYNC_DATA));
-		m_fReportedHealth = ofSync->byteHealth;
-		m_fReportedArmour = ofSync->byteArmour;
-		m_byteUpdateFromNetwork = UPDATE_TYPE_ONFOOT;
-		m_dwLastRecvTick = GetTickCount();
-		m_byteSpecialAction = ofSync->byteSpecialAction;
+	if (dwTime != 0 && m_dwLastStoredSyncDataTime != 0
+			&& static_cast<int32_t>(dwTime - m_dwLastStoredSyncDataTime) < 0) {
+		return;
+	}
 
-		if (m_onFootSync.dwAnimation < 0) {
-			m_onFootSync.dwAnimation = 0;
-		}
-		if (m_pPlayerPed && m_pPlayerPed->IsInVehicle()) {
-			if (m_byteSpecialAction != SPECIAL_ACTION_ENTER_VEHICLE && m_byteSpecialAction != SPECIAL_ACTION_EXIT_VEHICLE) {
-				RemoveFromVehicle();
-			}
+	m_pCurrentVehicle = nullptr;
+	if (dwTime != 0) {
+		m_dwLastStoredSyncDataTime = dwTime;
+	}
+	memcpy(&m_onFootSync, ofSync, sizeof(ONFOOT_SYNC_DATA));
+	m_fReportedHealth = ofSync->byteHealth;
+	m_fReportedArmour = ofSync->byteArmour;
+	m_byteUpdateFromNetwork = UPDATE_TYPE_ONFOOT;
+	m_dwLastRecvTick = GetTickCount();
+	m_byteSpecialAction = ofSync->byteSpecialAction;
+
+	if (m_pPlayerPed && m_pPlayerPed->IsInVehicle() && !m_pPlayerPed->IsExitingVehicle()) {
+		if (m_byteSpecialAction != SPECIAL_ACTION_ENTER_VEHICLE && m_byteSpecialAction != SPECIAL_ACTION_EXIT_VEHICLE) {
+			RemoveFromVehicle();
 		}
 	}
 
@@ -531,8 +565,11 @@ void CRemotePlayer::StoreOnFootFullSyncData(ONFOOT_SYNC_DATA* ofSync, uint32_t d
 //In-Car Sync
 void CRemotePlayer::StoreInCarFullSyncData(INCAR_SYNC_DATA* picSync, uint32_t dwTime)
 {
-	if (!dwTime || static_cast<int32_t>(dwTime - m_dwLastStoredSyncDataTime) >= 0) {
-		m_dwLastStoredSyncDataTime = dwTime;
+	if (dwTime == 0 || m_dwLastStoredSyncDataTime == 0
+			|| static_cast<int32_t>(dwTime - m_dwLastStoredSyncDataTime) >= 0) {
+		if (dwTime != 0) {
+			m_dwLastStoredSyncDataTime = dwTime;
+		}
 		memcpy(&m_inCarSync, picSync, sizeof(INCAR_SYNC_DATA));
 		m_VehicleID = picSync->VehicleID;
 
@@ -566,7 +603,7 @@ void CRemotePlayer::StoreAimFullSyncData(AIM_SYNC_DATA* paimSync)
 	}
 
 	// detonator crash fix
-	if (m_onFootSync.byteCurrentWeapon == 40) // If you have a detonator in your hand
+	if (m_pPlayerPed->GetCurrentWeapon() == 40) // If you have a detonator in your hand
 	{
 		int CrashCam[] = {7, 8, 34, 45, 46, 51, 65}; // Detonator crash camera angle.
 		int CrashCamSize = sizeof(CrashCam) / sizeof(CrashCam[0]); // calculate @CrashCam array size
@@ -614,6 +651,7 @@ void CRemotePlayer::StoreAimFullSyncData(AIM_SYNC_DATA* paimSync)
 	m_pPlayerPed->SetCameraZoomAndAspect(fExtZoom, fAspectRatio);
 
 	sa::CWeapon* pwstWeapon = m_pPlayerPed->GetCurrentWeaponSlot();
+	if (!pwstWeapon) return;
 
 	//reload sync
 	if (paimSync->byteWeaponState == WS_RELOADING) {
@@ -653,8 +691,8 @@ void CRemotePlayer::StorePassengerFullSyncData(PASSENGER_SYNC_DATA* psSync)
 //trailer sync
 void CRemotePlayer::StoreTrailerFullSyncData(TRAILER_SYNC_DATA* trSync)
 {
-	VEHICLEID trailerId = m_inCarSync.TrailerID;
-	if (trailerId >= MAX_VEHICLES) {
+	VEHICLEID trailerId = trSync->trailerId;
+	if (!trailerId || trailerId >= MAX_VEHICLES) {
 		return;
 	}
 
@@ -728,9 +766,28 @@ void CRemotePlayer::StoreUnoccupiedFullSyncData(UNOCCUPIED_SYNC_DATA* ucSync)
 	sa::CVehicle* pEnt = pVehicle->m_pVehicle;
 	if (pEnt->pDriver || pEnt->m_pTowingVehicle) return;
 
+	auto isFiniteVec = [](const sa::CVector& v) -> bool {
+		return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+	};
+	if (!isFiniteVec(ucSync->vecRoll) || !isFiniteVec(ucSync->vecDirection)
+			|| !isFiniteVec(ucSync->vecPos) || !isFiniteVec(ucSync->vecMoveSpeed)
+			|| !isFiniteVec(ucSync->vecTurnSpeed)) {
+		return;
+	}
+	if (ucSync->vecRoll.SquaredMagnitude() < 1e-4f || ucSync->vecDirection.SquaredMagnitude() < 1e-4f) {
+		return;
+	}
+
 	sa::CMatrix mat = pEnt->GetMatrix();
 	mat.m_right = ucSync->vecRoll;
 	mat.m_forward = ucSync->vecDirection;
+	mat.m_up = mat.m_right.Cross(mat.m_forward);
+	if (mat.m_up.SquaredMagnitude() < 1e-4f) {
+		return;
+	}
+	mat.m_right.Normalise();
+	mat.m_up.Normalise();
+	mat.m_forward = mat.m_up.Cross(mat.m_right);
 
 	sa::CVector vecOffset;
 	vecOffset.x = FloatOffset(ucSync->vecPos.x, mat.m_pos.x);
@@ -788,13 +845,16 @@ void CRemotePlayer::StoreBulletFullSyncData(BULLET_SYNC_DATA* btSync)
 	btData.vecOffset.y = btSync->vecOffset.y;
 	btData.vecOffset.z = btSync->vecOffset.z;
 
+	if (!std::isfinite(btData.vecOrigin.x) || !std::isfinite(btData.vecOrigin.y) || !std::isfinite(btData.vecOrigin.z)
+			|| !std::isfinite(btData.vecPos.x) || !std::isfinite(btData.vecPos.y) || !std::isfinite(btData.vecPos.z)
+			|| !std::isfinite(btData.vecOffset.x) || !std::isfinite(btData.vecOffset.y) || !std::isfinite(btData.vecOffset.z)) {
+		return;
+	}
+
 	if (btSync->targetType != BULLET_HIT_TYPE_NONE) {
-		if (btData.vecOffset.x > 300.0f ||
-				btData.vecOffset.x < -300.0f ||
-				btData.vecOffset.y > 300.0f ||
-				btData.vecOffset.y < -300.0f ||
-				btData.vecOffset.z > 300.0f ||
-				btData.vecOffset.z < -300.0f) {
+		if (std::fabs(btData.vecOffset.x) > 300.0f ||
+				std::fabs(btData.vecOffset.y) > 300.0f ||
+				std::fabs(btData.vecOffset.z) > 300.0f) {
 			return;
 		}
 
@@ -881,7 +941,8 @@ void CRemotePlayer::UpdateTrainDriverMatrixAndSpeed(RwMatrix* matWorld, sa::CVec
 
 	if (m_pCurrentVehicle->m_pVehicle) {
 		sa::CVehicle* pVeh = m_pCurrentVehicle->m_pVehicle;
-		((sa::CTrain*) pVeh)->LinearSpeed = fTrainSpeed;
+		const float safeSpeed = std::isfinite(fTrainSpeed) ? std::clamp(fTrainSpeed, -100.0f, 100.0f) : 0.0f;
+		((sa::CTrain*) pVeh)->LinearSpeed = safeSpeed;
 	}
 }
 //Vehicle speed update
@@ -1054,12 +1115,6 @@ void CRemotePlayer::EnterVehicle(VEHICLEID VehicleID, bool bPassenger)
 	CVehicle* pVehicle = pVehiclePool->GetAt(VehicleID);
 
 	if (m_pPlayerPed && pVehicle && !m_pPlayerPed->IsInVehicle()) {
-		if (bPassenger) {
-			SetState(PLAYER_STATE_ENTER_VEHICLE_PASSENGER);
-		}
-		else {
-			SetState(PLAYER_STATE_ENTER_VEHICLE_DRIVER);
-		}
 		uint32_t dwGTAId = pVehiclePool->FindGtaIDFromID(VehicleID);
 		if (dwGTAId != INVALID_VEHICLE_ID) {
 			m_pPlayerPed->SetKeys(0, 0, 0);
@@ -1112,8 +1167,12 @@ void CRemotePlayer::StateChange(uint8_t byteNewState, uint8_t byteOldState)
 				sa::CVehicle* pGtaVehicle = pPlayerPed->GetGtaVehicle();
 
 				if (pVehiclePool && pVehiclePool->FindIDFromGtaPtr(pGtaVehicle) == m_VehicleID) {
-					// Leaving the vehicle when the vehicle is robbed
-					pPlayerPed->ExitCurrentVehicle();
+					// Match PC: warp local ped out immediately when car-jacked
+					RwMatrix mat = pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
+					pPlayerPed->RemoveFromVehicleAndPutAt(mat.pos.x, mat.pos.y, mat.pos.z + 1.0f);
+					if (pGame) {
+						pGame->DisplayGameText("~r~Car Jacked", 2000, 5);
+					}
 				}
 			}
 		}
@@ -1133,15 +1192,19 @@ void CRemotePlayer::ProcessSpecialAction(unsigned char byteSpecialAction)
 
 	m_pPlayerPed->SetSpecialAction(byteSpecialAction);
 
-	if (GetState() == PLAYER_STATE_ONFOOT && m_pPlayerPed->IsAdded() && Settings::headMove()) {
+	if (!m_bIsNPC && GetState() == PLAYER_STATE_ONFOOT && m_pPlayerPed->IsAdded()
+			&& Settings::headMove() && m_pPlayerPed->GetStuff() == STUFF_TYPE_NONE) {
 		//head turn sync
 		if ((GetTickCount() - m_dwLastHeadUpdate) > 500) {
-			sa::CVector LookAt;
 			CAMERA_AIM* Aim = GameGetRemotePlayerAim(m_pPlayerPed->m_bytePlayerNumber);
-			LookAt.x = Aim->pos1x + (Aim->f1x * 20.0f);
-			LookAt.y = Aim->pos1y + (Aim->f1y * 20.0f);
-			LookAt.z = Aim->pos1z + (Aim->f1z * 20.0f);
-			m_pPlayerPed->ApplyCommandTask("FollowPedSA", nullptr, 2000, -1, &LookAt, 0, 0.1f, 500, 3, 0);
+			if (Aim && m_pPlayerPed->m_ped) {
+				RwMatrix matHead = m_pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
+				sa::CVector LookAt;
+				LookAt.x = matHead.pos.x + (Aim->f1x * 20.0f);
+				LookAt.y = matHead.pos.y + (Aim->f1y * 20.0f);
+				LookAt.z = matHead.pos.z + (Aim->f1z * 20.0f);
+				m_pPlayerPed->ApplyCommandTask("FollowPedSA", nullptr, 2000, -1, &LookAt, 0, 0.1f, 500, 3, 0);
+			}
 			m_dwLastHeadUpdate = GetTickCount();
 		}
 	}
@@ -1232,7 +1295,14 @@ void CRemotePlayer::WeaponSyncCheck(uint8_t netCurrentWeapon)
 
 void CRemotePlayer::ProcessSurfing()
 {
-	if (!m_pPlayerPed || GetState() != PLAYER_STATE_ONFOOT || m_onFootSync.wSurfInfo == 0 || m_onFootSync.wSurfInfo == INVALID_VEHICLE_ID) {
+	if (!m_pPlayerPed || !m_pPlayerPed->m_ped || GetState() != PLAYER_STATE_ONFOOT
+			|| m_onFootSync.wSurfInfo == 0 || m_onFootSync.wSurfInfo == INVALID_VEHICLE_ID) {
+		return;
+	}
+
+	const sa::CVector& off = m_onFootSync.vecSurfOffsets;
+	if (!std::isfinite(off.x) || !std::isfinite(off.y) || !std::isfinite(off.z)
+			|| std::fabs(off.x) > 100.0f || std::fabs(off.y) > 100.0f || std::fabs(off.z) > 100.0f) {
 		return;
 	}
 
@@ -1253,30 +1323,26 @@ void CRemotePlayer::ProcessSurfing()
 		CObjectPool* pObjectPool = pNetGame->GetObjectPool();
 		if (pObjectPool) {
 			CObject* pObject = pObjectPool->GetAt(objId);
-			if (pObject) {
+			if (pObject && pObject->m_entity && GamePool_Object_GetAt(pObject->m_gtaId) == pObject->m_entity) {
 				pObjectSurfing = pObject;
 			}
 		}
 	}
 
-	if (pVehicleSurfing && pVehicleSurfing->m_pVehicle && m_pPlayerPed->m_ped) {
-		RwMatrix matEntity, matPlayer;
-
-		matEntity = pVehicleSurfing->m_pVehicle->GetMatrix().ToRwMatrix();
-		matPlayer = m_pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
-
+	if (pVehicleSurfing && pVehicleSurfing->m_pVehicle) {
+		m_pPlayerPed->SetCollisionChecking(0);
+		RwMatrix matEntity = pVehicleSurfing->m_pVehicle->GetMatrix().ToRwMatrix();
+		RwMatrix matPlayer = m_pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
 		ProjectMatrix((sa::CVector*) &matPlayer.pos, (sa::CMatrix*) &matEntity, &m_onFootSync.vecSurfOffsets);
-
 		m_pPlayerPed->m_ped->SetMatrix((sa::CMatrix&) matPlayer);
 	}
-	else if (pObjectSurfing && pObjectSurfing->m_entity && m_pPlayerPed->m_ped) {
-		RwMatrix matEntity, matPlayer;
-
-		matEntity = pObjectSurfing->m_entity->GetMatrix().ToRwMatrix();
-		matPlayer = m_pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
-
+	else if (pObjectSurfing && pObjectSurfing->m_entity) {
+		if (!m_pPlayerPed->m_ped->m_bUsesCollision) {
+			m_pPlayerPed->SetCollisionChecking(1);
+		}
+		RwMatrix matEntity = pObjectSurfing->m_entity->GetMatrix().ToRwMatrix();
+		RwMatrix matPlayer = m_pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
 		ProjectMatrix((sa::CVector*) &matPlayer.pos, (sa::CMatrix*) &matEntity, &m_onFootSync.vecSurfOffsets);
-
 		m_pPlayerPed->m_ped->SetMatrix((sa::CMatrix&) matPlayer);
 	}
 }

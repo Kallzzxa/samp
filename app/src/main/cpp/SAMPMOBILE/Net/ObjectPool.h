@@ -16,6 +16,7 @@ public:
 
 	bool New(OBJECTID ObjectID, int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDrawDistance);
 	bool Delete(OBJECTID ObjectID);
+	void Reset();
 
 	void Process();
 

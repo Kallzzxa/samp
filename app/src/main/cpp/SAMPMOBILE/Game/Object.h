@@ -3,6 +3,7 @@
 #include <vector>
 
 class CEntryInfoNode;
+class CPlayerPed;
 
 enum {
 	MAX_MATERIALS = 16
@@ -77,9 +78,12 @@ public:
 
 	void SetAttachedObject(uint16_t ObjectID, sa::CVector* vecPos, sa::CVector* vecRot, bool bSyncRotation);
 	void SetAttachedVehicle(uint16_t VehicleID, sa::CVector* vecPos, sa::CVector* vecRot);
+	void SetAttachedPlayer(uint16_t PlayerID, sa::CVector* vecPos, sa::CVector* vecRot);
 
 	void AttachToVehicle(CVehicle* pVehicle);
 	void AttachToObject(CObject* pObject);
+	void AttachToPlayer(CPlayerPed* pPlayerPed);
+	void Detach();
 
 	bool AttachedToMovingEntity();
 
@@ -116,6 +120,7 @@ public:
 	/* attach */
 	uint16_t m_AttachedVehicleID;
 	uint16_t m_AttachedObjectID;
+	uint16_t m_AttachedPlayerID;
 	sa::CVector m_vecAttachedPos;
 	sa::CVector m_vecAttachedRot;
 	bool m_bSyncRotation;

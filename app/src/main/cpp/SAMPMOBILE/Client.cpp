@@ -431,7 +431,9 @@ void Client::process()
 		CTextDrawPool* pTextDrawPool = pNetGame->GetTextDrawPool();
 		if (pTextDrawPool) {
 			pTextDrawPool->processPendingTouches();
-			pTextDrawPool->Draw();
+			if (!pUI || !pUI->scoreboard() || !pUI->scoreboard()->visible()) {
+				pTextDrawPool->Draw();
+			}
 		}
 
 		if (pAudioStream) {

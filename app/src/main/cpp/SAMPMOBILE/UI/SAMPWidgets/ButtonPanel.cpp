@@ -91,24 +91,7 @@ ButtonPanel::ButtonPanel()
 	});
 
 	m_esc->setCallback([]() {
-		if (pUI->scoreboard()->visible()) {
-			pUI->scoreboard()->setVisible(false);
-		}
-
-		if (pNetGame) {
-			if (CMenuPool* pMenuPool = pNetGame->GetMenuPool(); pMenuPool && pMenuPool->IsVisible()) {
-				pMenuPool->ExitMenu();
-			}
-			if (CObjectPool* pObjPool = pNetGame->GetObjectPool(); pObjPool && pObjPool->IsSelectState()) {
-				pObjPool->SetSelectState(false);
-			}
-			if (EditObject::m_visible) {
-				EditObject::cancelEdit();
-			}
-			if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
-				pTdPool->SetSelectState(false, 0, true);
-			}
-		}
+		ButtonPanel::dismissTopModal();
 	});
 
 	m_tab->setCallback([]() {
@@ -404,6 +387,38 @@ void ButtonPanel::draw(ImGuiRenderer* renderer)
 	Widget::draw(renderer);
 }
 
+void ButtonPanel::dismissTopModal()
+{
+	if (pUI && pUI->keyboard() && pUI->keyboard()->visible()) {
+		pUI->keyboard()->setVisible(false);
+		return;
+	}
+	if (pUI && pUI->scoreboard() && pUI->scoreboard()->visible()) {
+		pUI->scoreboard()->setVisible(false);
+		return;
+	}
+	if (pNetGame) {
+		if (CMenuPool* pMenuPool = pNetGame->GetMenuPool(); pMenuPool && pMenuPool->IsVisible()) {
+			pMenuPool->ExitMenu();
+			return;
+		}
+	}
+	if (EditObject::m_visible) {
+		EditObject::exitEdit();
+		return;
+	}
+	if (pNetGame) {
+		if (CObjectPool* pObjPool = pNetGame->GetObjectPool(); pObjPool && pObjPool->IsSelectState()) {
+			pObjPool->SetSelectState(false);
+			return;
+		}
+		if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
+			pTdPool->SetSelectState(false, 0, true);
+			return;
+		}
+	}
+}
+
 void ButtonPanel::handleHardwareKey(int androidKeyCode, bool isDown)
 {
 	if (!Settings::kmEnabled()) return;
@@ -492,23 +507,7 @@ void ButtonPanel::handleHardwareKey(int androidKeyCode, bool isDown)
 
 		case 111: // KEYCODE_ESCAPE
 			if (isDown) {
-				if (pUI->scoreboard() && pUI->scoreboard()->visible()) {
-					pUI->scoreboard()->setVisible(false);
-				}
-				if (pNetGame) {
-					if (CMenuPool* pMenuPool = pNetGame->GetMenuPool(); pMenuPool && pMenuPool->IsVisible()) {
-						pMenuPool->ExitMenu();
-					}
-					if (CObjectPool* pObjPool = pNetGame->GetObjectPool(); pObjPool && pObjPool->IsSelectState()) {
-						pObjPool->SetSelectState(false);
-					}
-					if (EditObject::m_visible) {
-						EditObject::cancelEdit();
-					}
-					if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
-						pTdPool->SetSelectState(false, 0, true);
-					}
-				}
+				dismissTopModal();
 			}
 			break;
 

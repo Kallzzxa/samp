@@ -60,12 +60,17 @@ public:
 	bool HasSunk();
 	bool HasADriver();
 
-	void SetEngineState(bool state)
+	void ApplyEngineStatus(bool state)
 	{
-		m_bEngineState = state;
 		if (m_pVehicle && VerifyInstance()) {
 			m_pVehicle->SetEngineStatus(state);
 		}
+	}
+
+	void SetEngineState(bool state)
+	{
+		m_iEngineState = state ? 1 : 0;
+		ApplyEngineStatus(state);
 	}
 
 	int GetEngineState()
@@ -76,12 +81,12 @@ public:
 		return 0;
 	}
 
+	void ApplyLightStatus(bool state);
 	void SetLightState(bool state);
 
 	int GetLightState()
 	{
-		//return m_pVehicle->GetLightsStatus();
-		return m_bLightState;
+		return m_iLightState > 0 ? 1 : 0;
 	}
 
 	void SetDoorState(int state);
@@ -160,8 +165,8 @@ public:
 	bool m_bPreloaded;
 	bool m_bIsInvulnerable;
 	bool m_bIsLocked;
-	bool m_bEngineState;
-	bool m_bLightState;
+	int8_t m_iEngineState; // -1 = unset (auto), 0 = off, 1 = on
+	int8_t m_iLightState;  // -1 = unset (auto day/night), 0 = off, 1 = on
 	bool m_bDoorsLocked;
 	uint8_t m_byteObjectiveVehicle;
 	bool m_bSpecialMarkerEnabled;

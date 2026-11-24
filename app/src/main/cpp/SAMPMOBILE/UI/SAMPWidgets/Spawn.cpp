@@ -2,6 +2,7 @@
 #include "../../Game/Game.h"
 #include "../../Net/NetGame.h"
 
+extern UI* pUI;
 extern NetGame* pNetGame;
 
 Spawn::Spawn()
@@ -11,9 +12,18 @@ Spawn::Spawn()
 	m_buttonSpawn = new Button("Spawn", UISettings::fontSize() / 2);
 	m_buttonNext = new Button(">>", UISettings::fontSize() / 2);
 
-	m_buttonPrev->setCallback([]() { if (pNetGame) pNetGame->SendPrevClass(); });
-	m_buttonSpawn->setCallback([]() { if (pNetGame) pNetGame->SendSpawn(); });
-	m_buttonNext->setCallback([]() { if (pNetGame) pNetGame->SendNextClass(); });
+	m_buttonPrev->setCallback([]() {
+		if (pUI && pUI->scoreboard() && pUI->scoreboard()->visible()) return;
+		if (pNetGame) pNetGame->SendPrevClass();
+	});
+	m_buttonSpawn->setCallback([]() {
+		if (pUI && pUI->scoreboard() && pUI->scoreboard()->visible()) return;
+		if (pNetGame) pNetGame->SendSpawn();
+	});
+	m_buttonNext->setCallback([]() {
+		if (pUI && pUI->scoreboard() && pUI->scoreboard()->visible()) return;
+		if (pNetGame) pNetGame->SendNextClass();
+	});
 
 	this->addChild(m_buttonPrev);
 	this->addChild(m_buttonSpawn);

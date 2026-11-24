@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 const char g_szAnimBlockNames[][40] = {
 		"AIRPORT:thrw_barl_thrw",
 		"ATTRACTORS:stepsit_in",
@@ -1813,40 +1815,12 @@ const char g_szAnimBlockNames[][40] = {
 		"RUNNINGMAN:DANCE_B15",
 		"RUNNINGMAN:DANCE_B16",
 		"RUNNINGMAN:DANCE_LOOP",
-
-		"CDANCESTA:DANCE_G1",
-		"CDANCESTA:DANCE_G2",
-		"CDANCESTA:DANCE_G3",
-		"CDANCESTA:DANCE_G4",
-		"CDANCESTA:DANCE_G5",
-		"CDANCESTA:DANCE_G6",
-		"CDANCESTA:DANCE_G7",
-		"CDANCESTA:DANCE_G8",
-		"CDANCESTA:DANCE_G9",
-		"CDANCESTA:DANCE_G10",
-		"CDANCESTA:DANCE_G11",
-		"CDANCESTA:DANCE_G12",
-		"CDANCESTA:DANCE_G13",
-		"CDANCESTA:DANCE_G14",
-		"CDANCESTA:DANCE_G15",
-		"CDANCESTA:DANCE_G16",
-		"CDANCESTA:DANCE_B1",
-		"CDANCESTA:DANCE_B2",
-		"CDANCESTA:DANCE_B3",
-		"CDANCESTA:DANCE_B4",
-		"CDANCESTA:DANCE_B5",
-		"CDANCESTA:DANCE_B6",
-		"CDANCESTA:DANCE_B7",
-		"CDANCESTA:DANCE_B8",
-		"CDANCESTA:DANCE_B9",
-		"CDANCESTA:DANCE_B10",
-		"CDANCESTA:DANCE_B11",
-		"CDANCESTA:DANCE_B12",
-		"CDANCESTA:DANCE_B13",
-		"CDANCESTA:DANCE_B14",
-		"CDANCESTA:DANCE_B15",
-		"CDANCESTA:DANCE_B16"
+		"SAMP:FISHINGIDLE"
 };
 
 const char* GetAnimByIdx(int idx);
 int GetAnimIdxByName(const char* szName);
+uint16_t GetAnimIdxByHashKey(uint32_t hashKey);
+void RecordLocalPedQueuedAnim(int groupId, int animId, float blendDelta);
+void ResetLocalPedQueuedAnim();
+uint32_t PackLocalPedQueuedAnim();

@@ -10,12 +10,9 @@ extern NetGame* pNetGame;
 #define EVENT_TYPE_CARCOLOR            3
 #define EVENT_ENTEREXIT_MODSHOP        4
 
-extern bool bFirstSpawn;
-
 void ProcessIncommingEvent(PLAYERID playerId, int iEventType, uint32_t dwParam1, uint32_t dwParam2, uint32_t dwParam3)
 {
 	if (pNetGame == nullptr) return;
-	if (bFirstSpawn) return;
 
 	CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
@@ -25,27 +22,34 @@ void ProcessIncommingEvent(PLAYERID playerId, int iEventType, uint32_t dwParam1,
 	CRemotePlayer* pPlayer = nullptr;
 
 	switch (iEventType) {
-		case EVENT_TYPE_PAINTJOB: pVehicle = pVehiclePool->GetAt(dwParam1);
+		case EVENT_TYPE_PAINTJOB:
+			if (dwParam1 >= MAX_VEHICLES) return;
+			pVehicle = pVehiclePool->GetAt(static_cast<VEHICLEID>(dwParam1));
 			if (pVehicle) {
 				pVehicle->SetPaintJob(dwParam2);
 			}
 			break;
 
-		case EVENT_TYPE_CARCOMPONENT: pVehicle = pVehiclePool->GetAt(dwParam1);
+		case EVENT_TYPE_CARCOMPONENT:
+			if (dwParam1 >= MAX_VEHICLES) return;
+			pVehicle = pVehiclePool->GetAt(static_cast<VEHICLEID>(dwParam1));
 			if (pVehicle) {
 				pVehicle->AddComponent(dwParam2);
 			}
 			break;
 
-		case EVENT_TYPE_CARCOLOR: pVehicle = pVehiclePool->GetAt(dwParam1);
+		case EVENT_TYPE_CARCOLOR:
+			if (dwParam1 >= MAX_VEHICLES) return;
+			pVehicle = pVehiclePool->GetAt(static_cast<VEHICLEID>(dwParam1));
 			if (pVehicle) {
 				pVehicle->SetColor(dwParam2, dwParam3);
 			}
 			break;
 
-		case EVENT_ENTEREXIT_MODSHOP: if (playerId >= MAX_PLAYERS) return;
+		case EVENT_ENTEREXIT_MODSHOP:
+			if (playerId >= MAX_PLAYERS || dwParam1 >= MAX_VEHICLES) return;
 
-			pVehicle = pVehiclePool->GetAt(dwParam1);
+			pVehicle = pVehiclePool->GetAt(static_cast<VEHICLEID>(dwParam1));
 			pPlayer = pPlayerPool->GetAt(playerId);
 
 			if (pPlayer && pVehicle) {

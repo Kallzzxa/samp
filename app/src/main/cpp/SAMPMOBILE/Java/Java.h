@@ -19,6 +19,7 @@ public:
 	static bool isJavaDialogVisible();
 	static bool isJavaKeyboardVisible();
 	static bool isRadarSuppressedByKeyboard();
+	static void setNativeModalActive(bool active);
 
 	void setPauseState(bool pause);
 

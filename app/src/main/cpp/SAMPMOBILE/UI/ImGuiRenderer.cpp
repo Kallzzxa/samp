@@ -112,19 +112,19 @@ void ImGuiRenderer::drawText(const ImVec2& pos, const ImColor& color, const std:
 	ImColor color_cur = color;
 
 	while (*text_cur) {
-		if (*text_cur == '{' && ((&text_cur[7] < text_end) && text_cur[7] == '}')) {
+		ImVec4 parsedCol;
+		if (*text_cur == '{' && ((&text_cur[7] < text_end) && text_cur[7] == '}')
+			&& processInlineHexColor(text_cur + 1, text_cur + 7, parsedCol)) {
 			// print accumulated text
 			if (text_cur != text_start) {
 				drawText(pos_cur, color_cur, text_start, text_cur, outlined, sz_font, pFont);
-				ImVec2 sz = calculateTextSize(text_start, text_cur, sz_font);
+				ImVec2 sz = pFont->CalcTextSizeA(sz_font, FLT_MAX, 0.0f, text_start, text_cur);
 				pos_cur.x += sz.x;
 			}
 
-			// new colorcode
-			ImVec4 col;
-			if (processInlineHexColor(text_cur + 1, text_cur + 7, col)) {
-				color_cur = col;
-			}
+			// preserve existing alpha (e.g. semi-transparent 3D labels / TextDraws)
+			parsedCol.w = color_cur.Value.w;
+			color_cur = parsedCol;
 
 			text_cur += 7;
 			text_start = text_cur + 1;
@@ -143,7 +143,7 @@ void ImGuiRenderer::drawText(const ImVec2& pos, const ImColor& color, const std:
 			// print accumulated text
 			if (text_cur != text_start) {
 				drawText(pos_cur, color_cur, text_start, text_cur, outlined, sz_font, pFont);
-				ImVec2 sz = calculateTextSize(text_start, text_cur, sz_font);
+				ImVec2 sz = pFont->CalcTextSizeA(sz_font, FLT_MAX, 0.0f, text_start, text_cur);
 				pos_cur.x += sz.x;
 			}
 
@@ -172,7 +172,9 @@ ImVec2 ImGuiRenderer::calculateTextSize(const std::string& text, float font_size
 	const char* text_end = text.c_str() + text.length();
 
 	while (*text_cur) {
-		if (*text_cur == '{' && ((&text_cur[7] < text_end) && text_cur[7] == '}')) {
+		ImVec4 dummyCol;
+		if (*text_cur == '{' && ((&text_cur[7] < text_end) && text_cur[7] == '}')
+			&& processInlineHexColor(text_cur + 1, text_cur + 7, dummyCol)) {
 			if (text_cur != text_start) {
 				// ����� �� �����-����
 				ImVec2 sz = calculateTextSize(text_start, text_cur, font_size);
@@ -231,23 +233,24 @@ ImVec2 ImGuiRenderer::calculateTextSize(const char* begin, const char* end, floa
 
 bool ImGuiRenderer::processInlineHexColor(const char* start, const char* end, ImVec4& color)
 {
-	const int hexCount = (int) (end - start);
-	if (hexCount == 6) {
-		char hex[7];
-		strncpy(hex, start, hexCount);
-		hex[hexCount] = 0;
-
-		unsigned int hexColor = 0;
-		if (sscanf(hex, "%x", &hexColor) > 0) {
-			color.x = static_cast<float>((hexColor & 0x00FF0000) >> 16) / 255.0f;
-			color.y = static_cast<float>((hexColor & 0x0000FF00) >> 8) / 255.0f;
-			color.z = static_cast<float>((hexColor & 0x000000FF)) / 255.0f;
-			color.w = 1.0f;
-			return true;
-		}
+	if (!start || !end || (end - start) != 6) {
+		return false;
 	}
-
-	return false;
+	unsigned int hexColor = 0;
+	for (int i = 0; i < 6; ++i) {
+		const unsigned char c = static_cast<unsigned char>(start[i]);
+		unsigned int nibble = 0;
+		if (c >= '0' && c <= '9') nibble = c - '0';
+		else if (c >= 'a' && c <= 'f') nibble = 10 + (c - 'a');
+		else if (c >= 'A' && c <= 'F') nibble = 10 + (c - 'A');
+		else return false;
+		hexColor = (hexColor << 4) | nibble;
+	}
+	color.x = static_cast<float>((hexColor & 0x00FF0000u) >> 16) / 255.0f;
+	color.y = static_cast<float>((hexColor & 0x0000FF00u) >> 8) / 255.0f;
+	color.z = static_cast<float>((hexColor & 0x000000FFu)) / 255.0f;
+	color.w = 1.0f;
+	return true;
 }
 
 void ImGuiRenderer::drawImage(const ImVec2& a, const ImVec2& b, ImTextureID texture)

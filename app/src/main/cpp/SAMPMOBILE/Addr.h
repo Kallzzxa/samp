@@ -13,6 +13,7 @@ public:
 	static constexpr uintptr_t ms_pedModelStore = !VER_x32 ? 0xB5CB80 : 0x915FC8;
 	static constexpr uintptr_t CPed_ProcessControl = !VER_x32 ? 0x598730 : 0x4A2540;
 	static constexpr uintptr_t CPed_UpdatePosition_BranchBL1 = !VER_x32 ? CPed_ProcessControl + 0x5EC : CPed_ProcessControl + 0x552;
+	static constexpr uintptr_t CPlayerPed_ProcessControl_AttackRelease_BranchBL = !VER_x32 ? 0x5C2F1C : 0x4C5626;
 	static constexpr uintptr_t CTaskComplexEnterCarAsDriver_Branch1 = !VER_x32 ? 0x4EF504 : 0x40AC80;
 	static constexpr uintptr_t CTaskComplexLeaveCar_Branch1 = !VER_x32 ? 0x4EE3C0 : 0x409A8E;
 	static constexpr uintptr_t CTaskComplexLeaveCar_Branch2 = !VER_x32 ? 0x4EEE00 : 0x40A864;
@@ -63,6 +64,9 @@ public:
 	static constexpr uintptr_t CAudioEngine_StartLoadingTune_patch = !VER_x32 ? 0x70A3D0 : 0x5E4966;
 	static constexpr uintptr_t RwCameraEndUpdate_patch = !VER_x32 ? 0x4D9254 : 0x3F6CDC;
 	static constexpr uintptr_t CBike_ProcessAI_patch = !VER_x32 ? 0x6859BC : 0x564D30;
+	static constexpr uintptr_t CVehicle_SetDriver_rewardBranch = !VER_x32 ? 0x6A82A0 : 0x58463A;
+	static constexpr uintptr_t CPlayerInfo_Process_parachuteBranch = !VER_x32 ? 0x4EEE38 : 0x40A88E;
+	static constexpr uintptr_t CPlayerInfo_Process_passengerMoneyStore = !VER_x32 ? 0x4EDAD0 : 0x4092B4;
 	static constexpr uintptr_t CMessages_AddBigMessage_patch = !VER_x32 ? 0x4F07DC : 0x40BF26;
 	static constexpr uintptr_t CRadar_DrawCoordBlip_patch = !VER_x32 ? 0x52522C : 0x43FE5A;
 	static constexpr uintptr_t CRadar_DrawEntityBlip_patch = !VER_x32 ? 0x525E14 : 0x4409AE;

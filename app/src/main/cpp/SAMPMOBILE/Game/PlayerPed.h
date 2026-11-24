@@ -169,14 +169,8 @@ public:
 	void DropStuff();
 	bool ApplyStuff();
 
-	void SetDrunkLevel(uint32_t dwLevel)
-	{
-		if (dwLevel > 50000) { dwLevel = 50000; }
-		else if (dwLevel < 0) dwLevel = 0;
-
-		m_dwDrunkLevel = dwLevel;
-	}
-	uint32_t GetDrunkLevel() { return m_dwDrunkLevel; }
+	void SetDrunkLevel(int32_t iLevel);
+	int32_t GetDrunkLevel() const { return m_iDrunkLevel; }
 
 	void ProcessParachutes();
 	void ProcessParachuteSkydiving();
@@ -230,8 +224,10 @@ private:
 	int m_iParachuteState = 0;
 	int m_iParachuteAnim = 0;
 
-	uint32_t m_dwDrunkLevel = 0;
+	int32_t m_iDrunkLevel = 0;
 	uint32_t m_dwDrunkLastUpdateTick = 0;
+	bool m_bDrunkVisualsActive = false;
+	bool m_bDrunkHudHidden = false;
 
 	bool m_bHaveBulletData = false;
 	BULLET_DATA m_bulletData{};

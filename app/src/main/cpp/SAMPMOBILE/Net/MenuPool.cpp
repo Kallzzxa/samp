@@ -17,11 +17,46 @@ std::string CMenuPool::formatMenuText(const std::string& raw, const char* resetH
 		return {};
 	}
 	// SA-MP menu rules: max 31 usable chars per entry, max 8 ~x~ color codes per entry.
+	// Convert to UTF-8 before truncating so multi-byte characters (GBK/UTF-8) are not split mid-sequence.
 	constexpr size_t kMaxUsableMenuChars = 31;
 	constexpr int kMaxMenuColorCodes = 8;
-	const std::string clamped = (raw.size() > kMaxUsableMenuChars) ? raw.substr(0, kMaxUsableMenuChars) : raw;
-	const std::string utf8 = Encoding::cp2utf(clamped);
+	std::string utf8 = Encoding::cp2utf(raw);
+	size_t byteIdx = 0;
+	size_t cpCount = 0;
+	while (byteIdx < utf8.size() && cpCount < kMaxUsableMenuChars) {
+		// Keep 3-char GXT color tags (~r~, ~h~, etc.) atomic so truncation never slices one in half
+		if (utf8[byteIdx] == '~' && byteIdx + 2 < utf8.size() && utf8[byteIdx + 2] == '~') {
+			if (cpCount + 3 > kMaxUsableMenuChars) break;
+			byteIdx += 3;
+			cpCount += 3;
+			continue;
+		}
+		const unsigned char c = static_cast<unsigned char>(utf8[byteIdx]);
+		size_t step = 1;
+		if ((c & 0xE0) == 0xC0) step = 2;
+		else if ((c & 0xF0) == 0xE0) step = 3;
+		else if ((c & 0xF8) == 0xF0) step = 4;
+		if (byteIdx + step > utf8.size()) break;
+		byteIdx += step;
+		++cpCount;
+	}
+	if (byteIdx < utf8.size()) {
+		utf8.resize(byteIdx);
+	}
 	return GxtToImGuiColors(utf8, resetHex, kMaxMenuColorCodes);
+}
+
+void CMenuPool::Reset()
+{
+	hideActiveInternal();
+	for (auto& m : m_menus) {
+		m.reset();
+	}
+	m_currentMenu = INVALID_MENU_ID;
+	m_selectedRow = -1;
+	std::lock_guard<std::mutex> lock(m_touchMutex);
+	m_pendingTouches.clear();
+	m_layout = LayoutSnapshot{};
 }
 
 int CMenuPool::findFirstEnabledRow(const MenuData& menu) const
@@ -106,7 +141,7 @@ void CMenuPool::HideMenu(uint8_t menuId)
 	if (menuId != INVALID_MENU_ID && menuId >= MAX_MENUS) {
 		return;
 	}
-	if (menuId == INVALID_MENU_ID || m_currentMenu == menuId || (m_menus[menuId] != nullptr)) {
+	if (menuId == INVALID_MENU_ID || m_currentMenu == menuId) {
 		hideActiveInternal();
 		spdlog::info("CMenuPool::HideMenu id={}", menuId);
 	}

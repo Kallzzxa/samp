@@ -15,6 +15,7 @@ public:
 
 	void New(uint16_t wTextDrawID, TEXT_DRAW_TRANSMIT* pTextDrawTransmit, const char* szText);
 	void Delete(uint16_t wTextDrawID);
+	void Reset();
 	void Draw();
 	void DrawImGui(ImGuiRenderer* renderer);
 

@@ -6,6 +6,7 @@
 #include "../Client.h"
 #include "RenderWare/rphanim.h"
 #include "PlayerPed.h"
+#include "../Java/EditObject.h"
 
 extern UI* pUI;
 extern Game* pGame;
@@ -36,8 +37,10 @@ CPlayerPed::CPlayerPed()
 	m_iParachuteAnim = 0;
 	m_dwParachuteObject = 0;
 
-	m_dwDrunkLevel = 0;
+	m_iDrunkLevel = 0;
 	m_dwDrunkLastUpdateTick = 0;
+	m_bDrunkVisualsActive = false;
+	m_bDrunkHudHidden = false;
 
 	for (auto& m_attachedObject : m_attachedObjects) {
 		m_attachedObject.slotUsed = false;
@@ -79,11 +82,29 @@ CPlayerPed::CPlayerPed(int iNum, int iSkin, float fX, float fY, float fZ, float 
 	m_iParachuteAnim = 0;
 	m_dwParachuteObject = 0;
 
-	m_dwDrunkLevel = 0;
+	m_iDrunkLevel = 0;
+	m_dwDrunkLastUpdateTick = 0;
+	m_bDrunkVisualsActive = false;
+	m_bDrunkHudHidden = false;
+	m_iDanceState = 0;
+	m_bCellPhoneEnabled = false;
+	m_bPissingState = 0;
+	m_dwPissParticlesHandle = 0;
+	m_iStuffType = STUFF_TYPE_NONE;
+	m_dwStuffObject = 0;
+
+	if (m_bytePlayerNumber > 0 && m_bytePlayerNumber < PLAYER_PED_SLOTS) {
+		memset(&RemotePlayerKeys[m_bytePlayerNumber], 0, sizeof(PAD_KEYS));
+		CAMERA_AIM zeroAim{};
+		GameStoreRemotePlayerAim(m_bytePlayerNumber, &zeroAim);
+		GameSetPlayerCameraMode(4, m_bytePlayerNumber);
+		GameSetPlayerCameraExtZoomAndAspect(m_bytePlayerNumber, 1.0f, 0.5f);
+		for (int s = 0; s < kWeaponSkillCount; ++s) {
+			GameSetRemotePlayerSkill(m_bytePlayerNumber, s, 999);
+		}
+	}
 
 	SetModelIndex(iSkin);
-
-	// GameResetPlayerKeys
 
 	if (m_ped) {
 		SetTargetRotation(fRotation);
@@ -108,7 +129,19 @@ CPlayerPed::~CPlayerPed()
 {
 	spdlog::debug("Destroying PlayerPed({})", m_bytePlayerNumber);
 
-	// GameResetPlayerKeys
+	if (m_bytePlayerNumber > 0 && m_bytePlayerNumber < PLAYER_PED_SLOTS) {
+		memset(&RemotePlayerKeys[m_bytePlayerNumber], 0, sizeof(PAD_KEYS));
+		CAMERA_AIM zeroAim{};
+		GameStoreRemotePlayerAim(m_bytePlayerNumber, &zeroAim);
+		GameSetPlayerCameraMode(4, m_bytePlayerNumber);
+		for (int s = 0; s < kWeaponSkillCount; ++s) {
+			GameSetRemotePlayerSkill(m_bytePlayerNumber, s, 999);
+		}
+	}
+
+	if (m_bPissingState || m_dwPissParticlesHandle) {
+		TogglePissing(false);
+	}
 
 	SetPlayerPedPtrRecord(m_bytePlayerNumber, nullptr);
 
@@ -376,20 +409,12 @@ void CPlayerPed::SetSpecialAction(uint8_t byteSpecialAction)
 
 uint8_t CPlayerPed::GetSpecialAction()
 {
-	if (IsCrouching()) {
-		return SPECIAL_ACTION_DUCK;
-	}
-
 	if (IsEnteringVehicle() != 0) {
 		return SPECIAL_ACTION_ENTER_VEHICLE;
 	}
 
 	if (IsExitingVehicle()) {
 		return SPECIAL_ACTION_EXIT_VEHICLE;
-	}
-
-	if (IsSitTask()) {
-		return SPECIAL_ACTION_SITTING;
 	}
 
 	if (IsInJetpack()) {
@@ -439,6 +464,14 @@ uint8_t CPlayerPed::GetSpecialAction()
 
 	if (GetStuff() == STUFF_TYPE_CIGGI) {
 		return SPECIAL_ACTION_SMOKE_CIGGY;
+	}
+
+	if (IsSitTask()) {
+		return SPECIAL_ACTION_SITTING;
+	}
+
+	if (IsCrouching()) {
+		return SPECIAL_ACTION_DUCK;
 	}
 
 	return SPECIAL_ACTION_NONE;
@@ -559,12 +592,19 @@ char* CPlayerPed::GetDanceAnimForMove(int iMove)
 
 void CPlayerPed::ToggleCellphone(bool on)
 {
+	if (!on) {
+		m_bCellPhoneEnabled = false;
+		if (m_ped && GamePool_Ped_GetAt(m_gtaId) && IsAdded()) {
+			ScriptCommand(&toggle_actor_cellphone, m_gtaId, 0);
+		}
+		return;
+	}
 	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId) || !IsAdded()) {
 		return;
 	}
 
-	m_bCellPhoneEnabled = on;
-	ScriptCommand(&toggle_actor_cellphone, m_gtaId, on);
+	m_bCellPhoneEnabled = true;
+	ScriptCommand(&toggle_actor_cellphone, m_gtaId, 1);
 }
 
 void CPlayerPed::ApplyCrouch()
@@ -671,13 +711,13 @@ void CPlayerPed::GiveStuff(int iType)
 
 void CPlayerPed::DropStuff()
 {
-	if (m_dwStuffObject && m_ped && GamePool_Ped_GetAt(m_gtaId)) {
+	if (m_dwStuffObject) {
 		if (GamePool_Object_GetAt(m_dwStuffObject)) {
-			ScriptCommand(&task_pick_up_object, m_gtaId, m_dwStuffObject, 0.0, 0.0, 0.0, 6, 16, "NULL", "NULL", 0);
+			if (m_ped && GamePool_Ped_GetAt(m_gtaId)) {
+				ScriptCommand(&task_pick_up_object, m_gtaId, m_dwStuffObject, 0.0, 0.0, 0.0, 6, 16, "NULL", "NULL", 0);
+			}
+			ScriptCommand(&destroy_object, m_dwStuffObject);
 		}
-		m_dwStuffObject = 0;
-	}
-	else {
 		m_dwStuffObject = 0;
 	}
 
@@ -696,7 +736,7 @@ bool CPlayerPed::ApplyStuff()
 
 	SetArmedWeapon(0);
 	float fDummyBlend = 4.0f;
-	if (m_bytePlayerNumber != 0 || GetCurrentAnimationIndex(fDummyBlend) != 0) {
+	if (GetCurrentAnimationIndex(fDummyBlend) != 0) {
 		return false;
 	}
 
@@ -712,7 +752,7 @@ bool CPlayerPed::ApplyStuff()
 		else {
 			ApplyAnimation("dnk_stndM_loop", "BAR", 4.0f, 0, 0, 0, 0, -1);
 		}
-		if (m_iStuffType != STUFF_TYPE_PINT_GLASS) {
+		if (m_bytePlayerNumber == 0 && m_iStuffType != STUFF_TYPE_PINT_GLASS) {
 			SetDrunkLevel(GetDrunkLevel() + 1250);
 		}
 		return true;
@@ -835,7 +875,7 @@ bool CPlayerPed::IsJumpTask()
 
 bool CPlayerPed::IsSitTask()
 {
-	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId) || !IsInVehicle() || !m_ped->m_pIntelligence || !m_ped->m_pIntelligence->m_TaskMgr.m_aPrimaryTasks[sa::TASK_PRIMARY_PRIMARY]) {
+	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId) || IsInVehicle() || !m_ped->m_pIntelligence || !m_ped->m_pIntelligence->m_TaskMgr.m_aPrimaryTasks[sa::TASK_PRIMARY_PRIMARY]) {
 		return false;
 	}
 
@@ -883,7 +923,7 @@ bool CPlayerPed::IsInPassengerDriveByMode()
 bool CPlayerPed::StartPassengerDriveByMode()
 {
 	if (m_ped) {
-		if (!m_ped->IsInVehicle() || !m_ped->pVehicle) {
+		if (!m_ped->IsInVehicle() || !m_ped->pVehicle || m_ped->m_nPedState != ACTION_INCAR) {
 			return false;
 		}
 
@@ -987,7 +1027,10 @@ uint32_t CPlayerPed::GetCurrentAnimationIndexFlag()
 		}
 	}
 
-	// Default non-scripted movement fallback (bit 31 set, blend=4, idle index 1189)
+	// Non-scripted movement: return last engine blended animation for local ped (PC parity)
+	if (m_bytePlayerNumber == 0) {
+		return PackLocalPedQueuedAnim();
+	}
 	return static_cast<uint32_t>(1189u) | (4u << 16) | (0x80u << 24);
 }
 
@@ -1042,68 +1085,65 @@ int CPlayerPed::GetCurrentAnimationIndex(float& blendData)
 
 void CPlayerPed::ToggleCuffed(bool cuff)
 {
+	if (!cuff) {
+		m_bCuffedState = false;
+		return;
+	}
 	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId) || !IsAdded()) {
 		return;
 	}
 
-	if (cuff) {
-		SetArmedWeapon(0);
-		m_bCuffedState = true;
-	}
-	else {
-		m_bCuffedState = false;
-	}
+	SetArmedWeapon(0);
+	m_bCuffedState = true;
 }
 
 void CPlayerPed::ToggleCarry(bool carry)
 {
+	if (!carry) {
+		m_bCarryState = false;
+		if (m_ped && GamePool_Ped_GetAt(m_gtaId) && IsAdded() && !IsInVehicle()) {
+			ApplyAnimation("CRRY_PRTIAL", "CARRY", 4.00, 0, 0, 0, 0, 1);
+		}
+		return;
+	}
 	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId) || !IsAdded()) {
 		return;
 	}
 
-	if (carry) {
-		m_bCarryState = true;
-		ApplyAnimation("CRRY_PRTIAL", "CARRY", 4.1, 0, 0, 0, 1, 1);
-	}
-	else {
-		m_bCarryState = false;
-		ApplyAnimation("CRRY_PRTIAL", "CARRY", 4.00, 0, 0, 0, 0, 1);
-	}
+	m_bCarryState = true;
+	ApplyAnimation("CRRY_PRTIAL", "CARRY", 4.1, 0, 0, 0, 1, 1);
 }
 
 void CPlayerPed::TogglePissing(bool piss)
 {
-	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId) || IsInVehicle() || !IsAdded()) {
-		return;
-	}
-
-	if (piss) {
-		if (m_bPissingState) {
-			return;
-		}
-
-		ApplyAnimation("PISS_LOOP", "PAULNMAC", 4.0f, 1, 0, 0, 0, -1);
-
-		ScriptCommand(&attach_particle_to_actor2, "PETROLCAN", m_gtaId, 0.0f, 0.58f, -0.08f, 0.0f, 0.01f, 0.0f, 1, &m_dwPissParticlesHandle);
-		ScriptCommand(&make_particle_visible, m_dwPissParticlesHandle);
-
-		m_bPissingState = true;
-	}
-	else {
-		if (!m_bPissingState) {
-			return;
-		}
-
+	if (!piss) {
 		if (m_dwPissParticlesHandle) {
 			ScriptCommand(&destroy_particle, m_dwPissParticlesHandle);
 			m_dwPissParticlesHandle = 0;
 		}
-
-		RwMatrix mat = m_ped->GetMatrix().ToRwMatrix();
-		TeleportTo(mat.pos.x, mat.pos.y, mat.pos.z);
-
+		const bool wasPissing = m_bPissingState;
 		m_bPissingState = false;
+		if (wasPissing && m_ped && GamePool_Ped_GetAt(m_gtaId) && IsAdded() && !IsInVehicle()) {
+			RwMatrix mat = m_ped->GetMatrix().ToRwMatrix();
+			TeleportTo(mat.pos.x, mat.pos.y, mat.pos.z);
+		}
+		return;
 	}
+
+	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId) || IsInVehicle() || !IsAdded()) {
+		return;
+	}
+
+	if (m_bPissingState) {
+		return;
+	}
+
+	ApplyAnimation("PISS_LOOP", "PAULNMAC", 4.0f, 1, 0, 0, 0, -1);
+
+	ScriptCommand(&attach_particle_to_actor2, "PETROLCAN", m_gtaId, 0.0f, 0.58f, -0.08f, 0.0f, 0.01f, 0.0f, 1, &m_dwPissParticlesHandle);
+	ScriptCommand(&make_particle_visible, m_dwPissParticlesHandle);
+
+	m_bPissingState = true;
 }
 
 void CPlayerPed::StartDancing(int danceId)
@@ -1220,6 +1260,12 @@ void CPlayerPed::SetDead()
 	RwMatrix mat;
 
 	if (m_gtaId && m_ped) {
+		if (IsInJetpack()) {
+			StopJetpack();
+		}
+		if (m_iStuffType != STUFF_TYPE_NONE || m_dwStuffObject != 0) {
+			DropStuff();
+		}
 		if (!m_ped->IsInVehicle()) {
 			// ~
 		}
@@ -1305,59 +1351,112 @@ void CPlayerPed::SatisfyHunger()
 	// todo
 }
 
+void CPlayerPed::SetDrunkLevel(int32_t iLevel)
+{
+	if (iLevel > 50000) {
+		iLevel = 50000;
+	}
+	else if (iLevel < 0) {
+		iLevel = 0;
+	}
+
+	m_iDrunkLevel = iLevel;
+
+	// Clear visuals/handling immediately when dropping to <= 2000 (including 0)
+	// so SetPlayerDrunkLevel(playerid, 0) never leaves permanent camera sway.
+	if (!m_bytePlayerNumber && m_ped) {
+		if (m_iDrunkLevel <= 2000 && m_bDrunkVisualsActive) {
+			ScriptCommand(&set_player_drunk_visuals, m_bytePlayerNumber, 0);
+			ScriptCommand(&set_player_drunk_handling, m_bytePlayerNumber, 0);
+			m_bDrunkVisualsActive = false;
+		}
+		if (m_iDrunkLevel <= 5000 && m_bDrunkHudHidden) {
+			if (pGame) {
+				pGame->SetHudHidden(Game::HUD_HIDE_DRUNK, false);
+			}
+			m_bDrunkHudHidden = false;
+		}
+	}
+}
+
 void CPlayerPed::DrunkProcess()
 {
-	if (!m_ped || GetDrunkLevel() == 0) {
+	if (!m_ped || m_bytePlayerNumber != 0) {
 		return;
 	}
 
-	int iDrunkLevel = GetDrunkLevel();
-	if (!m_bytePlayerNumber) {
-		if (iDrunkLevel > 0 && iDrunkLevel <= 2000) {
-			SetDrunkLevel(iDrunkLevel - 1);
+	int32_t iDrunkLevel = GetDrunkLevel();
+	if (iDrunkLevel <= 0) {
+		if (m_bDrunkVisualsActive) {
 			ScriptCommand(&set_player_drunk_visuals, m_bytePlayerNumber, 0);
+			ScriptCommand(&set_player_drunk_handling, m_bytePlayerNumber, 0);
+			m_bDrunkVisualsActive = false;
 		}
-		else if (iDrunkLevel > 2000 && iDrunkLevel <= 50000) {
-			int iDrunkVisual = iDrunkLevel * 0.02;
-			if (iDrunkVisual <= 250) {
-				if (iDrunkVisual < 5) {
-					iDrunkVisual = 0;
-				}
+		if (m_bDrunkHudHidden) {
+			if (pGame) {
+				pGame->SetHudHidden(Game::HUD_HIDE_DRUNK, false);
 			}
-			else {
-				iDrunkVisual = 250;
+			m_bDrunkHudHidden = false;
+		}
+		return;
+	}
+
+	// Hide HUD/radar when drunk level > 5000 (SA-MP PC & docs contract)
+	if (iDrunkLevel > 5000) {
+		if (!m_bDrunkHudHidden && pGame) {
+			pGame->SetHudHidden(Game::HUD_HIDE_DRUNK, true);
+			m_bDrunkHudHidden = true;
+		}
+	}
+	else if (m_bDrunkHudHidden) {
+		if (pGame) {
+			pGame->SetHudHidden(Game::HUD_HIDE_DRUNK, false);
+		}
+		m_bDrunkHudHidden = false;
+	}
+
+	if (iDrunkLevel <= 2000) {
+		m_iDrunkLevel = iDrunkLevel - 1;
+		if (m_bDrunkVisualsActive) {
+			ScriptCommand(&set_player_drunk_visuals, m_bytePlayerNumber, 0);
+			ScriptCommand(&set_player_drunk_handling, m_bytePlayerNumber, 0);
+			m_bDrunkVisualsActive = false;
+		}
+	}
+	else {
+		int iDrunkVisual = static_cast<int>(iDrunkLevel * 0.02f);
+		if (iDrunkVisual <= 250) {
+			if (iDrunkVisual < 5) {
+				iDrunkVisual = 0;
 			}
+		}
+		else {
+			iDrunkVisual = 250;
+		}
 
-			SetDrunkLevel(iDrunkLevel - 1);
-			ScriptCommand(&set_player_drunk_visuals, m_bytePlayerNumber, iDrunkVisual);
+		m_iDrunkLevel = iDrunkLevel - 1;
+		ScriptCommand(&set_player_drunk_visuals, m_bytePlayerNumber, iDrunkVisual);
+		m_bDrunkVisualsActive = (iDrunkVisual > 0);
 
-			if (IsInVehicle() && !IsAPassenger()) {
-				sa::CVehicle* _pVehicle = GetGtaVehicle();
-				if (_pVehicle) {
-					if (!m_dwDrunkLastUpdateTick || (GetTickCount() - m_dwDrunkLastUpdateTick) > 200) {
-						int iRandNumber = rand() % 40;
-						float fRotation = 0.0;
-						if (iRandNumber >= 20) {
-							fRotation = 0.012;
-							if (iDrunkLevel >= 5000) {
-								fRotation = 0.015;
-							}
-
-							if (iRandNumber <= 30) {
-								fRotation = -0.012;
-								if (iDrunkLevel >= 5000) {
-									fRotation = -0.015;
-								}
-							}
+		if (IsInVehicle() && !IsAPassenger()) {
+			sa::CVehicle* _pVehicle = GetGtaVehicle();
+			if (_pVehicle) {
+				if (!m_dwDrunkLastUpdateTick || (GetTickCount() - m_dwDrunkLastUpdateTick) > 200) {
+					int iRandNumber = rand() % 40;
+					float fRotation = 0.0f;
+					if (iRandNumber >= 20) {
+						fRotation = (iDrunkLevel >= 5000) ? 0.015f : 0.012f;
+						if (iRandNumber <= 30) {
+							fRotation = -fRotation;
 						}
-
-						if (FloatOffset(_pVehicle->m_vecMoveSpeed.x, 0.0) > 0.050000001f ||
-								FloatOffset(_pVehicle->m_vecMoveSpeed.y, 0.0) > 0.050000001f) {
-							_pVehicle->m_vecTurnSpeed.z = fRotation + _pVehicle->m_vecTurnSpeed.z;
-						}
-
-						m_dwDrunkLastUpdateTick = GetTickCount();
 					}
+
+					if (FloatOffset(_pVehicle->m_vecMoveSpeed.x, 0.0) > 0.050000001f ||
+							FloatOffset(_pVehicle->m_vecMoveSpeed.y, 0.0) > 0.050000001f) {
+						_pVehicle->m_vecTurnSpeed.z = fRotation + _pVehicle->m_vecTurnSpeed.z;
+					}
+
+					m_dwDrunkLastUpdateTick = GetTickCount();
 				}
 			}
 		}
@@ -1377,6 +1476,9 @@ void CPlayerPed::SetKeys(uint16_t lrAnalog, uint16_t udAnalog, uint16_t wKeys)
 	wKeys >>= 1;
 	// KEY_CROUCH
 	pad->bKeys[ePadKeys::KEY_CROUCH] = (wKeys & 1);
+	if (!pad->bKeys[ePadKeys::KEY_CROUCH]) {
+		pad->bIgnoreDuck = false;
+	}
 	wKeys >>= 1;
 	// KEY_FIRE
 	pad->bKeys[ePadKeys::KEY_FIRE] = (wKeys & 1);
@@ -1620,6 +1722,45 @@ void CPlayerPed::SetModelIndex(uint uiModel)
 		uiModel = 0;
 	}
 
+	// P1-16: PC SA-MP keeps CClothes::RebuildPlayer patched to ret after initial CJ
+	// model creation. On Android, if skin 0's RwObject prototype was never built yet,
+	// build model 0 directly via CClothes::ConstructPedModel(0, ...) when player.img
+	// is present (no runtime .text unpatch and never touches local ped's current skin);
+	// if player.img is absent (stripped pack), fall back to skin 29 so CJ isn't invisible.
+	if (uiModel == 0 && !GetModelRWObject(0)) {
+		static int s_cjImgState = -1; // -1=unchecked, 0=missing, 1=present
+		if (s_cjImgState < 0) {
+			const char* dir = Client::gameDir();
+			std::string base = dir ? std::string(dir) : std::string();
+			if (!base.empty() && base.back() != '/') {
+				base.push_back('/');
+			}
+			const bool hasPlayerImg = !base.empty() && (
+				access((base + "texdb/player.img").c_str(), F_OK) == 0 ||
+				access((base + "TEXDB/PLAYER.IMG").c_str(), F_OK) == 0 ||
+				access((base + "texdb/PLAYER.IMG").c_str(), F_OK) == 0);
+			s_cjImgState = hasPlayerImg ? 1 : 0;
+			if (!hasPlayerImg) {
+				spdlog::warn("SetModelIndex(0): texdb/player.img missing; falling back to skin 29");
+			}
+		}
+
+		if (s_cjImgState == 1) {
+			sa::CPed* pLocalGtaPed = GamePool_FindPlayerPed();
+			if (pLocalGtaPed && pLocalGtaPed->m_pPlayerData && pLocalGtaPed->m_pPlayerData->m_pPedClothesDesc) {
+				eng::fn::CClothes_ConstructPedModel(
+					0u,
+					pLocalGtaPed->m_pPlayerData->m_pPedClothesDesc,
+					nullptr,
+					false);
+			}
+		}
+
+		if (!GetModelRWObject(0)) {
+			uiModel = 29;
+		}
+	}
+
 	// CClothes::RebuildPlayer (registered in PatchRegistry as Session patch)
 	patches::set("CClothes::RebuildPlayer", true);
 
@@ -1678,7 +1819,10 @@ void CPlayerPed::GiveWeapon(int iWeaponId, int iAmmo)
 			}
 
 			{
-				ScopedPlayerContext ctx(m_bytePlayerNumber, ScopedPlayerContext::kFocusOnly);
+				const uint32_t ctxFlags = (m_bytePlayerNumber != 0)
+					? (ScopedPlayerContext::kFocus | ScopedPlayerContext::kSkills)
+					: ScopedPlayerContext::kFocusOnly;
+				ScopedPlayerContext ctx(m_bytePlayerNumber, ctxFlags);
 				// CPed::GiveWeapon
 				eng::fn::CPed_GiveWeapon( m_ped, iWeaponId, iAmmo, true);
 				SetArmedWeapon(iWeaponId);
@@ -1690,7 +1834,10 @@ void CPlayerPed::GiveWeapon(int iWeaponId, int iAmmo)
 void CPlayerPed::SetArmedWeapon(uint8_t weapon)
 {
 	if (m_ped && GamePool_Ped_GetAt(m_gtaId)) {
-		ScopedPlayerContext ctx(m_bytePlayerNumber, ScopedPlayerContext::kFocusOnly);
+		const uint32_t ctxFlags = (m_bytePlayerNumber != 0)
+			? (ScopedPlayerContext::kFocus | ScopedPlayerContext::kSkills)
+			: ScopedPlayerContext::kFocusOnly;
+		ScopedPlayerContext ctx(m_bytePlayerNumber, ctxFlags);
 		m_ped->SetCurrentWeapon(weapon);
 	}
 }
@@ -1700,7 +1847,20 @@ void CPlayerPed::SetAmmo(uint8_t byteWeapon, uint16_t wAmmo)
 	if (m_ped) {
 		sa::CWeapon* WeaponSlot = FindWeaponSlot(byteWeapon);
 		if (WeaponSlot) {
-			WeaponSlot->dwAmmo = (uint32_t) wAmmo;
+			if (wAmmo == 0) {
+				const bool wasArmed = (GetCurrentWeapon() == byteWeapon);
+				WeaponSlot->dwAmmo = 0;
+				WeaponSlot->dwAmmoInClip = 0;
+				if (wasArmed) {
+					SetArmedWeapon(0);
+				}
+			}
+			else {
+				WeaponSlot->dwAmmo = static_cast<uint32_t>(wAmmo);
+				if (WeaponSlot->dwAmmoInClip > WeaponSlot->dwAmmo) {
+					WeaponSlot->dwAmmoInClip = WeaponSlot->dwAmmo;
+				}
+			}
 		}
 	}
 }
@@ -1732,9 +1892,16 @@ void CPlayerPed::ApplyCommandTask(const char* szTaskName, void* p1, int p2, int 
 
 void CPlayerPed::ProcessParachuteSkydiving()
 {
-	uint16_t lrAnalog, udAnalog;
-	uint8_t exKeys = 0;
-	uint16_t wKeys = GetKeys(&lrAnalog, &udAnalog, &exKeys);
+	int16_t udAnalog = 0;
+	if (m_bytePlayerNumber != 0 && m_bytePlayerNumber < PLAYER_PED_SLOTS) {
+		udAnalog = static_cast<int16_t>(RemotePlayerKeys[m_bytePlayerNumber].wKeyUD);
+	}
+	else {
+		uint16_t lrRaw = 0, udRaw = 0;
+		uint8_t exKeys = 0;
+		GetKeys(&lrRaw, &udRaw, &exKeys, false);
+		udAnalog = static_cast<int16_t>(udRaw);
+	}
 	RwMatrix mat;
 
 	if ((udAnalog > 0) && (m_iParachuteAnim != FALL_SKYDIVE_ACCEL)) {
@@ -1769,7 +1936,7 @@ void CPlayerPed::ProcessParachuteSkydiving()
 	}
 
 	// process parachute opening event
-	if (RemotePlayerKeys[m_bytePlayerNumber].bKeys[ePadKeys::KEY_FIRE]) {
+	if (m_bytePlayerNumber < PLAYER_PED_SLOTS && RemotePlayerKeys[m_bytePlayerNumber].bKeys[ePadKeys::KEY_FIRE]) {
 		ApplyAnimation("PARA_OPEN", "PARACHUTE", 8.0f, 0, 0, 0, 1, -2);
 		ScriptCommand(&apply_object_animation, m_dwParachuteObject, "PARA_OPEN_O", "PARACHUTE", 1000.0f, 0, 1);
 		ScriptCommand(&set_object_visible, m_dwParachuteObject, 1);
@@ -1801,8 +1968,8 @@ void CPlayerPed::ProcessParachutes()
 		{
 			if (ScriptCommand(&is_actor_falling_think, m_gtaId)) // is falling
 			{
-				float fDistanceFromGround;
-				ScriptCommand(&get_actor_distance_from_ground, m_gtaId, &fDistanceFromGround); // TODO: check if this will crash??
+				float fDistanceFromGround = 0.0f;
+				ScriptCommand(&get_actor_distance_from_ground, m_gtaId, &fDistanceFromGround);
 				if (fDistanceFromGround > 20.0f) {
 					// ScriptCommand(&actor_set_collision, m_dwGTAId, 0);
 					m_iParachuteState = 1;
@@ -1842,18 +2009,30 @@ void CPlayerPed::ProcessParachutes()
 
 void CPlayerPed::ProcessParachuting()
 {
-	uint16_t lrAnalog, udAnalog;
-	uint8_t exKeys = 0;
-	uint16_t wKeys = GetKeys(&lrAnalog, &udAnalog, &exKeys);
+	int16_t udAnalog = 0;
+	if (m_bytePlayerNumber != 0 && m_bytePlayerNumber < PLAYER_PED_SLOTS) {
+		udAnalog = static_cast<int16_t>(RemotePlayerKeys[m_bytePlayerNumber].wKeyUD);
+	}
+	else {
+		uint16_t lrRaw = 0, udRaw = 0;
+		uint8_t exKeys = 0;
+		GetKeys(&lrRaw, &udRaw, &exKeys, false);
+		udAnalog = static_cast<int16_t>(udRaw);
+	}
 
+	const bool hasParaObj = (m_dwParachuteObject != 0 && GamePool_Object_GetAt(m_dwParachuteObject) != nullptr);
 	if ((udAnalog > 0) && (m_iParachuteAnim != PARA_DECEL)) {
 		ApplyAnimation("PARA_DECEL", "PARACHUTE", 1.0f, 1, 0, 0, 1, -2);
-		ScriptCommand(&apply_object_animation, m_dwParachuteObject, "PARA_DECEL_O", "PARACHUTE", 1.0f, 1, 1);
+		if (hasParaObj) {
+			ScriptCommand(&apply_object_animation, m_dwParachuteObject, "PARA_DECEL_O", "PARACHUTE", 1.0f, 1, 1);
+		}
 		m_iParachuteAnim = PARA_DECEL;
 	}
 	else if ((udAnalog <= 0) && (m_iParachuteAnim != PARA_FLOAT)) {
 		ApplyAnimation("PARA_FLOAT", "PARACHUTE", 1.0f, 1, 0, 0, 1, -2);
-		ScriptCommand(&apply_object_animation, m_dwParachuteObject, "PARA_FLOAT_O", "PARACHUTE", 1.0f, 1, 1);
+		if (hasParaObj) {
+			ScriptCommand(&apply_object_animation, m_dwParachuteObject, "PARA_FLOAT_O", "PARACHUTE", 1.0f, 1, 1);
+		}
 		m_iParachuteAnim = PARA_FLOAT;
 	}
 }
@@ -2043,6 +2222,11 @@ void CPlayerPed::SetAttachedObject(int index, NEW_ATTACHED_OBJECT* pNewAttachedO
 
 					RwMatrix matPlayer = m_ped->GetMatrix().ToRwMatrix();
 					auto pNewObject = new CObject(pNewAttachedObject->iModel, {matPlayer.pos.x, matPlayer.pos.y, matPlayer.pos.z}, pNewAttachedObject->vecRot, 200.0f, true);
+					if (!pNewObject || !pNewObject->m_entity) {
+						delete pNewObject;
+						memset(&m_attachedObjects[index].info, 0, sizeof(NEW_ATTACHED_OBJECT));
+						return;
+					}
 
 					m_attachedObjects[index].object = pNewObject;
 					m_attachedObjects[index].slotUsed = true;
@@ -2064,6 +2248,9 @@ void CPlayerPed::SetAttachedObject(int index, NEW_ATTACHED_OBJECT* pNewAttachedO
 void CPlayerPed::RemoveAttachedObject(int index)
 {
 	if (GetObjectSlotState(index)) {
+		if (m_bytePlayerNumber == 0 && EditObject::m_visible && EditObject::m_type == EditObject::TYPE_ATTACHED_OBJECT && EditObject::m_id == index) {
+			EditObject::cancelEdit();
+		}
 		if (m_attachedObjects[index].object) {
 			delete m_attachedObjects[index].object;
 			m_attachedObjects[index].object = nullptr;
@@ -2096,6 +2283,9 @@ bool CPlayerPed::HasAttachedObject()
 
 void CPlayerPed::RemoveAllAttachedObjects()
 {
+	if (m_bytePlayerNumber == 0 && EditObject::m_visible && EditObject::m_type == EditObject::TYPE_ATTACHED_OBJECT) {
+		EditObject::cancelEdit();
+	}
 	for (auto& m_attachedObject : m_attachedObjects) {
 		if (m_attachedObject.slotUsed) {
 			if (m_attachedObject.object) {
@@ -2275,7 +2465,14 @@ void CPlayerPed::PutDirectlyInVehicle(uint32_t dwVehicleGTAId, uint8_t byteSeatI
 	sa::CVehicle* pGtaVehicle = GamePool_Vehicle_GetAt(dwVehicleGTAId);
 
 	if (pGtaVehicle->fHealth != 0.0f && !IsEntityPlaceable(pGtaVehicle)) {
-		if (byteSeatID > pGtaVehicle->m_nMaxPassengers) {
+		uint8_t vehSubtype = 0;
+		if (pNetGame && pNetGame->GetVehiclePool()) {
+			VEHICLEID vid = pNetGame->GetVehiclePool()->FindIDFromGtaPtr(pGtaVehicle);
+			CVehicle* pVeh = (vid != INVALID_VEHICLE_ID) ? pNetGame->GetVehiclePool()->GetAt(vid) : nullptr;
+			if (pVeh) vehSubtype = pVeh->GetVehicleSubtype();
+		}
+		if ((vehSubtype == VEHICLE_SUBTYPE_CAR || vehSubtype == VEHICLE_SUBTYPE_BIKE)
+				&& byteSeatID > pGtaVehicle->m_nMaxPassengers) {
 			return;
 		}
 
@@ -2448,6 +2645,8 @@ uint8_t CPlayerPed::FindDeathReasonAndResponsiblePlayer(unsigned short* pPlayerI
 					}
 				}
 			}
+			*pPlayerID = INVALID_PLAYER_ID;
+			return 0xFF;
 		}
 		else if (byteDeathReason == WEAPON_COLLISION) {
 			if (m_ped->m_pLastEntityDamage) {
@@ -2461,11 +2660,9 @@ uint8_t CPlayerPed::FindDeathReasonAndResponsiblePlayer(unsigned short* pPlayerI
 						return WEAPON_COLLISION;
 					}
 				}
-				else {
-					*pPlayerID = INVALID_PLAYER_ID;
-					return WEAPON_COLLISION;
-				}
 			}
+			*pPlayerID = INVALID_PLAYER_ID;
+			return WEAPON_COLLISION;
 		}
 	}
 

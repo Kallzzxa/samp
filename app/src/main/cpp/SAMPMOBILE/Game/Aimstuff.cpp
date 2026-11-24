@@ -1,4 +1,5 @@
 #include "Game.h"
+#include <algorithm>
 #include <cmath>
 
 CAMERA_AIM* pcaInternalAim = nullptr;
@@ -46,12 +47,16 @@ uint8_t GameGetPlayerCameraMode(uint8_t bytePlayerNumber)
 
 float GameGetLocalPlayerCameraExtZoom()
 {
-	return pfCameraExtZoom ? ((*pfCameraExtZoom - 35.0f) * 0.028571429f) : 0.0f;
+	if (!pfCameraExtZoom) return 0.0f;
+	return std::clamp((*pfCameraExtZoom - 35.0f) * 0.028571429f, 0.0f, 1.0f);
 }
 
 float GameGetAspectRatio()
 {
-	return pfAspectRatio ? *pfAspectRatio : 0.0f;
+	// SA-MP wire protocol encodes (aspectRatio - 1.0f) in [0.0f, 1.0f] -> uint8 [0..255]
+	// (open.mp decodes as aspectRatio = (byte / 255.0f) + 1.0f).
+	if (!pfAspectRatio) return 0.0f;
+	return std::clamp(*pfAspectRatio - 1.0f, 0.0f, 1.0f);
 }
 
 void GameAimSyncInit()

@@ -10,6 +10,8 @@
 
 #include <rapidjson/document.h>
 #include <rapidjson/filereadstream.h>
+#include <rapidjson/filewritestream.h>
+#include <rapidjson/prettywriter.h>
 #include <algorithm>
 
 extern Game* pGame;
@@ -483,5 +485,52 @@ void Settings::applyToGtaEngine(bool bInGameReady)
 		}
 		eng::fn::Menu_ApplyAudioSettings();
 		sa::getTheCamera().m_nPedZoom = std::max(1, std::min(3, m_pedcamzoom));
+	}
+}
+
+void Settings::setTimestamp(bool v)
+{
+	m_timestamp = v;
+
+	const char* gameDir = Client::gameDir();
+	if (!gameDir || !gameDir[0]) return;
+	std::string base(gameDir);
+	if (base.back() != '/') base.push_back('/');
+	std::string path = base + "SAMP/settings.json";
+	std::string tmpPath = path + ".tmp";
+
+	FILE* fp = fopen(path.c_str(), "rb");
+	if (!fp) return;
+	std::vector<char> ioBuf(16384);
+	rapidjson::FileReadStream is(fp, ioBuf.data(), ioBuf.size());
+	rapidjson::Document doc;
+	doc.ParseStream(is);
+	fclose(fp);
+	if (doc.HasParseError() || !doc.IsObject()) return;
+
+	if (doc.HasMember("client") && doc["client"].IsObject()
+			&& doc["client"].HasMember("settings") && doc["client"]["settings"].IsObject()) {
+		auto& s = doc["client"]["settings"];
+		if (s.HasMember("timestamp")) {
+			s["timestamp"].SetBool(v);
+		}
+		else {
+			s.AddMember("timestamp", v, doc.GetAllocator());
+		}
+
+		FILE* out = fopen(tmpPath.c_str(), "wb");
+		if (out) {
+			rapidjson::FileWriteStream os(out, ioBuf.data(), ioBuf.size());
+			rapidjson::PrettyWriter<rapidjson::FileWriteStream> writer(os);
+			doc.Accept(writer);
+			const bool ok = (fflush(out) == 0);
+			fclose(out);
+			if (ok) {
+				rename(tmpPath.c_str(), path.c_str());
+			}
+			else {
+				remove(tmpPath.c_str());
+			}
+		}
 	}
 }

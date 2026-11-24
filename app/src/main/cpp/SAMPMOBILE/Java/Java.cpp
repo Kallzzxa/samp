@@ -2,6 +2,7 @@
 // Created by ALYN on 2024/8/25.
 //
 #include "Java.h"
+#include "EditObject.h"
 #include "../../Client.h"
 #include "../../UI/UI.h"
 #include "../../Game/Game.h"
@@ -35,6 +36,8 @@ std::deque<PendingHardwareKey> g_pendingHardwareKeys;
 std::atomic<bool> g_javaDialogVisible{false};
 std::atomic<bool> g_javaKeyboardVisible{false};
 std::atomic<int64_t> g_javaKeyboardClosedMs{0};
+std::atomic<bool> g_nativeModalActive{false};
+std::atomic<bool> g_pendingBackCancel{false};
 
 int64_t nowSteadyMs()
 {
@@ -77,8 +80,17 @@ bool Java::isRadarSuppressedByKeyboard()
 	return false;
 }
 
+void Java::setNativeModalActive(bool active)
+{
+	g_nativeModalActive.store(active, std::memory_order_release);
+}
+
 void Java::processPendingInputs()
 {
+	if (g_pendingBackCancel.exchange(false, std::memory_order_acq_rel)) {
+		ButtonPanel::dismissTopModal();
+	}
+
 	std::deque<std::string> kbQueue;
 	std::deque<PendingDialogResp> dlgQueue;
 	std::deque<PendingHardwareKey> keyQueue;
@@ -406,4 +418,15 @@ extern "C" JNIEXPORT void JNICALL Java_com_sampmobile_game_SAMP_onHardwareKeyEve
 	if (g_pendingHardwareKeys.size() < 64) {
 		g_pendingHardwareKeys.push_back({static_cast<int>(keyCode), isDown == JNI_TRUE});
 	}
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_com_sampmobile_game_ui_UI_handleNativeBackPressed(JNIEnv* env, jobject obj)
+{
+	// Read only the GameMain-published atomic modal flag (no cross-thread pool derefs)
+	// and signal a dedicated atomic cancel flag (not gated by Settings::kmEnabled()).
+	if (!g_nativeModalActive.load(std::memory_order_acquire)) {
+		return JNI_FALSE;
+	}
+	g_pendingBackCancel.store(true, std::memory_order_release);
+	return JNI_TRUE;
 }

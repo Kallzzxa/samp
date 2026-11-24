@@ -67,25 +67,26 @@ void Stream::Push(const VoicePacket& packet)
 	}
 
 	if (channelPtr == nullptr) {
-		this->channels.emplace_back(MakeChannel(this->streamFlags));
+		static constexpr size_t kMaxChannelsPerStream = 64;
+		if (this->channels.size() >= kMaxChannelsPerStream) {
+			return;
+		}
+		try {
+			this->channels.emplace_back(MakeChannel(this->streamFlags));
+		}
+		catch (const std::exception&) {
+			return;
+		}
 
-		int channelCount = 1;
-		for (const auto& channel : this->channels) {
-			if (channelCount == this->channels.size()) {
-				//channel->SetPlayCallback(std::bind(&Stream::OnChannelPlay, this, std::placeholders::_1));
-				//channel->SetStopCallback(std::bind(&Stream::OnChannelStop, this, std::placeholders::_1));
-				channel->SetSpeaker(packet.sender);
+		if (!this->channels.empty()) {
+			auto& channel = this->channels.back();
+			channel->SetSpeaker(packet.sender);
 
-				LogVoice("[sv:dbg:stream:push] : channel %p for player %hu created (stream:%s)",
-						channel.get(), packet.sender, this->streamInfo.GetName().c_str());
+			LogVoice("[sv:dbg:stream:push] : channel %p for player %hu created (stream:%s)",
+					channel.get(), packet.sender, this->streamInfo.GetName().c_str());
 
-				this->OnChannelCreate(*channel);
-
-				channelPtr = &channel;
-				break;
-			}
-
-			channelCount++;
+			this->OnChannelCreate(*channel);
+			channelPtr = &channel;
 		}
 	}
 

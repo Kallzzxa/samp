@@ -182,6 +182,8 @@ public class SAMP extends GTASA {
         }
     }
 
+    private boolean mConsumedBackKey = false;
+
     @Override
     public void onBackPressed() {
         if (ui != null && ui.onBackPressed()) {
@@ -192,6 +194,15 @@ public class SAMP extends GTASA {
 
     @Override
     public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
+        if (keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+            if (event.getRepeatCount() == 0 && ui != null && ui.onBackPressed()) {
+                mConsumedBackKey = true;
+                return true;
+            }
+            if (mConsumedBackKey) {
+                return true;
+            }
+        }
         if (ui != null && !ui.isInputFocused()) {
             try {
                 onHardwareKeyEvent(keyCode, true);
@@ -203,6 +214,10 @@ public class SAMP extends GTASA {
 
     @Override
     public boolean onKeyUp(int keyCode, android.view.KeyEvent event) {
+        if (keyCode == android.view.KeyEvent.KEYCODE_BACK && mConsumedBackKey) {
+            mConsumedBackKey = false;
+            return true;
+        }
         if (ui != null && !ui.isInputFocused()) {
             try {
                 onHardwareKeyEvent(keyCode, false);

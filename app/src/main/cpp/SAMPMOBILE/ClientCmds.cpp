@@ -333,9 +333,11 @@ void cmdClearMyChat(const std::string& params)
 void cmdTimestamp(const std::string& params)
 {
 	if (pUI) {
-		pUI->chat()->addInfoMessage("-> Timestamp %s", Chat::timestamp() ? "OFF" : "ON");
-		Chat::setTimestamp(!Chat::timestamp());
+		const bool next = !Chat::timestamp();
+		Chat::setTimestamp(next);
+		Settings::setTimestamp(next);
 		pUI->chat()->performLayout();
+		pUI->chat()->addInfoMessage("-> Timestamp %s", next ? "ON" : "OFF");
 	}
 }
 

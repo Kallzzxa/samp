@@ -226,6 +226,12 @@ DECL_HOOK(uint16_t, CPad_JumpJustDown, uintptr_t _this)
 		return 0;
 	}
 	else {
+		if (CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr) {
+			if (!pLocal->IsInVehicle() && pLocal->IsCarry()) {
+				LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = false;
+				return 0;
+			}
+		}
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = CPad_JumpJustDown(_this);
 		return LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP];
 	}
@@ -237,6 +243,12 @@ DECL_HOOK(uint16_t, CPad_GetJump, uintptr_t _this)
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_JUMP];
 	}
 	else {
+		if (CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr) {
+			if (!pLocal->IsInVehicle() && pLocal->IsCarry()) {
+				LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = false;
+				return 0;
+			}
+		}
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = CPad_GetJump(_this);
 		return LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP];
 	}
@@ -248,6 +260,12 @@ DECL_HOOK(uint16_t, CPad_GetDuck, uintptr_t _this)
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_CROUCH];
 	}
 	else {
+		if (CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr) {
+			if (!pLocal->IsInVehicle() && pLocal->IsCarry()) {
+				LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = false;
+				return 0;
+			}
+		}
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = CPad_GetDuck(_this);
 		return LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH];
 	}
@@ -275,15 +293,39 @@ DECL_HOOK(uint16_t, CPad_MeleeAttackJustDown, uintptr_t _this)
 	}
 }
 
-DECL_HOOK(uint16_t, CPad_DuckJustDown, uintptr_t _this, int unk)
+DECL_HOOK(uint16_t, CPad_DuckJustDown, uintptr_t _this, sa::CPed* pPed)
 {
-	if (CurrentPlayerSlot()) {
-		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_CROUCH];
+	if (const uint8_t slot = CurrentPlayerSlot(); slot > 0 && slot < PLAYER_PED_SLOTS) {
+		// Remote stand-up is controlled by SPECIAL_ACTION_DUCK clearing via ResetCrouch();
+		// suppress DuckJustDown while pPed is already ducking so GTA doesn't toggle crouch back off.
+		if (pPed && pPed->bIsDucking) {
+			RemotePlayerKeys[slot].bIgnoreDuck = true;
+			return 0;
+		}
+		if (!RemotePlayerKeys[slot].bIgnoreDuck && RemotePlayerKeys[slot].bKeys[ePadKeys::KEY_CROUCH]) {
+			RemotePlayerKeys[slot].bIgnoreDuck = true;
+			return 1;
+		}
+		return 0;
 	}
 	else {
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = CPad_DuckJustDown(_this, unk);
+		if (CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr) {
+			if (!pLocal->IsInVehicle() && pLocal->IsCarry()) {
+				LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = false;
+				return 0;
+			}
+		}
+		LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = CPad_DuckJustDown(_this, pPed);
 		return LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH];
 	}
+}
+
+DECL_HOOK(bool, CPad_GetTarget, uintptr_t _this, bool bCheckVehicle)
+{
+	if (const uint8_t slot = CurrentPlayerSlot(); slot > 0 && slot < PLAYER_PED_SLOTS) {
+		return RemotePlayerKeys[slot].bKeys[ePadKeys::KEY_HANDBRAKE];
+	}
+	return CPad_GetTarget(_this, bCheckVehicle);
 }
 
 DECL_HOOK(uint32_t, CPad_GetSprint, uintptr_t _this, uint32_t unk)
@@ -292,6 +334,12 @@ DECL_HOOK(uint32_t, CPad_GetSprint, uintptr_t _this, uint32_t unk)
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_SPRINT];
 	}
 	else {
+		if (CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr) {
+			if (!pLocal->IsInVehicle() && (pLocal->IsCuffed() || pLocal->IsCarry())) {
+				LocalPlayerKeys.bKeys[ePadKeys::KEY_SPRINT] = false;
+				return 0;
+			}
+		}
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_SPRINT] = CPad_GetSprint(_this, unk);
 		return LocalPlayerKeys.bKeys[ePadKeys::KEY_SPRINT];
 	}
@@ -397,14 +445,13 @@ DECL_HOOK(uint16_t, CPad_GetAccelerate, uintptr_t _this)
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_SPRINT] ? 0xFF : 0x00;
 	}
 	else {
-		sa::CPed* local = GamePool_FindPlayerPed();
-		sa::CVehicle* pVehicle = local ? local->pVehicle : nullptr;
-		if (pVehicle) {
-			bool engineOn = pVehicle->m_nVehicleFlags.bEngineOn;
-			if (pVehicle->pDriver == local && !engineOn) return 0;
-		}
 		uint16_t wResult = CPad_GetAccelerate(_this);
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_SPRINT] = wResult;
+		sa::CPed* local = GamePool_FindPlayerPed();
+		sa::CVehicle* pVehicle = local ? local->pVehicle : nullptr;
+		if (pVehicle && pVehicle->pDriver == local && !pVehicle->m_nVehicleFlags.bEngineOn) {
+			return 0;
+		}
 		return wResult;
 	}
 }
@@ -415,45 +462,36 @@ DECL_HOOK(uint16_t, CPad_GetBrake, uintptr_t _this)
 		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_JUMP] ? 0xFF : 0x00;
 	}
 	else {
-		sa::CPed* local = GamePool_FindPlayerPed();
-		sa::CVehicle* pVehicle = local ? local->pVehicle : nullptr;
-		if (pVehicle) {
-			bool engineOn = pVehicle->m_nVehicleFlags.bEngineOn;
-			if (pVehicle->pDriver == local && !engineOn) return 0;
-		}
-
 		uint16_t wResult = CPad_GetBrake(_this);
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = wResult;
+		sa::CPed* local = GamePool_FindPlayerPed();
+		sa::CVehicle* pVehicle = local ? local->pVehicle : nullptr;
+		if (pVehicle && pVehicle->pDriver == local && !pVehicle->m_nVehicleFlags.bEngineOn) {
+			return 0;
+		}
 		return wResult;
 	}
 }
 
 DECL_HOOK(uint32_t, CPad_GetHandBrake, uintptr_t _this)
 {
-	if (CurrentPlayerSlot()) {
-		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_HANDBRAKE] ? 0xFF : 0x00;
+	if (const uint8_t slot = CurrentPlayerSlot(); slot > 0 && slot < PLAYER_PED_SLOTS) {
+		return RemotePlayerKeys[slot].bKeys[ePadKeys::KEY_HANDBRAKE] ? 0xFF : 0x00;
 	}
 	else {
-		sa::CPed* local = GamePool_FindPlayerPed();
-		sa::CVehicle* pVehicle = local ? local->pVehicle : nullptr;
-		if (pVehicle) {
-			bool engineOn = pVehicle->m_nVehicleFlags.bEngineOn;
-			if (pVehicle->pDriver == local && !engineOn) return 0;
-		}
-
 		uint32_t dwResult = CPad_GetHandBrake(_this);
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_HANDBRAKE] = dwResult;
 		return dwResult;
 	}
 }
 
-DECL_HOOK(uint32_t, CPad_GetHorn, uintptr_t _this)
+DECL_HOOK(uint32_t, CPad_GetHorn, uintptr_t _this, bool bCheckVehicle)
 {
-	if (CurrentPlayerSlot()) {
-		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_CROUCH];
+	if (const uint8_t slot = CurrentPlayerSlot(); slot > 0 && slot < PLAYER_PED_SLOTS) {
+		return RemotePlayerKeys[slot].bKeys[ePadKeys::KEY_CROUCH];
 	}
 	else {
-		uint32_t dwResult = CPad_GetHorn(_this);
+		uint32_t dwResult = CPad_GetHorn(_this, bCheckVehicle);
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = dwResult;
 		return dwResult;
 	}
@@ -464,6 +502,12 @@ DECL_HOOK(uint32_t, CPad_ExitVehicleJustDown, uintptr_t _this, int a2, uintptr_t
 	static uint32_t dwPassengerEnterExit = GetTickCount();
 	if (GetTickCount() - dwPassengerEnterExit < 1000) {
 		return 0;
+	}
+
+	if (CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr) {
+		if (!pLocal->IsInVehicle() && (pLocal->IsCuffed() || pLocal->IsCarry())) {
+			return 0;
+		}
 	}
 
 	if (pNetGame) {
@@ -479,27 +523,7 @@ DECL_HOOK(uint32_t, CPad_ExitVehicleJustDown, uintptr_t _this, int a2, uintptr_t
 		}
 	}
 
-	uint32_t dwRes = CPad_ExitVehicleJustDown(_this, a2, vehicle, a4, vec);
-	// diag: exit-vehicle taps stopped working — log the touch on widget 0
-	// vs the orig result and the pad-disable bytes that gate it
-	{
-		uintptr_t* widgets = GetTouchWidgets();
-		uint32_t t0 = (widgets && widgets[0])
-			? eng::fn::CTouchInterface_IsTouched(
-				0, static_cast<void*>(nullptr), 0) : 0;
-		uint32_t d = (*reinterpret_cast<uint16_t*>(_this + 272) ? 8u : 0u)
-			| (*reinterpret_cast<uint8_t*>(_this + 301) ? 4u : 0u)
-			| (*reinterpret_cast<uint8_t*>(_this + 280) ? 2u : 0u)
-			| (*reinterpret_cast<uint8_t*>(_this + 291) ? 1u : 0u);
-		int pair = (dwRes ? 1 : 0) | ((int)t0 << 1) | ((int)d << 8);
-		static int s_lastExitPair = -1;
-		if (pair != s_lastExitPair && (t0 || dwRes || d)) {
-			s_lastExitPair = pair;
-			spdlog::info("EXIT-VEH justdown={} touch0={} padDis=0x{:x}",
-				dwRes, t0, d);
-		}
-	}
-	return dwRes;
+	return CPad_ExitVehicleJustDown(_this, a2, vehicle, a4, vec);
 }
 
 DECL_HOOK(int, CPad_GetTurretLeft, uintptr_t _this)
@@ -572,6 +596,19 @@ static void ProcessRemoteVehicleControl(OrigFn orig, sa::CVehicle* pVehicle)
 	const uint8_t prevCurPlayer = byteCurPlayer;
 	byteInternalPlayer = CurrentPlayerSlot();
 
+	CVehicle* pSampVeh = nullptr;
+	if (pVehicle && pNetGame && pNetGame->GetVehiclePool()) {
+		VEHICLEID vid = pNetGame->GetVehiclePool()->FindIDFromGtaPtr(pVehicle);
+		if (vid != INVALID_VEHICLE_ID) {
+			pSampVeh = pNetGame->GetVehiclePool()->GetAt(vid);
+		}
+	}
+
+	const bool bManualEngineOff = pSampVeh && (
+		pSampVeh->m_iEngineState == 0 ||
+		(pNetGame && pNetGame->m_netSet && pNetGame->m_netSet->manualVehicleEngineAndLight && pSampVeh->m_iEngineState < 0));
+	const bool bIsHeli = pSampVeh && (pSampVeh->GetVehicleSubtype() == VEHICLE_SUBTYPE_HELI);
+
 	const uint8_t curPlayer = (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0
 		&& pVehicle->pDriver != GamePool_FindPlayerPed() && byteInternalPlayer == 0)
 		? FindPlayerNumFromPedPtr(pVehicle->pDriver)
@@ -596,15 +633,64 @@ static void ProcessRemoteVehicleControl(OrigFn orig, sa::CVehicle* pVehicle)
 		pVehicle->nControlFlags = savedControlFlags;
 		pVehicle->pDriver->m_nPedType = sa::PEDTYPE_PLAYER1;
 
+		// Preserve Z position & velocity for boats/aircraft and distant non-train vehicles
+		// so unstreamed collision geometry cannot drop remote vehicles through the map.
+		const float savedZ = pVehicle->GetMatrix().m_pos.z;
+		const float savedVelZ = pVehicle->GetMoveSpeed().z;
+		bool bLockZ = false;
+		if (pSampVeh) {
+			const uint8_t sub = pSampVeh->GetVehicleSubtype();
+			bLockZ = (sub == VEHICLE_SUBTYPE_BOAT || sub == VEHICLE_SUBTYPE_PLANE || sub == VEHICLE_SUBTYPE_HELI)
+				|| (!pSampVeh->IsATrainPart() && pSampVeh->GetDistanceFromLocalPlayerPed() > 160.0f);
+		}
+
+		if (bManualEngineOff) {
+			pVehicle->m_nVehicleFlags.bEngineOn = 0;
+		}
+		if (bIsHeli) {
+			if (!pVehicle->m_nVehicleFlags.bEngineOn) pVehicle->nControlFlags |= 0x20;
+			else pVehicle->nControlFlags &= ~0x20;
+		}
 		{
 			ScopedPlayerContext focusCtx(curPlayer, ScopedPlayerContext::kFocusOnly);
 			orig(pVehicle);
 		}
+		if (bManualEngineOff) {
+			pVehicle->m_nVehicleFlags.bEngineOn = 0;
+		}
+		if (bIsHeli) {
+			if (!pVehicle->m_nVehicleFlags.bEngineOn) pVehicle->nControlFlags |= 0x20;
+			else pVehicle->nControlFlags &= ~0x20;
+		}
+		if (bLockZ) {
+			sa::CMatrix mat = pVehicle->GetMatrix();
+			mat.m_pos.z = savedZ;
+			pVehicle->SetMatrix(mat);
+			sa::CVector vel = pVehicle->GetMoveSpeed();
+			vel.z = savedVelZ;
+			pVehicle->SetVelocity(vel);
+		}
 	}
 	else {
+		if (pVehicle && !pVehicle->pDriver && !pVehicle->m_pTowingVehicle
+			&& pSampVeh && !pSampVeh->IsATrainPart()
+			&& pSampVeh->GetDistanceFromLocalPlayerPed() > 160.0f) {
+			// Skip physics for distant unmanned vehicles outside loaded collision sector
+			byteCurPlayer = prevCurPlayer;
+			return;
+		}
+
 		if (pVehicle && pVehicle->pDriver && pVehicle->pDriver->m_nPedType == 0
 			&& GamePool_FindPlayerPed() == pVehicle->pDriver) {
 			ApplyVehicleTyreBurstFix(pVehicle);
+		}
+
+		if (bManualEngineOff && pVehicle) {
+			pVehicle->m_nVehicleFlags.bEngineOn = 0;
+		}
+		if (bIsHeli && pVehicle) {
+			if (!pVehicle->m_nVehicleFlags.bEngineOn) pVehicle->nControlFlags |= 0x20;
+			else pVehicle->nControlFlags &= ~0x20;
 		}
 
 		if constexpr (CallAudioService) {
@@ -612,6 +698,14 @@ static void ProcessRemoteVehicleControl(OrigFn orig, sa::CVehicle* pVehicle)
 		}
 
 		orig(pVehicle);
+
+		if (bManualEngineOff && pVehicle) {
+			pVehicle->m_nVehicleFlags.bEngineOn = 0;
+		}
+		if (bIsHeli && pVehicle) {
+			if (!pVehicle->m_nVehicleFlags.bEngineOn) pVehicle->nControlFlags |= 0x20;
+			else pVehicle->nControlFlags &= ~0x20;
+		}
 	}
 
 	byteCurPlayer = prevCurPlayer;
@@ -729,6 +823,8 @@ DECL_HOOK(void, CQuadBike_ProcessControl, sa::CVehicle* _this)     { ProcessRemo
 DECL_HOOK(void, CTrain_ProcessControl, sa::CVehicle* _this)        { ProcessRemoteVehicleControl<true>(CTrain_ProcessControl, _this); }
 DECL_HOOK(void, CTrailer_ProcessControl, sa::CVehicle* _this)      { ProcessRemoteVehicleControl<false>(CTrailer_ProcessControl, _this); }
 
+static bool g_bCancelCarTask = false;
+
 bool NotifyEnterVehicle(sa::CVehicle* _pVehicle)
 {
 	spdlog::info("NotifyEnterVehicle: 0x{:X}", reinterpret_cast<uintptr_t>(_pVehicle));
@@ -749,6 +845,16 @@ bool NotifyEnterVehicle(sa::CVehicle* _pVehicle)
 		return false;
 	}
 
+	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
+	CLocalPlayer* pLocalPlayer = pPlayerPool ? pPlayerPool->GetLocalPlayer() : nullptr;
+	if (!pLocalPlayer || !pLocalPlayer->GetPlayerPed()) {
+		return false;
+	}
+
+	if (pLocalPlayer->GetPlayerPed()->IsCuffed() || pLocalPlayer->GetPlayerPed()->IsCarry()) {
+		return false;
+	}
+
 	CVehicle* pVehicle = pVehiclePool->GetAt(vehicleId);
 	if (pVehicle && pVehicle->m_pVehicle) {
 		if (pVehicle->GetDoorState()) {
@@ -759,28 +865,34 @@ bool NotifyEnterVehicle(sa::CVehicle* _pVehicle)
 			return false;
 		}
 
-		if (pVehicle->m_pVehicle->pDriver && pVehicle->m_pVehicle->pDriver->m_nPedType != 0) {
-			return false;
+		if (pVehicle->m_pVehicle->pDriver) {
+			if (pVehicle->m_pVehicle->pDriver->m_nPedType != 0) {
+				return false;
+			}
+			PLAYERID driverId = pPlayerPool->FindRemotePlayerIDFromGtaPtr(pVehicle->m_pVehicle->pDriver);
+			if (driverId != INVALID_PLAYER_ID) {
+				CRemotePlayer* pDriver = pPlayerPool->GetAt(driverId);
+				if (pDriver && pDriver->IsNPC()) {
+					return false;
+				}
+			}
 		}
 	}
 
-	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
-	CLocalPlayer* pLocalPlayer = pPlayerPool ? pPlayerPool->GetLocalPlayer() : nullptr;
-	if (pLocalPlayer) {
-		if (pLocalPlayer->GetPlayerPed() && pLocalPlayer->GetPlayerPed()->GetCurrentWeapon() == WEAPON_PARACHUTE) {
-			pLocalPlayer->GetPlayerPed()->SetArmedWeapon(0);
-		}
-
-		pLocalPlayer->SendEnterVehicleNotification(vehicleId, false);
-		return true;
+	if (pLocalPlayer->GetPlayerPed()->GetCurrentWeapon() == WEAPON_PARACHUTE) {
+		pLocalPlayer->GetPlayerPed()->SetArmedWeapon(0);
 	}
 
-	return false;
+	pLocalPlayer->SendEnterVehicleNotification(vehicleId, false);
+	return true;
 }
 
 DECL_HOOK(void, CTaskComplexEnterCarAsDriver, uintptr_t** _this, sa::CVehicle* pVehicle)
 {
-	NotifyEnterVehicle(pVehicle);
+	if (!NotifyEnterVehicle(pVehicle)) {
+		g_bCancelCarTask = true;
+	}
+	// Must always invoke constructor because CPlayerInfo::Process immediately passes _this to SetTask
 	CTaskComplexEnterCarAsDriver(_this, pVehicle);
 }
 
@@ -797,14 +909,17 @@ DECL_HOOK(void, CTaskComplexLeaveCar, uintptr_t** _this, sa::CVehicle* pVehicle,
 					CVehicle* pVeh = pVehiclePool->GetAt(VehicleID);
 					CLocalPlayer* pLocalPlayer = pPlayerPool->GetLocalPlayer();
 					if (pVeh && pVeh->m_pVehicle && pLocalPlayer) {
+						pLocalPlayer->SendExitVehicleNotification(VehicleID);
 						if (pVeh->IsATrainPart()) {
 							RwMatrix mat = pVeh->m_pVehicle->GetMatrix().ToRwMatrix();
 							if (pLocalPlayer->GetPlayerPed()) {
 								pLocalPlayer->GetPlayerPed()->RemoveFromVehicleAndPutAt(mat.pos.x + 2.5f, mat.pos.y + 2.5f, mat.pos.z);
 							}
-						}
-						else {
-							pLocalPlayer->SendExitVehicleNotification(VehicleID);
+							if (pGame && pGame->GetCamera()) {
+								pGame->GetCamera()->SetBehindPlayer();
+							}
+							pLocalPlayer->m_LastVehicle = VehicleID;
+							g_bCancelCarTask = true;
 						}
 					}
 				}
@@ -968,6 +1083,20 @@ DECL_HOOK(void, CPlayerInfo_Process, uintptr_t _this, int playerNumber)
 	}
 	CPlayerInfo_Process(_this, playerNumber);
 	s_bInPlayerInfoProcess = prev;
+
+	if (playerNumber == 0 && g_bCancelCarTask) {
+		g_bCancelCarTask = false;
+		CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr;
+		if (pLocal && pLocal->m_ped && pLocal->m_ped->m_pIntelligence && pLocal->m_gtaId) {
+			sa::CTask* pPrimary = pLocal->m_ped->m_pIntelligence->m_TaskMgr.m_aPrimaryTasks[sa::TASK_PRIMARY_PRIMARY];
+			const int taskType = pPrimary ? GetTaskTypeFromTask(&pPrimary) : -1;
+			// Only clear if GTA actually installed an enter/leave car task (700/704),
+			// avoiding wiping unrelated scripted or Carry/Dance animations.
+			if (taskType == 700 || taskType == 704 || taskType == 711) {
+				ScriptCommand(&clear_char_tasks, pLocal->m_gtaId);
+			}
+		}
+	}
 }
 
 DECL_HOOK(uint32_t, CTaskSimplePlayerOnFoot_MakeAbortable, uintptr_t _this, sa::CPed* pPed, int priority, uintptr_t pEvent)
@@ -1237,29 +1366,6 @@ static void TickTouchCombatInput()
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_HANDBRAKE] = true;
 	}
 
-	// Temporary bounded trace on fire-release while aiming (to verify phone yaw stability)
-	{
-		static int s_aimRelFrames = 0;
-		static int s_aimRelTotal = 0;
-		if (bOnFoot && pLocal && EngineIsAiming(pLocal) && bFirePrev && !bFireNow && s_aimRelTotal < 30) {
-			s_aimRelFrames = 6;
-		}
-		if (s_aimRelFrames > 0 && pLocal && pLocal->m_ped) {
-			--s_aimRelFrames;
-			++s_aimRelTotal;
-			auto& cam = sa::getTheCamera();
-			const auto& active = cam.m_aCams[cam.m_nActiveCam & 1];
-			uintptr_t wLook = widgets[sa::WidgetIDs::WIDGET_LOOK];
-			const int32_t lookF = wLook ? *reinterpret_cast<int32_t*>(wLook + (VER_x32 ? 120 : 132)) : -9;
-			spdlog::info("AIM-REL rem={} mode={} rst={} yaw={:.4f} spd={:.4f} rot={:.4f} arot={:.4f} free={} inp={} lookF={}",
-				s_aimRelFrames, static_cast<int>(active.m_nMode), static_cast<int>(active.ResetStatics),
-				active.m_fHorizontalAngle, active.BetaSpeed,
-				pLocal->m_ped->m_fCurrentRotation, pLocal->m_ped->m_fAimingRotation,
-				pLocal->m_ped->m_pPlayerData ? static_cast<int>(pLocal->m_ped->m_pPlayerData->m_bFreeAiming) : -1,
-				eng::fn::CHID_GetInputType(), lookF);
-		}
-	}
-
 	// 1.2) T32: Aim button toggles passenger drive-by on touch screens
 	if (bPassenger && pLocal->CanDoPassengerDriveBy() && widgets[kAimToggleWidget] && PollTouchRelease(kAimToggleWidget) != 0) {
 		g_bPassengerDriveByToggleRequested.store(true, std::memory_order_release);
@@ -1345,6 +1451,18 @@ static void TickTouchCombatInput()
 			eng::fn::CPlayerPed_ClearWeaponTarget( pAimPed->m_ped);
 		}
 	}
+}
+
+// War Drum Mobile's CPlayerPed::ProcessControl clears m_bFreeAiming whenever
+// WIDGET_ATTACK (1) is released for non-scoped guns, causing MODE_AIMWEAPON (53)
+// to drop for 1 frame and re-enter with ResetStatics=1 (rightward shoulder yaw jump)
+// while our touch aim-toggle latch is active. Suppress that release while latched.
+DECL_HOOK(uint32_t, CTouchInterface_IsReleased_fromProcessControl, int32_t widgetID, void* pOutVec, int32_t frames)
+{
+	if (CurrentPlayerSlot() != 0 || (g_touchCombat.aimLatch && widgetID == sa::WidgetIDs::WIDGET_ATTACK)) {
+		return 0;
+	}
+	return CTouchInterface_IsReleased_fromProcessControl(widgetID, pOutVec, frames);
 }
 
 DECL_HOOK(void, CTouchInterface_Clear)
@@ -1524,14 +1642,7 @@ DECL_HOOK(uint32_t, CWorld_ProcessLineOfSight, sa::CVector* vecOrigin, sa::CVect
 						vecPosPlusOffset.z = g_pCurrentBulletData->pEntity->m_matrix->m_pos.z + g_pCurrentBulletData->vecOffset.z;
 					}
 					else {
-						if (g_pCurrentBulletData->vecOffset != nullptr) {
-							if (g_pCurrentBulletData->pEntity->m_matrix->m_up != nullptr &&
-									g_pCurrentBulletData->pEntity->m_matrix->m_forward != nullptr &&
-									g_pCurrentBulletData->pEntity->m_matrix->m_right != nullptr &&
-									g_pCurrentBulletData->pEntity->m_matrix->m_pos != nullptr) {
-								ProjectMatrix(&vecPosPlusOffset, g_pCurrentBulletData->pEntity->m_matrix, &g_pCurrentBulletData->vecOffset);
-							}
-						}
+						ProjectMatrix(&vecPosPlusOffset, g_pCurrentBulletData->pEntity->m_matrix, &g_pCurrentBulletData->vecOffset);
 					}
 
 					vecEnd->x = vecPosPlusOffset.x - vecOrigin->x + vecPosPlusOffset.x;
@@ -1605,11 +1716,20 @@ PLAYERID FindPlayerIDFromGtaPtr(sa::CEntity* pEntity)
 	if (PlayerID != INVALID_PLAYER_ID) return PlayerID;
 
 	if (pVehiclePool) {
-		VEHICLEID VehicleID = pVehiclePool->FindIDFromGtaPtr((sa::CVehicle*) pEntity);
+		auto* pGtaVehicle = (sa::CVehicle*) pEntity;
+		VEHICLEID VehicleID = pVehiclePool->FindIDFromGtaPtr(pGtaVehicle);
 		if (VehicleID != INVALID_VEHICLE_ID) {
+			if (pGtaVehicle->pDriver) {
+				PLAYERID driverId = pPlayerPool->FindRemotePlayerIDFromGtaPtr(pGtaVehicle->pDriver);
+				if (driverId != INVALID_PLAYER_ID) {
+					return driverId;
+				}
+			}
 			for (PLAYERID i = 0; i < MAX_PLAYERS; i++) {
 				CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(i);
-				if (pRemotePlayer && pRemotePlayer->CurrentVehicleID() == VehicleID) {
+				if (pRemotePlayer && pRemotePlayer->IsActive()
+						&& pRemotePlayer->GetState() == PLAYER_STATE_DRIVER
+						&& pRemotePlayer->CurrentVehicleID() == VehicleID) {
 					return i;
 				}
 			}
@@ -1656,9 +1776,17 @@ bool ComputeDamageResponse(CPedDamageResponseCalculator* calculator, sa::CPed* p
 	}
 	PLAYERID PlayerID = INVALID_PLAYER_ID;
 
+	// open.mp rejects Give/TakeDamage & GiveDamageActor if bodypart is outside [3..9] (Torso..Head).
+	const int bodyPart = (calculator->m_eHitZone >= 3 && calculator->m_eHitZone <= 9)
+		? calculator->m_eHitZone : 3;
+
 	if (isLocalPed) {
-		if (pLocalPlayer->m_surfSync.bIsActive && calculator->m_eWeaponUsed == WEAPON_COLLISION
-				&& pLocalPlayer->m_surfSync.dwSurfVehID >= 0) {
+		if (pLocalPlayer->m_surfSync.bIsActive && pLocalPlayer->m_surfSync.dwSurfVehID >= 0) {
+			// Matches PC hooks.cpp: while surfing, block both collision damage (54) and
+			// any impact coming from the surfed vehicle/object itself.
+			if (calculator->m_eWeaponUsed == WEAPON_COLLISION) {
+				return true;
+			}
 			if (pLocalPlayer->m_surfSync.bIsVehicle) {
 				CVehiclePool* pVehiclePool = pNetGame->GetVehiclePool();
 				CVehicle* pSurfingVehicle = (pVehiclePool && pLocalPlayer->m_surfSync.dwSurfVehID < MAX_VEHICLES)
@@ -1678,12 +1806,17 @@ bool ComputeDamageResponse(CPedDamageResponseCalculator* calculator, sa::CPed* p
 		}
 
 		PlayerID = FindPlayerIDFromGtaPtr(pDamager);
-		pLocalPlayer->SendTakeDamageEvent(PlayerID, calculator->m_fRawDamage, calculator->m_eWeaponUsed, calculator->m_eHitZone);
 	}
 	else {
 		PlayerID = FindPlayerIDFromGtaPtr(pPed);
+	}
+
+	if (isLocalPed) {
+		pLocalPlayer->SendTakeDamageEvent(PlayerID, calculator->m_fRawDamage, calculator->m_eWeaponUsed, bodyPart);
+	}
+	else {
 		if (PlayerID != INVALID_PLAYER_ID) {
-			pLocalPlayer->SendGiveDamageEvent(PlayerID, calculator->m_fRawDamage, calculator->m_eWeaponUsed, calculator->m_eHitZone);
+			pLocalPlayer->SendGiveDamageEvent(PlayerID, calculator->m_fRawDamage, calculator->m_eWeaponUsed, bodyPart);
 			CRemotePlayer* pRemote = pPlayerPool->GetAt(PlayerID);
 			if (pRemote && pRemote->IsNPC()) {
 				return true;
@@ -1692,24 +1825,28 @@ bool ComputeDamageResponse(CPedDamageResponseCalculator* calculator, sa::CPed* p
 		else {
 			PLAYERID ActorID = FindActorIDFromGtaPtr(pPed);
 			if (ActorID != INVALID_PLAYER_ID) {
-				pLocalPlayer->SendGiveDamageActorEvent(ActorID, calculator->m_fRawDamage, calculator->m_eWeaponUsed, calculator->m_eHitZone);
+				CActorPool* pActorPool = pNetGame->GetActorPool();
+				CActor* pActor = pActorPool ? pActorPool->GetAt(ActorID) : nullptr;
+				if (pActor && !pActor->m_invulnerable) {
+					pLocalPlayer->SendGiveDamageActorEvent(ActorID, calculator->m_fRawDamage, calculator->m_eWeaponUsed, bodyPart);
+				}
 				return true;
 			}
 		}
 	}
 
-	// :check_friendly_fire
-	if (!pNetGame->m_netSet || !pNetGame->m_netSet->friendlyFire) {
-		return false;
+	// Matches PC hooks.cpp:2839-2849 — ALWAYS emit Give/TakeDamage RPCs first
+	// (required by weapon-config & server-side damage gamemodes that place all
+	// players on the same team), then suppress native GTA HP loss on same-team.
+	if (pNetGame->m_netSet && pNetGame->m_netSet->friendlyFire && PlayerID != INVALID_PLAYER_ID) {
+		uint8_t byteTeam = pLocalPlayer->m_byteTeam;
+		CRemotePlayer* pTargetRemote = pPlayerPool->GetAt(PlayerID);
+		if (byteTeam != NO_TEAM && pTargetRemote && pTargetRemote->m_byteTeam == byteTeam) {
+			return true;
+		}
 	}
 
-	uint8_t byteTeam = pLocalPlayer->m_byteTeam;
-	CRemotePlayer* pTargetRemote = (PlayerID != INVALID_PLAYER_ID) ? pPlayerPool->GetAt(PlayerID) : nullptr;
-	if (byteTeam == NO_TEAM || !pTargetRemote || pTargetRemote->m_byteTeam != byteTeam) {
-		return false;
-	}
-
-	return true;
+	return false;
 }
 
 DECL_HOOK(void, CPedDamageResponseCalculator_ComputeDamageResponse, CPedDamageResponseCalculator* _this, sa::CPed* pVictim, uintptr_t damageResponse, const bool bTriggerPainAudio)
@@ -1796,6 +1933,9 @@ void Hooks::installPadHooks()
 	REG_HOOK_BL(Boot, addr::CPed_UpdatePosition_BranchBL1, "CPed_UpdatePosition.ProcessControl",
 		&CPed_UpdatePosition_fromProcessControl_hook, &CPed_UpdatePosition_fromProcessControl,
 		"Suppress CPed::UpdatePosition for remote peds");
+	REG_HOOK_BL(Boot, addr::CPlayerPed_ProcessControl_AttackRelease_BranchBL, "CTouchInterface_IsReleased.ProcessControl",
+		&CTouchInterface_IsReleased_fromProcessControl_hook, &CTouchInterface_IsReleased_fromProcessControl,
+		"Keep m_bFreeAiming across touch fire release while aim-latched");
 	REG_HOOK(Boot, CTaskSimplePlayerOnFoot_PlayerControlZelda, CTaskSimplePlayerOnFoot_PlayerControlZelda,
 		"Preserve remote ped m_fAimingRotation from camera");
 
@@ -1874,6 +2014,7 @@ void Hooks::installPadHooks()
 	REG_HOOK(Boot, CPad_GetWeapon, CPad_GetWeapon, "Pad weapon fire sync");
 	REG_HOOK(Boot, CPad_WeaponJustDown, CPad_WeaponJustDown, "Pad weapon just-down sync");
 	REG_HOOK(Boot, CCamera_IsTargetingActivePed, CCamera_IsTargetingActive, "Remote player targeting check");
+	REG_HOOK(Boot, CPad_GetTarget, CPad_GetTarget, "Remote player aim/roll target sync");
 	REG_HOOK(Boot, CPad_GetEnterTargeting, CPad_GetEnterTargeting, "Touch aim button enter");
 	REG_HOOK(Boot, CPad_GetExitTargeting, CPad_GetExitTargeting, "Touch aim button exit");
 

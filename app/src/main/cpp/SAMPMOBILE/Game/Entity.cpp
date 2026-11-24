@@ -375,8 +375,11 @@ bool CEntity::EnforceWorldBoundries(float fPX, float fZX, float fPY, float fNY)
 
 bool CEntity::HasExceededWorldBoundries(float fPX, float fZX, float fPY, float fNY)
 {
-	// spdlog::info("CEntity::HasExceededWorldBoundries({}, {}, {}, {})", fPX, fZX, fPY, fNY);
+	if (!m_entity) {
+		return false;
+	}
 
-	// TODO
-	return false;
+	RwMatrix matWorld = m_entity->GetMatrix().ToRwMatrix();
+	return matWorld.pos.x > fPX || matWorld.pos.x < fZX
+		|| matWorld.pos.y > fPY || matWorld.pos.y < fNY;
 }

@@ -50,10 +50,13 @@ void Patches::preApply()
 	// show fps
 	//*(bool*) (g_saSym->GetSymbol<uintptr_t>("FrontEndMenuManager") + (VER_x32 ? 0xB5 : 0xC1)) = true;
 
-	// Set max stats
+	// Set max stats and unlock all cities (STAT_CITIES_PASSED = 181 -> 2.0f)
+	// Note: 181 is an integer stat (StatTypesInt[181 - 120]), NOT StatTypesFloat;
+	// call CStats::SetStatValue before patching it out on the next line.
 	sa::CCheat::WeaponSkillsCheat();
 	sa::CCheat::VehicleSkillsCheat();
 	sa::CCheat::StaminaCheat();
+	eng::fn::CStats_SetStatValue(181, 2.0f);
 	patches::set("CStats::SetStatValue", true);
 }
 
@@ -239,9 +242,9 @@ void Patches::apply()
 	}
 	patches::registerNop("CAudioEngine.StartLoadingTune", "Disable loading tune audio", patches::Scope::Online, addr::CAudioEngine_StartLoadingTune_patch, 2);
 
-#if !VER_x32
-	patches::registerNop("CBike::ProcessAI", "Disable bike AI (arm64 only)", patches::Scope::Online, addr::CBike_ProcessAI_patch, 2);
-#endif
+	// P2-19: arm32 CBike_ProcessAI_patch (0x564D30) is a 2-byte Thumb-16 bhi -> word_count=1; arm64 is 4-byte -> word_count=2
+	patches::registerNop("CBike::ProcessAI", "Allow remote bike ProcessControlInputs",
+		patches::Scope::Online, addr::CBike_ProcessAI_patch, VER_x32 ? 1 : 2);
 
 	patches::registerNop("CPlayerInfo.KillPlayer.BigMsg", "Suppress wasted big message", patches::Scope::Online, addr::CMessages_AddBigMessage_patch, 2);
 	patches::registerRet("CAEGlobalWeaponAudio.AmbientGunFire", "Disable ambient gunfire audio", patches::Scope::Online, eng::Sym::CAEGlobalWeaponAudioEntity_ServiceAmbientGunFire);
@@ -249,6 +252,39 @@ void Patches::apply()
 	patches::registerRet("CFileLoader::LoadPickup", "Disable singleplayer map pickups", patches::Scope::Online, eng::Sym::CFileLoader_LoadPickup);
 	patches::registerRet("CEntryExit::GenerateAmbientPeds", "Disable interior ambient peds", patches::Scope::Online, eng::Sym::CEntryExit_GenerateAmbientPeds);
 	patches::registerRet("CPlayerInfo::AddHealth", "Disable hospital/ambulance auto-heal", patches::Scope::Online, eng::Sym::CPlayerInfo_AddHealth);
+	patches::registerRet("CPlayerInfo::ArrestPlayer", "Disable singleplayer busted arrest flow", patches::Scope::Online, eng::Sym::CPlayerInfo_ArrestPlayer);
+	patches::registerRet("CPlayerInfo::StreamParachuteWeapon", "Disable auto parachute streaming", patches::Scope::Online, eng::Sym::CPlayerInfo_StreamParachuteWeapon);
+	patches::registerRet("CPlayerInfo::GivePlayerParachute", "Disable auto parachute grant", patches::Scope::Online, eng::Sym::CPlayerInfo_GivePlayerParachute);
+	patches::registerNop("CVehicle.SetDriver.Rewards", "Disable emergency/taxi/caddy vehicle entry weapons, armour & money",
+		patches::Scope::Online, addr::CVehicle_SetDriver_rewardBranch, VER_x32 ? 1 : 2);
+	patches::registerBytes("CPlayerInfo.Process.AutoParachute", "Skip auto GiveWeapon(46) on aircraft bailout",
+		patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CPlayerInfo_Process_parachuteBranch),
+		!VER_x32 ? "\x09\x00\x00\x14" : "\x09\xE0", !VER_x32 ? 4 : 2);
+	patches::registerRet("CGameLogic::SetPlayerWantedLevelForForbiddenTerritories", "Disable forbidden-city 4-star wanted level",
+		patches::Scope::Online, eng::Sym::CGameLogic_SetPlayerWantedLevelForForbiddenTerritories);
+	patches::registerRet("CHeli::UpdateHelis", "Disable singleplayer police helicopters", patches::Scope::Online, eng::Sym::CHeli_UpdateHelis);
+	patches::registerRet("CRoadBlocks::GenerateRoadBlocks", "Disable singleplayer police roadblocks", patches::Scope::Online, eng::Sym::CRoadBlocks_GenerateRoadBlocks);
+	patches::registerRet("CWanted::Update", "Disable singleplayer wanted pursuit update", patches::Scope::Online, eng::Sym::CWanted_Update);
+	patches::registerRet("CWanted::UpdateEachFrame", "Disable singleplayer wanted per-frame update", patches::Scope::Online, eng::Sym::CWanted_UpdateEachFrame);
+
+	// P2-18 & P3-9: Singleplayer leakage & idle loop suppression
+	patches::registerRet("CPlayerInfo::WorkOutEnergyFromHunger", "Disable singleplayer hunger starvation HP drain", patches::Scope::Online, eng::Sym::CPlayerInfo_WorkOutEnergyFromHunger);
+	patches::registerRet("CStats::IncrementStat", "Disable singleplayer stat drift (increment)", patches::Scope::Online, eng::Sym::CStats_IncrementStat);
+	patches::registerRet("CStats::DecrementStat", "Disable singleplayer stat drift (decrement)", patches::Scope::Online, eng::Sym::CStats_DecrementStat);
+	patches::registerRet("CTrain::DoTrainGenerationAndRemoval", "Disable singleplayer ambient train generation", patches::Scope::Online, eng::Sym::CTrain_DoTrainGenerationAndRemoval);
+	patches::registerRet("InteriorManager_c::Update", "Disable singleplayer interior furniture manager", patches::Scope::Online, eng::Sym::InteriorManager_c_Update);
+	patches::registerRet("CAEVehicleAudioEntity::TurnOnRadioForVehicle", "Disable auto-radio on vehicle enter", patches::Scope::Online, eng::Sym::CAEVehicleAudioEntity_TurnOnRadioForVehicle);
+	patches::registerNop("CPlayerInfo.Process.PassengerMoney", "Disable singleplayer +$1/sec passenger money reward",
+		patches::Scope::Online, addr::CPlayerInfo_Process_passengerMoneyStore, 2);
+	patches::registerRet("CGangWars::Update", "Disable singleplayer gang wars loop", patches::Scope::Online, eng::Sym::CGangWars_Update);
+	patches::registerRet("CDarkel::Update", "Disable singleplayer rampage/darkel loop", patches::Scope::Online, eng::Sym::CDarkel_Update);
+	patches::registerRet("CSetPieces::Update", "Disable singleplayer set-pieces loop", patches::Scope::Online, eng::Sym::CSetPieces_Update);
+	patches::registerRet("CGarages::Update", "Disable singleplayer garages loop", patches::Scope::Online, eng::Sym::CGarages_Update);
+	patches::registerRet("CConversations::Update", "Disable singleplayer ped conversations loop", patches::Scope::Online, eng::Sym::CConversations_Update);
+	patches::registerRet("CPedToPlayerConversations::Update", "Disable singleplayer ped-to-player conversations", patches::Scope::Online, eng::Sym::CPedToPlayerConversations_Update);
+	patches::registerRet("CAutomobile::ProcessFlyingCarStuff", "Disable singleplayer flying car cheat loop", patches::Scope::Online, eng::Sym::CAutomobile_ProcessFlyingCarStuff);
+	patches::registerRet("CCarCtrl::RemoveDistantCars", "Disable singleplayer distant car despawn", patches::Scope::Online, eng::Sym::CCarCtrl_RemoveDistantCars);
+	patches::registerRet("CCarCtrl::RemoveCarsIfThePoolGetsFull", "Disable singleplayer full-pool car despawn", patches::Scope::Online, eng::Sym::CCarCtrl_RemoveCarsIfThePoolGetsFull);
 	patches::registerRet("CRadar::DrawLegend", "Disable radar legend draw", patches::Scope::Online, eng::Sym::CRadar_DrawLegend);
 	patches::registerRet("CRadar::AddBlipToLegendList", "Disable radar legend list", patches::Scope::Online, eng::Sym::CRadar_AddBlipToLegendList);
 	patches::registerNop("CRadar.DrawCoordBlip.SpriteDraw", "Suppress vanilla coord blip sprite", patches::Scope::Online, addr::CRadar_DrawCoordBlip_patch, 2);

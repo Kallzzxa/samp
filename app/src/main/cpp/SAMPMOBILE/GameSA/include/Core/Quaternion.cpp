@@ -49,6 +49,13 @@ void CQuaternion::GetMatrix(RwMatrix* mat)
 void CQuaternion::Normalize()
 {
 	double n = sqrt(x * x + y * y + z * z + w * w);
+	if (!std::isfinite(n) || n < 1e-6) {
+		x = 0.0f;
+		y = 0.0f;
+		z = 0.0f;
+		w = 1.0f;
+		return;
+	}
 
 	w /= n;
 	x /= n;

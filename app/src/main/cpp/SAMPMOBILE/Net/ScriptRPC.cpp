@@ -12,21 +12,34 @@ extern Game* pGame;
 extern NetGame* pNetGame;
 extern AudioStream* pAudioStream;
 
+namespace {
+inline bool isFinite3(float x, float y, float z) {
+	return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+}
+}
+
 void RpcHandlers::OnSetGravity(const proto::SetGravity& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetGravity");
-	pGame->SetGravity(p.gravity);
+	if (pGame && std::isfinite(p.gravity)) {
+		pGame->SetGravity(p.gravity);
+	}
 }
 
 void RpcHandlers::OnSetCameraPos(const proto::SetCameraPos& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetCameraPos");
-	pGame->GetCamera()->SetPosition(p.position.x, p.position.y, p.position.z, 0.0f, 0.0f, 0.0f);
+	if (pGame && pGame->GetCamera() && isFinite3(p.position.x, p.position.y, p.position.z)) {
+		pGame->GetCamera()->SetPosition(p.position.x, p.position.y, p.position.z, 0.0f, 0.0f, 0.0f);
+	}
 }
 
 void RpcHandlers::OnSetCameraLookAt(const proto::SetCameraLookAt& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetCameraLookAt");
+	if (!pGame || !pGame->GetCamera() || !isFinite3(p.position.x, p.position.y, p.position.z)) {
+		return;
+	}
 
 	uint8_t byteType = p.cutType;
 	if (byteType < 1 || byteType > 2) {
@@ -39,6 +52,12 @@ void RpcHandlers::OnSetCameraLookAt(const proto::SetCameraLookAt& p)
 void RpcHandlers::OnInterpolateCamera(const proto::InterpolateCamera& p)
 {
 	spdlog::debug("ScriptRPC: ScrInterpolateCamera");
+	if (!pGame || !pGame->GetCamera() || !pNetGame || !pNetGame->GetPlayerPool() || !pNetGame->GetPlayerPool()->GetLocalPlayer()) {
+		return;
+	}
+	if (!isFinite3(p.from.x, p.from.y, p.from.z) || !isFinite3(p.to.x, p.to.y, p.to.z)) {
+		return;
+	}
 
 	uint8_t byteMode = p.cutType;
 	if (byteMode < 1 || byteMode > 2) {
@@ -49,6 +68,7 @@ void RpcHandlers::OnInterpolateCamera(const proto::InterpolateCamera& p)
 		sa::CVector vecFrom(p.from.x, p.from.y, p.from.z);
 		sa::CVector vecTo(p.to.x, p.to.y, p.to.z);
 		pNetGame->GetPlayerPool()->GetLocalPlayer()->m_bSpectateProcessed = true;
+		pGame->GetCamera()->m_pAttachedTo = nullptr;
 		if (p.setPos) {
 			pGame->GetCamera()->InterpolateCameraPos(&vecFrom, &vecTo, p.time, byteMode);
 		}
@@ -63,12 +83,21 @@ void RpcHandlers::OnTogglePlayerSpectating(const proto::TogglePlayerSpectating& 
 	spdlog::debug("ScriptRPC: ScrTogglePlayerSpectating");
 	spdlog::debug("dwToggle: {}", p.toggle);
 
-	pNetGame->GetPlayerPool()->GetLocalPlayer()->ToggleSpectating(p.toggle);
+	if (pNetGame && pNetGame->GetPlayerPool() && pNetGame->GetPlayerPool()->GetLocalPlayer()) {
+		pNetGame->GetPlayerPool()->GetLocalPlayer()->ToggleSpectating(p.toggle);
+	}
 }
 
 void RpcHandlers::OnSetSpawnInfo(const proto::SetSpawnInfo& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetSpawnInfo");
+	if (!pNetGame || !pNetGame->GetPlayerPool() || !pNetGame->GetPlayerPool()->GetLocalPlayer()) {
+		return;
+	}
+	if (!isFinite3(p.spawnInfo.position.x, p.spawnInfo.position.y, p.spawnInfo.position.z)
+			|| !std::isfinite(p.spawnInfo.rotation)) {
+		return;
+	}
 
 	PLAYER_SPAWN_INFO spawnInfo{};
 	spawnInfo.byteTeam = p.spawnInfo.team;
@@ -406,6 +435,9 @@ void RpcHandlers::OnClearPlayerAnimations(const proto::ClearPlayerAnimations& p)
 		if (pPlayerPed && pPlayerPed->m_ped) {
 			RwMatrix mat = pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
 			pPlayerPed->TeleportTo(mat.pos.x, mat.pos.y, mat.pos.z);
+			if (pPlayerPed->m_gtaId) {
+				ScriptCommand(&clear_char_tasks, pPlayerPed->m_gtaId);
+			}
 		}
 	}
 }
@@ -413,6 +445,9 @@ void RpcHandlers::OnClearPlayerAnimations(const proto::ClearPlayerAnimations& p)
 void RpcHandlers::OnSetPlayerHealth(const proto::SetPlayerHealth& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetPlayerHealth");
+	if (!pNetGame || !pNetGame->GetPlayerPool() || !pNetGame->GetPlayerPool()->GetLocalPlayer() || !std::isfinite(p.health)) {
+		return;
+	}
 
 	CPlayerPed* pPlayerPed = pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed();
 	if (pPlayerPed) {
@@ -423,6 +458,9 @@ void RpcHandlers::OnSetPlayerHealth(const proto::SetPlayerHealth& p)
 void RpcHandlers::OnGivePlayerWeapon(const proto::GivePlayerWeapon& p)
 {
 	spdlog::debug("ScriptRPC: ScrGivePlayerWeapon");
+	if (!pNetGame || !pNetGame->GetPlayerPool() || !pNetGame->GetPlayerPool()->GetLocalPlayer()) {
+		return;
+	}
 
 	CPlayerPed* pPlayerPed = pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed();
 	if (pPlayerPed) {
@@ -433,7 +471,9 @@ void RpcHandlers::OnGivePlayerWeapon(const proto::GivePlayerWeapon& p)
 void RpcHandlers::OnSetPlayerInterior(const proto::SetPlayerInterior& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetPlayerInterior");
-	pGame->FindPlayerPed()->SetInterior(p.interiorId, true);
+	if (CPlayerPed* pPed = pGame ? pGame->FindPlayerPed() : nullptr) {
+		pPed->SetInterior(p.interiorId, true);
+	}
 }
 
 void RpcHandlers::OnShowTextDraw(const proto::ShowTextDraw& p)
@@ -442,6 +482,13 @@ void RpcHandlers::OnShowTextDraw(const proto::ShowTextDraw& p)
 
 	CTextDrawPool* pTextDrawPool = pNetGame->GetTextDrawPool();
 	if (pTextDrawPool == nullptr) {
+		return;
+	}
+
+	if (p.style > 5 || !std::isfinite(p.position.x) || !std::isfinite(p.position.y)
+			|| !std::isfinite(p.letterSize.x) || !std::isfinite(p.letterSize.y)
+			|| !std::isfinite(p.lineSize.x) || !std::isfinite(p.lineSize.y)
+			|| !isFinite3(p.rotation.x, p.rotation.y, p.rotation.z) || !std::isfinite(p.zoom)) {
 		return;
 	}
 
@@ -518,7 +565,7 @@ void RpcHandlers::OnSelectTextDraw(const proto::SelectTextDraw& p)
 	}
 
 	if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool()) {
-		pTdPool->SetSelectState(p.enable, p.hoverColor, false);
+		pTdPool->SetSelectState(p.enable, p.hoverColor, !p.enable);
 	}
 }
 
@@ -729,33 +776,9 @@ void RpcHandlers::OnAttachObjectToPlayer(const proto::AttachObjectToPlayer& p)
 		return;
 	}
 
-	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
-	if (!pPlayerPool) {
-		return;
-	}
-
-	if (pPlayerPool->GetLocalPlayerID() == p.playerId) {
-		CLocalPlayer* pLocalPlayer = pPlayerPool->GetLocalPlayer();
-		if (!pLocalPlayer || !pLocalPlayer->GetPlayerPed()) {
-			return;
-		}
-		ScriptCommand(&attach_object_to_actor,
-				pObject->m_gtaId,
-				pLocalPlayer->GetPlayerPed()->m_gtaId,
-				p.offset.x, p.offset.y, p.offset.z,
-				p.rotation.x, p.rotation.y, p.rotation.z);
-	}
-	else {
-		CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(p.playerId);
-		if (!pRemotePlayer || !pRemotePlayer->GetPlayerPed()) {
-			return;
-		}
-		ScriptCommand(&attach_object_to_actor,
-				pObject->m_gtaId,
-				pRemotePlayer->GetPlayerPed()->m_gtaId,
-				p.offset.x, p.offset.y, p.offset.z,
-				p.rotation.x, p.rotation.y, p.rotation.z);
-	}
+	sa::CVector offset(p.offset.x, p.offset.y, p.offset.z);
+	sa::CVector rot(p.rotation.x, p.rotation.y, p.rotation.z);
+	pObject->SetAttachedPlayer(p.playerId, &offset, &rot);
 }
 
 void RpcHandlers::OnSetPlayerWantedLevel(const proto::SetPlayerWantedLevel& p)
@@ -948,13 +971,26 @@ void RpcHandlers::OnSetPlayerPos(const proto::SetPlayerPos& p)
 		return;
 	}
 
+	if (!isFinite3(p.position.x, p.position.y, p.position.z)) {
+		return;
+	}
 	pLocalPlayer->DisableSurfing();
-	pLocalPlayer->GetPlayerPed()->TeleportTo(p.position.x, p.position.y, p.position.z);
+	if (CPlayerPed* pPed = pLocalPlayer->GetPlayerPed()) {
+		if (pPed->IsInVehicle()) {
+			pPed->RemoveFromVehicleAndPutAt(p.position.x, p.position.y, p.position.z);
+		}
+		else {
+			pPed->TeleportTo(p.position.x, p.position.y, p.position.z);
+		}
+	}
 }
 
 void RpcHandlers::OnSetPlayerPosFindZ(const proto::SetPlayerPosFindZ& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetPlayerPosFindZ");
+	if (!pGame || !isFinite3(p.position.x, p.position.y, p.position.z)) {
+		return;
+	}
 
 	CPlayerPool* pPlayerPool = pNetGame->GetPlayerPool();
 	if (!pPlayerPool) {
@@ -968,7 +1004,14 @@ void RpcHandlers::OnSetPlayerPosFindZ(const proto::SetPlayerPosFindZ& p)
 
 	float fZ = pGame->FindGroundZForCoord(p.position.x, p.position.y, p.position.z) + 1.5f;
 	pLocalPlayer->DisableSurfing();
-	pLocalPlayer->GetPlayerPed()->TeleportTo(p.position.x, p.position.y, fZ);
+	if (CPlayerPed* pPed = pLocalPlayer->GetPlayerPed()) {
+		if (pPed->IsInVehicle()) {
+			pPed->RemoveFromVehicleAndPutAt(p.position.x, p.position.y, fZ);
+		}
+		else {
+			pPed->TeleportTo(p.position.x, p.position.y, fZ);
+		}
+	}
 }
 
 void RpcHandlers::OnPutPlayerInVehicle(const proto::PutPlayerInVehicle& p)
@@ -1032,11 +1075,12 @@ void RpcHandlers::OnShowGameText(const proto::ShowGameText& p)
 {
 	spdlog::debug("ScriptRPC: ScrShowGameText");
 
-	if (p.text.size() > 200 || p.style < 0 || p.style > 6) {
+	if (p.style < 0 || p.style > 6) {
 		return;
 	}
 
-	if (pGame) pGame->DisplayGameText(const_cast<char*>(p.text.c_str()), p.time, p.style);
+	std::string text = (p.text.size() > 512) ? p.text.substr(0, 512) : p.text;
+	if (pGame) pGame->DisplayGameText(text.c_str(), p.time, p.style);
 }
 
 void RpcHandlers::OnSetVehiclePos(const proto::SetVehiclePos& p)
@@ -1418,7 +1462,7 @@ void RpcHandlers::OnDeathMessage(const proto::DeathMessage& p)
 	}
 
 	if (pUI) {
-		pUI->deathwindow()->record(playername.c_str(), UI::fixcolor(playercolor), killername.c_str(), killercolor, p.reason);
+		pUI->deathwindow()->record(playername.c_str(), playercolor, killername.c_str(), killercolor, p.reason);
 	}
 }
 

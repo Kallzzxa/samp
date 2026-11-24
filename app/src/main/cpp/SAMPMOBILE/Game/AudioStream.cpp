@@ -74,8 +74,14 @@ bool isAllowedAudioUrl(const char* url)
 	return strncasecmp(url, "http://", 7) == 0 || strncasecmp(url, "https://", 8) == 0;
 }
 
+std::atomic<int> g_audioStreamInFlightThreads{0};
+
 void* audioStreamThread(void* rawArg)
 {
+	struct InFlightGuard {
+		~InFlightGuard() { g_audioStreamInFlightThreads.fetch_sub(1, std::memory_order_acq_rel); }
+	} inFlightGuard;
+
 	std::unique_ptr<AudioStreamStartArgs> args(static_cast<AudioStreamStartArgs*>(rawArg));
 	if (!args) return nullptr;
 
@@ -179,12 +185,20 @@ bool AudioStream::Play(const char* szUrl, float fX, float fY, float fZ, float fR
 		generation = ++g_audioStreamGeneration;
 	}
 
+	static constexpr int kMaxInFlightAudioThreads = 2;
+	if (g_audioStreamInFlightThreads.fetch_add(1, std::memory_order_acq_rel) >= kMaxInFlightAudioThreads) {
+		g_audioStreamInFlightThreads.fetch_sub(1, std::memory_order_acq_rel);
+		spdlog::warn("AudioStream::Play: too many in-flight connect threads, dropping request");
+		return false;
+	}
+
 	auto* args = new AudioStreamStartArgs{generation, szUrl};
 	pthread_t thread;
 	if (pthread_create(&thread, nullptr, audioStreamThread, args) == 0) {
 		pthread_detach(thread);
 		return true;
 	}
+	g_audioStreamInFlightThreads.fetch_sub(1, std::memory_order_acq_rel);
 	delete args;
 	return false;
 }

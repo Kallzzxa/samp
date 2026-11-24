@@ -8,17 +8,23 @@ extern NetGame* pNetGame;
 CPickupPool::CPickupPool()
 {
 	memset(m_Pickups, 0, sizeof(m_Pickups));
+	memset(m_droppedWeapon, 0, sizeof(m_droppedWeapon));
 
 	for (int i = 0; i < MAX_PICKUPS; i++) {
 		m_dwHnd[i] = 0;
 		m_iTimer[i] = 0;
-		m_dwGTAId[i] = 0xFFFFFFFF;
+		m_dwGTAId[i] = -1;
+		m_droppedWeapon[i].PlayerID = INVALID_PLAYER_ID;
 	}
+	for (int i = 0; i < kMaxGtaPickups; i++) {
+		m_gtaIdToSampId[i] = -1;
+	}
+	m_highestActiveSlot = -1;
 }
 
 CPickupPool::~CPickupPool()
 {
-	for (int i = 0; i < MAX_PICKUPS; i++) {
+	for (int i = 0; i <= m_highestActiveSlot; i++) {
 		if (m_dwHnd[i] != 0) {
 			ScriptCommand(&destroy_pickup, m_dwHnd[i]);
 		}
@@ -27,34 +33,18 @@ CPickupPool::~CPickupPool()
 
 void CPickupPool::Process()
 {
-	for (int i = 0; i < MAX_PICKUPS; i++) {
+	if (m_highestActiveSlot < 0) return;
+
+	int newHighest = -1;
+	for (int i = 0; i <= m_highestActiveSlot; i++) {
 		if (m_dwHnd[i] != 0) {
-			if (m_droppedWeapon[i].bDroppedWeapon || m_Pickups[i].iType == 14) {
-				if (ScriptCommand(&is_pickup_picked_up, m_dwHnd[i])) {
-					RakNet::BitStream bsPickup;
-					if (m_droppedWeapon[i].bDroppedWeapon == false) {
-						proto::Writer writer(bsPickup);
-						proto::PickedUpPickupReq req{};
-						req.pickupId = i;
-						req.serialize(writer, proto::ProtoVersion::V037);
-						pNetGame->GetRakClient()->RPC(&RPC_PickedUpPickup, &bsPickup, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
-					}
-					else {
-						// T23: notify server via RPC 97 (dropped weapon pickup collected)
-						proto::Writer writer(bsPickup);
-						proto::PickedUpWeaponPickupReq req{};
-						req.owner = m_droppedWeapon[i].PlayerID;
-						req.serialize(writer, proto::ProtoVersion::V037);
-						pNetGame->GetRakClient()->RPC(&RPC_DestroyWeaponPickup, &bsPickup, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
-						Destroy(i);
-					}
-				}
-			}
-			else if (m_iTimer[i] > 0) {
+			newHighest = i;
+			if (!m_droppedWeapon[i].bDroppedWeapon && m_iTimer[i] > 0) {
 				m_iTimer[i]--;
 			}
 		}
 	}
+	m_highestActiveSlot = newHighest;
 }
 
 /**
@@ -63,19 +53,31 @@ void CPickupPool::Process()
  */
 void CPickupPool::New(PICKUP* pPickup, int iPickup)
 {
-	if (iPickup < 0 || iPickup >= MAX_PICKUPS) return;
+	if (!pPickup || !pGame || iPickup < 0 || iPickup >= MAX_PICKUPS) return;
 
 	if (m_dwHnd[iPickup] != 0) {
-		ScriptCommand(&destroy_pickup, m_dwHnd[iPickup]);
+		Destroy(iPickup);
 	}
 
 	memcpy(&m_Pickups[iPickup], pPickup, sizeof(PICKUP));
 	m_droppedWeapon[iPickup].bDroppedWeapon = false;
+	m_droppedWeapon[iPickup].PlayerID = INVALID_PLAYER_ID;
+	m_iTimer[iPickup] = 0;
 
-	int dwGTAId = 0;
-	m_dwHnd[iPickup] = pGame->CreatePickup(pPickup->iModel, pPickup->iType,
+	int dwGTAId = -1;
+	uint32_t hnd = pGame->CreatePickup(pPickup->iModel, pPickup->iType,
 			pPickup->fX, pPickup->fY, pPickup->fZ, &dwGTAId);
-	m_dwGTAId[iPickup] = dwGTAId;
+	m_dwHnd[iPickup] = hnd;
+	if (hnd != 0 && dwGTAId >= 0 && dwGTAId < kMaxGtaPickups) {
+		m_dwGTAId[iPickup] = dwGTAId;
+		m_gtaIdToSampId[dwGTAId] = iPickup;
+		if (iPickup > m_highestActiveSlot) {
+			m_highestActiveSlot = iPickup;
+		}
+	}
+	else {
+		m_dwGTAId[iPickup] = -1;
+	}
 }
 
 void CPickupPool::CreateWeapon(int iModel, float fX, float fY, float fZ, int iAmmo, PLAYERID owner)
@@ -97,16 +99,23 @@ void CPickupPool::CreateWeapon(int iModel, float fX, float fY, float fZ, int iAm
 	uint32_t hnd = pGame->CreateWeaponPickup(iModel, iAmmo, fX, fY, fZ);
 	if (hnd == 0) return;
 
+	const int gtaId = static_cast<int>(hnd & 0xFFFFu);
 	m_Pickups[slot].iModel = iModel;
 	m_Pickups[slot].iType = 4;
 	m_Pickups[slot].fX = fX;
 	m_Pickups[slot].fY = fY;
 	m_Pickups[slot].fZ = fZ;
 	m_dwHnd[slot] = hnd;
-	m_dwGTAId[slot] = 0xFFFFFFFF;
+	m_dwGTAId[slot] = (gtaId >= 0 && gtaId < kMaxGtaPickups) ? gtaId : -1;
+	if (m_dwGTAId[slot] >= 0) {
+		m_gtaIdToSampId[m_dwGTAId[slot]] = slot;
+	}
 	m_iTimer[slot] = 0;
 	m_droppedWeapon[slot].bDroppedWeapon = true;
 	m_droppedWeapon[slot].PlayerID = owner;
+	if (slot > m_highestActiveSlot) {
+		m_highestActiveSlot = slot;
+	}
 }
 
 /**
@@ -117,10 +126,14 @@ void CPickupPool::Destroy(int iPickup)
 	if (iPickup < 0 || iPickup >= MAX_PICKUPS) return;
 
 	if (m_dwHnd[iPickup]) {
+		const int gtaId = m_dwGTAId[iPickup];
+		if (gtaId >= 0 && gtaId < kMaxGtaPickups && m_gtaIdToSampId[gtaId] == iPickup) {
+			m_gtaIdToSampId[gtaId] = -1;
+		}
 		ScriptCommand(&destroy_pickup, m_dwHnd[iPickup]);
 		m_dwHnd[iPickup] = 0;
 		m_iTimer[iPickup] = 0;
-		m_dwGTAId[iPickup] = 0xFFFFFFFF;
+		m_dwGTAId[iPickup] = -1;
 		m_droppedWeapon[iPickup].bDroppedWeapon = false;
 		m_droppedWeapon[iPickup].PlayerID = INVALID_PLAYER_ID;
 	}
@@ -131,7 +144,7 @@ void CPickupPool::Destroy(int iPickup)
  */
 void CPickupPool::DestroyWeaponByOwner(PLAYERID owner)
 {
-	for (int i = 0; i < MAX_PICKUPS; i++) {
+	for (int i = 0; i <= m_highestActiveSlot; i++) {
 		if (m_dwHnd[i] && m_droppedWeapon[i].bDroppedWeapon && m_droppedWeapon[i].PlayerID == owner) {
 			Destroy(i);
 		}
@@ -144,12 +157,12 @@ void CPickupPool::DestroyWeaponByOwner(PLAYERID owner)
  */
 int CPickupPool::GetIDFromGTAId(int dwGTAId)
 {
-	for (int i = 0; i < MAX_PICKUPS; i++) {
-		if (m_dwGTAId[i] == dwGTAId) {
-			return i;
+	if (dwGTAId >= 0 && dwGTAId < kMaxGtaPickups) {
+		const int id = m_gtaIdToSampId[dwGTAId];
+		if (id >= 0 && id < MAX_PICKUPS && m_dwHnd[id] != 0 && m_dwGTAId[id] == dwGTAId) {
+			return id;
 		}
 	}
-
 	return -1;
 }
 
@@ -158,9 +171,19 @@ int CPickupPool::GetIDFromGTAId(int dwGTAId)
  */
 void CPickupPool::PickedUp(int dwGTAId)
 {
+	if (!pNetGame || !pNetGame->GetRakClient()) return;
 	int PickupID = GetIDFromGTAId(dwGTAId);
-	if (PickupID != 0xFFFFFFFF && m_dwHnd[PickupID] != 0 && m_iTimer[PickupID] == 0) {
-		if (m_droppedWeapon[PickupID].bDroppedWeapon) return;
+	if (PickupID >= 0 && PickupID < MAX_PICKUPS && m_dwHnd[PickupID] != 0 && m_iTimer[PickupID] == 0) {
+		if (m_droppedWeapon[PickupID].bDroppedWeapon) {
+			RakNet::BitStream bsPickup;
+			proto::Writer writer(bsPickup);
+			proto::PickedUpWeaponPickupReq req{};
+			req.owner = m_droppedWeapon[PickupID].PlayerID;
+			req.serialize(writer, proto::ProtoVersion::V037);
+			pNetGame->GetRakClient()->RPC(&RPC_DestroyWeaponPickup, &bsPickup, HIGH_PRIORITY, RELIABLE_SEQUENCED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
+			Destroy(PickupID);
+			return;
+		}
 
 		RakNet::BitStream bsPickup;
 		proto::Writer writer(bsPickup);

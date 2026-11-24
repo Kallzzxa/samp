@@ -21,9 +21,16 @@ CTextDrawPool::CTextDrawPool()
 
 CTextDrawPool::~CTextDrawPool()
 {
+	Reset();
+}
+
+void CTextDrawPool::Reset()
+{
+	SetSelectState(false, 0, false);
 	for (int i = 0; i < MAX_TEXT_DRAWS; i++) {
 		Delete(i);
 	}
+	ResetTextDrawTextures();
 }
 
 /**
@@ -81,13 +88,14 @@ void CTextDrawPool::DrawImGui(ImGuiRenderer* renderer)
 void CTextDrawPool::SetSelectState(bool bState, uint32_t dwColor, bool bSendCancel)
 {
 	if (bState) {
-		m_bSelectState.store(true, std::memory_order_release);
+		const bool alreadySelecting = m_bSelectState.exchange(true, std::memory_order_acq_rel);
 		// SelectTextDraw RPC transmits hover color in RGBA (0xRRGGBBAA), while
 		// CTextDraw::Draw / DrawImGui / DrawTextureUV consume ABGR (0xAABBGGRR).
 		m_dwHoverColor = __builtin_bswap32(dwColor);
 		m_wClickedTextDrawID = 0xFFFF;
-		//pGame->DisplayHUD(false);
-		//pGame->FindPlayerPed()->TogglePlayerControllable(false);
+		if (!alreadySelecting && pGame) {
+			pGame->SetHudHidden(Game::HUD_HIDE_TEXTDRAW_SELECT, true);
+		}
 	}
 	else {
 		const bool wasSelecting = m_bSelectState.exchange(false, std::memory_order_acq_rel);
@@ -97,8 +105,9 @@ void CTextDrawPool::SetSelectState(bool bState, uint32_t dwColor, bool bSendCanc
 			std::lock_guard<std::mutex> lock(m_touchMutex);
 			m_pendingTouches.clear();
 		}
-		//pGame->DisplayHUD(true);
-		//pGame->FindPlayerPed()->TogglePlayerControllable(true);
+		if (wasSelecting && pGame) {
+			pGame->SetHudHidden(Game::HUD_HIDE_TEXTDRAW_SELECT, false);
+		}
 
 		if (wasSelecting && bSendCancel) {
 			SendClick();
@@ -155,6 +164,7 @@ bool CTextDrawPool::onTouchEvent(int type, int x, int y)
 	if (!m_bSelectState.load(std::memory_order_acquire)) return true;
 
 	m_wClickedTextDrawID = 0xFFFF;
+	int topHitId = -1;
 
 	for (int i = 0; i < MAX_TEXT_DRAWS; i++) {
 		if (m_bSlotState[i] && m_pTextDraw[i]) {
@@ -164,23 +174,27 @@ bool CTextDrawPool::onTouchEvent(int type, int x, int y)
 
 			if (pTextDraw->m_TextDrawData.byteSelectable && pTextDraw->m_TextDrawData.bHasRectArea) {
 				sa::CRect* rect = &pTextDraw->m_rectArea;
-				if (rect) {
-					if (IsPointInRect(x, y, rect)) {
-						switch (type) {
-							case 2:
-							case 3: m_wClickedTextDrawID = 0xFFFF;
-								pTextDraw->m_bHovered = true;
-								pTextDraw->m_dwHoverColor = m_dwHoverColor;
-								break;
-
-							case 1: m_wClickedTextDrawID = i;
-								pTextDraw->m_bHovered = false;
-								pTextDraw->m_dwHoverColor = 0;
-								break;
-						}
-					}
+				if (IsPointInRect(x, y, rect)) {
+					topHitId = i;
 				}
 			}
+		}
+	}
+
+	if (topHitId >= 0 && m_pTextDraw[topHitId]) {
+		CTextDraw* pTop = m_pTextDraw[topHitId];
+		switch (type) {
+			case 2:
+			case 3:
+				m_wClickedTextDrawID = 0xFFFF;
+				pTop->m_bHovered = true;
+				pTop->m_dwHoverColor = m_dwHoverColor;
+				break;
+			case 1:
+				m_wClickedTextDrawID = static_cast<uint16_t>(topHitId);
+				pTop->m_bHovered = false;
+				pTop->m_dwHoverColor = 0;
+				break;
 		}
 	}
 

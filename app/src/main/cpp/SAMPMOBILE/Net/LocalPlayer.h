@@ -192,6 +192,7 @@ public:
 	PLAYERID GetAimedPlayerId() const { return m_lastTargetPlayerId; }
 	PLAYERID GetAimedActorId() const { return m_lastTargetActorId; }
 	void UpdateVehicleDamage(VEHICLEID vehicleID);
+	void SyncVehicleDamageCache(VEHICLEID vehicleID, uint32_t panels, uint32_t doors, uint8_t lights, uint8_t tires);
 	bool IsClearedToSpawn() { return m_bClearedToSpawn; }
 	void HandleClassSelection();
 	void ReturnToClassSelection() { m_bWantsAnotherClass = true; }
@@ -203,6 +204,7 @@ public:
 	void ProcessOnFootWorldBounds();
 	void ProcessInCarWorldBounds();
 	bool CompareOnFootSyncKeys(uint16_t wKeys, uint16_t lrAnalog, uint16_t udAnalog);
+	bool CompareInCarSyncKeys(uint16_t wKeys, uint16_t lrAnalog, uint16_t udAnalog);
 	void ApplySpecialAction(uint8_t byteSpecialAction);
 	void SetSpawnInfo(PLAYER_SPAWN_INFO* pSpawnInfo);
 	void HandleClassSelectionOutcome(bool bOutcome);
@@ -264,6 +266,7 @@ public:
 		bool bIsActive;
 		bool bIsVehicle;
 		uintptr_t pSurfInst;
+		uint32_t dwLastContactTick;
 	} m_surfSync;
 
 private:
@@ -309,7 +312,7 @@ private:
 	uint32_t m_dwLastAimDataSyncTick;
 	uint32_t m_dwLastSendSpecTick;
 	uint32_t m_dwLastWeaponsUpdateTick;
-	uint32_t m_dwLastHeadUpdate;
+	uint32_t m_dwLastHeadUpdate = 0;
 	uint32_t m_dwLastCameraTargetTick = 0;
 	uint16_t m_wCameraTargets[4] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
 

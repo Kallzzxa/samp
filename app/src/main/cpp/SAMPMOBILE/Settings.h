@@ -32,6 +32,7 @@ public:
 	static bool newinterface() { return m_newinterface; }
 	static bool systemkeyboard() { return m_systemkeyboard; }
 	static bool timestamp() { return m_timestamp; }
+	static void setTimestamp(bool v);
 	static bool fastconnect() { return m_fastconnect; }
 	static bool voice() { return m_voice; }
 	static bool displayfps() { return m_displayfps; }

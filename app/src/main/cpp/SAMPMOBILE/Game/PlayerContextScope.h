@@ -44,7 +44,9 @@ public:
 				savedCamMode1_ = true;
 			}
 			if (wCameraMode2) {
-				savedCameraMode2_ = *wCameraMode2;
+				// Save full 12-byte sa::CQueuedMode (m_nMode, pad, m_fDuration, m_nMinZoom, m_nMaxZoom)
+				// so remote ProcessPlayerWeapon -> SetNewPlayerWeaponMode cannot clobber local sniper zoom fields.
+				std::memcpy(savedWeaponMode_, wCameraMode2, sizeof(savedWeaponMode_));
 				*wCameraMode2 = (remoteMode == 4) ? 0 : remoteMode;
 				savedCamMode2_ = true;
 			}
@@ -104,7 +106,7 @@ public:
 			*pbyteCameraMode = savedCameraMode_;
 		}
 		if (savedCamMode2_ && wCameraMode2) {
-			*wCameraMode2 = savedCameraMode2_;
+			std::memcpy(wCameraMode2, savedWeaponMode_, sizeof(savedWeaponMode_));
 		}
 
 		if (savedZoomAspect_ && pfCameraExtZoom && pfAspectRatio) {
@@ -127,7 +129,7 @@ public:
 private:
 	uint32_t flags_ = kNone;
 	uint8_t savedCameraMode_ = 0;
-	uint16_t savedCameraMode2_ = 0;
+	uint8_t savedWeaponMode_[12]{};
 	uint8_t savedCurrentPlayer_ = 0;
 	float savedExtZoom_ = 0.0f;
 	float savedAspectRatio_ = 0.0f;

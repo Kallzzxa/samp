@@ -15,10 +15,8 @@ DeathWindow::DeathWindow()
 
 void DeathWindow::record(const char* playername, unsigned int playercolor, const char* killername, unsigned int killercolor, uint8_t reason)
 {
-	if (!playername || !strlen(playername)) return;
-
 	DeathWindowStruct* pPlayerKill = new DeathWindowStruct;
-	pPlayerKill->playerName = playername;
+	pPlayerKill->playerName = playername ? playername : "";
 	pPlayerKill->playercolor = playercolor;
 	pPlayerKill->killerName = killername ? killername : "";
 	pPlayerKill->killercolor = killercolor;
@@ -32,55 +30,113 @@ void DeathWindow::record(const char* playername, unsigned int playercolor, const
 	m_pDeathWindow.push_back(pPlayerKill);
 }
 
+static const char* FallbackWeaponTag(uint8_t reason)
+{
+	switch (reason) {
+		case WEAPON_FIST: return "[Fist]";
+		case WEAPON_BRASSKNUCKLE: return "[Knuckle]";
+		case WEAPON_GOLFCLUB: return "[Golf]";
+		case WEAPON_NITESTICK: return "[Stick]";
+		case WEAPON_KNIFE: return "[Knife]";
+		case WEAPON_BAT: return "[Bat]";
+		case WEAPON_SHOVEL: return "[Shovel]";
+		case WEAPON_POOLSTICK: return "[Pool]";
+		case WEAPON_KATANA: return "[Katana]";
+		case WEAPON_CHAINSAW: return "[Saw]";
+		case WEAPON_GRENADE: return "[Nade]";
+		case WEAPON_TEARGAS: return "[Gas]";
+		case WEAPON_MOLOTOV: return "[Molotov]";
+		case WEAPON_COLT45: return "[9mm]";
+		case WEAPON_SILENCED: return "[SD9mm]";
+		case WEAPON_DEAGLE: return "[Deagle]";
+		case WEAPON_SHOTGUN: return "[Shotgun]";
+		case WEAPON_SAWEDOFF: return "[Sawnoff]";
+		case WEAPON_SHOTGSPA: return "[SPAZ]";
+		case WEAPON_UZI: return "[Uzi]";
+		case WEAPON_MP5: return "[MP5]";
+		case WEAPON_AK47: return "[AK47]";
+		case WEAPON_M4: return "[M4]";
+		case WEAPON_TEC9: return "[Tec9]";
+		case WEAPON_RIFLE: return "[Rifle]";
+		case WEAPON_SNIPER: return "[Sniper]";
+		case WEAPON_ROCKETLAUNCHER: return "[RPG]";
+		case WEAPON_HEATSEEKER: return "[HS-RPG]";
+		case WEAPON_FLAMETHROWER: return "[Flame]";
+		case WEAPON_MINIGUN: return "[Minigun]";
+		case WEAPON_SATCHEL: return "[Satchel]";
+		case WEAPON_SPRAYCAN: return "[Spray]";
+		case WEAPON_FIREEXTINGUISHER: return "[Exting]";
+		case WEAPON_VEHICLE: return "[Car]";
+		case WEAPON_DROWN: return "[Drown]";
+		case WEAPON_HELIBLADES: return "[Heli]";
+		case WEAPON_EXPLOSION: return "[Boom]";
+		case WEAPON_COLLISION: return "[Fall]";
+		case 200: return "[Join]";
+		case 201: return "[Quit]";
+		default: return "[Death]";
+	}
+}
+
 void DeathWindow::draw(ImGuiRenderer* renderer)
 {
-	if (pNetGame && pNetGame->GetTextDrawPool() && pNetGame->GetTextDrawPool()->GetState()) return;
-
+	if (pUI && pUI->scoreboard() && pUI->scoreboard()->visible()) {
+		return;
+	}
 	if (!m_pDeathWindow.empty()) {
 		float fPosSprite = pUI->ScaleX(1480.0f);
+		const float fontSize = UISettings::fontSize() / 2.0f;
+		ImFont* weapFont = pUI->weapFont();
 
 		ImVec2 vecPos;
 		vecPos.y = pUI->ScaleY(420.0f);
 
+		auto drawWeaponIcon = [&](float x, float y, uint8_t reason, uint32_t iconColor) {
+			if (weapFont) {
+				renderer->drawText(ImVec2(x, y), 0xFF000000, "G", false, fontSize, weapFont);
+				renderer->drawText(ImVec2(x, y), iconColor, spriteIDForWeapon(reason), false, fontSize, weapFont);
+			}
+			else {
+				renderer->drawText(ImVec2(x, y), iconColor, FallbackWeaponTag(reason), true, fontSize * 0.85f);
+			}
+		};
+
 		for (auto& playerkill : m_pDeathWindow) {
 			if (playerkill) {
-				unsigned char PlayerColor[3];
-				PlayerColor[0] = (playerkill->playercolor >> 8) & 0xFF;
-				PlayerColor[1] = (playerkill->playercolor >> 16) & 0xFF;
-				PlayerColor[2] = (playerkill->playercolor >> 24) & 0xFF;
-
-				unsigned char KillerColor[3];
-				KillerColor[0] = (playerkill->killercolor >> 8) & 0xFF;
-				KillerColor[1] = (playerkill->killercolor >> 16) & 0xFF;
-				KillerColor[2] = (playerkill->killercolor >> 24) & 0xFF;
+				// Decode raw SA-MP 0xRRGGBBAA uniformly to ImColor(R, G, B)
+				const ImColor playerCol = UI::fixcolor(playerkill->playercolor | 0xFF);
+				const ImColor killerCol = UI::fixcolor(playerkill->killercolor | 0xFF);
 
 				if (!playerkill->killerName.empty() && !playerkill->playerName.empty()) {
-					vecPos.x = (fPosSprite - renderer->calculateTextSize(Encoding::cp2utf(playerkill->killerName), UISettings::fontSize() / 2).x) - 10.0f;
-					renderer->drawText(vecPos, ImColor(KillerColor[0], KillerColor[1], KillerColor[2]), Encoding::cp2utf(playerkill->killerName), true, UISettings::fontSize() / 2);
+					const std::string killerUtf = Encoding::cp2utf(playerkill->killerName);
+					const std::string playerUtf = Encoding::cp2utf(playerkill->playerName);
+					vecPos.x = (fPosSprite - renderer->calculateTextSize(killerUtf, fontSize).x) - 10.0f;
+					renderer->drawText(vecPos, killerCol, killerUtf, true, fontSize);
 
-					vecPos.x = fPosSprite;
-					renderer->drawText(vecPos, 0xFF000000, "G", false, UISettings::fontSize() / 2, pUI->weapFont());
-					renderer->drawText(vecPos, 0xFFFFFFFF, spriteIDForWeapon(playerkill->reason), false, UISettings::fontSize() / 2, pUI->weapFont());
+					drawWeaponIcon(fPosSprite, vecPos.y, playerkill->reason, 0xFFFFFFFF);
 
-					vecPos.x = fPosSprite + UISettings::fontSize() / 2 + 20.0f;
-					renderer->drawText(vecPos, ImColor(PlayerColor[0], PlayerColor[1], PlayerColor[2]), Encoding::cp2utf(playerkill->playerName), true, UISettings::fontSize() / 2);
+					const float iconW = weapFont ? (fontSize + 20.0f)
+						: (renderer->calculateTextSize(FallbackWeaponTag(playerkill->reason), fontSize * 0.85f).x + 12.0f);
+					vecPos.x = fPosSprite + iconW;
+					renderer->drawText(vecPos, playerCol, playerUtf, true, fontSize);
 				}
-
 				else if (playerkill->killerName.empty() && !playerkill->playerName.empty()) {
-					vecPos.x = (fPosSprite - renderer->calculateTextSize(Encoding::cp2utf(playerkill->playerName), UISettings::fontSize() / 2).x) - 10.0f;
-					renderer->drawText(vecPos, ImColor(PlayerColor[0], PlayerColor[1], PlayerColor[2]), Encoding::cp2utf(playerkill->playerName), true, UISettings::fontSize() / 2);
+					const std::string playerUtf = Encoding::cp2utf(playerkill->playerName);
+					vecPos.x = (fPosSprite - renderer->calculateTextSize(playerUtf, fontSize).x) - 10.0f;
+					renderer->drawText(vecPos, playerCol, playerUtf, true, fontSize);
 
+					// PC SA-MP ICON_CONNECT = 200 (blue), ICON_DISCONNECT = 201 (red)
 					uint32_t dwColor = 0xFFFFFFFF;
-					if (playerkill->reason == 55) { dwColor = 0xFFFF0000; }
-					else if (playerkill->reason == 56) dwColor = 0xFF0000FF;
+					if (playerkill->reason == 200) {
+						dwColor = ImColor(0x11, 0x11, 0xAA);
+					}
+					else if (playerkill->reason == 201) {
+						dwColor = ImColor(0xAA, 0x11, 0x11);
+					}
 
-					vecPos.x = fPosSprite;
-
-					renderer->drawText(vecPos, 0xFF000000, "G", false, UISettings::fontSize() / 2, pUI->weapFont());
-					renderer->drawText(vecPos, dwColor, spriteIDForWeapon(playerkill->reason), false, UISettings::fontSize() / 2, pUI->weapFont());
+					drawWeaponIcon(fPosSprite, vecPos.y, playerkill->reason, dwColor);
 				}
 
-				vecPos.y += UISettings::fontSize() / 2 + 5.0f;
+				vecPos.y += fontSize + 5.0f;
 			}
 		}
 	}
@@ -134,8 +190,8 @@ const char* DeathWindow::spriteIDForWeapon(uint8_t byteWeaponID)
 		case WEAPON_HELIBLADES: return "R";
 		case WEAPON_EXPLOSION: return "Q";
 		case WEAPON_COLLISION: return "K";
-		case 55: return "N";
-		case 56: return "N";
+		case 200: return "N";
+		case 201: return "N";
 	}
 	return "J";
 }

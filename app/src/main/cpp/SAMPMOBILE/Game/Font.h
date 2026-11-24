@@ -4,9 +4,9 @@
 
 class CFont {
 public:
-	static void StringToAscii(const char* str, uint16_t* ascii);
+	static void StringToAscii(const char* str, uint16_t* ascii, size_t maxOut = 800);
 	static void AsciiToGxtChar(const char* ascii, uint16_t* gxt);
-	static void AsciiToGxtCharU8(uint16_t* ascii, uint16_t* gxt);
+	static void AsciiToGxtCharU8(uint16_t* ascii, uint16_t* gxt, size_t maxOut = 800);
 	static void SetScale(float x, float y);
 	static void SetColor(RGBA* dwColor);
 	static void SetJustify(uint8_t just);

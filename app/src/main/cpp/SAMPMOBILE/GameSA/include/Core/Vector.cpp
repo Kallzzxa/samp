@@ -189,7 +189,7 @@ float CVector::Heading(bool limitAngle) const
 
 CVector* CrossProduct(CVector* out, CVector* a, CVector* b)
 {
-	*out = a->Cross(b);
+	*out = a->Cross(*b);
 	return out;
 }
 

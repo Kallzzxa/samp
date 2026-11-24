@@ -721,6 +721,7 @@ struct stbtt_fontinfo
 
    int loca,head,glyf,hhea,hmtx,kern,gpos; // table locations as offset from start of .ttf
    int index_map;                     // a cmap mapping for our chosen character encoding
+   int is_symbol_map;                 // 1 if index_map uses Microsoft Symbol encoding (0xF000 PUA)
    int indexToLocFormat;              // format needed to map from glyph index to glyph
 
    stbtt__buf cff;                    // cff font data
@@ -1431,24 +1432,35 @@ static int stbtt_InitFont_internal(stbtt_fontinfo *info, unsigned char *data, in
    // the same regardless of glyph.
    numTables = ttUSHORT(data + cmap + 2);
    info->index_map = 0;
-   for (i=0; i < numTables; ++i) {
-      stbtt_uint32 encoding_record = cmap + 4 + 8 * i;
-      // find an encoding we understand:
-      switch(ttUSHORT(data+encoding_record)) {
-         case STBTT_PLATFORM_ID_MICROSOFT:
-            switch (ttUSHORT(data+encoding_record+2)) {
-               case STBTT_MS_EID_UNICODE_BMP:
-               case STBTT_MS_EID_UNICODE_FULL:
-                  // MS/Unicode
-                  info->index_map = cmap + ttULONG(data+encoding_record+4);
-                  break;
-            }
-            break;
-        case STBTT_PLATFORM_ID_UNICODE:
-            // Mac/iOS has these
-            // all the encodingIDs are unicode, so we don't bother to check it
-            info->index_map = cmap + ttULONG(data+encoding_record+4);
-            break;
+   info->is_symbol_map = 0;
+   {
+      stbtt_uint32 symbol_map = 0;
+      for (i=0; i < numTables; ++i) {
+         stbtt_uint32 encoding_record = cmap + 4 + 8 * i;
+         // find an encoding we understand:
+         switch(ttUSHORT(data+encoding_record)) {
+            case STBTT_PLATFORM_ID_MICROSOFT:
+               switch (ttUSHORT(data+encoding_record+2)) {
+                  case STBTT_MS_EID_UNICODE_BMP:
+                  case STBTT_MS_EID_UNICODE_FULL:
+                     // MS/Unicode
+                     info->index_map = cmap + ttULONG(data+encoding_record+4);
+                     break;
+                  case STBTT_MS_EID_SYMBOL:
+                     symbol_map = cmap + ttULONG(data+encoding_record+4);
+                     break;
+               }
+               break;
+           case STBTT_PLATFORM_ID_UNICODE:
+               // Mac/iOS has these
+               // all the encodingIDs are unicode, so we don't bother to check it
+               info->index_map = cmap + ttULONG(data+encoding_record+4);
+               break;
+         }
+      }
+      if (info->index_map == 0 && symbol_map != 0) {
+         info->index_map = symbol_map;
+         info->is_symbol_map = 1;
       }
    }
    if (info->index_map == 0)
@@ -1514,8 +1526,11 @@ STBTT_DEF int stbtt_FindGlyphIndex(const stbtt_fontinfo *info, int unicode_codep
 
          STBTT_assert(unicode_codepoint <= ttUSHORT(data + endCount + 2*item));
          start = ttUSHORT(data + index_map + 14 + segcount*2 + 2 + 2*item);
-         if (unicode_codepoint < start)
+         if (unicode_codepoint < start) {
+            if (info->is_symbol_map && unicode_codepoint >= 0 && unicode_codepoint < 0x100)
+               return stbtt_FindGlyphIndex(info, 0xF000 + unicode_codepoint);
             return 0;
+         }
 
          offset = ttUSHORT(data + index_map + 14 + segcount*6 + 2 + 2*item);
          if (offset == 0)
