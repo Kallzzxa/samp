@@ -224,5 +224,7 @@ inline void LogVoice(const char* fmt, ...)
 	}
 
 	fprintf(flLog, "%s\n", buffer);
-	fflush(flLog);
+	if (Client::isLogLevelDebug()) {
+		fflush(flLog);
+	}
 }

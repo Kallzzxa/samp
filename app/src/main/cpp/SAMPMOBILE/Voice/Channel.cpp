@@ -4,7 +4,7 @@
 #include "Header.h"
 
 Channel::Channel(const uint32_t channelFlags)
-		: handle(BASS_StreamCreate(SV::kFrequency1, 1, channelFlags, STREAMPROC_PUSH, nullptr)), decoder(opus_decoder_create(SV::kFrequency, 1, &opusErrorCode))
+		: handle(BASS_StreamCreate(SV::kFrequency, 1, channelFlags, STREAMPROC_PUSH, nullptr)), decoder(opus_decoder_create(SV::kFrequency, 1, &opusErrorCode))
 {
 	//  BASS_ChannelSetAttribute(handle, BASS_ATTRIB_VOL, 1.0f);
 

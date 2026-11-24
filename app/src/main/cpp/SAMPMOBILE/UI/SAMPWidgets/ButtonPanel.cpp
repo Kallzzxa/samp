@@ -390,7 +390,7 @@ void ButtonPanel::draw(ImGuiRenderer* renderer)
 void ButtonPanel::dismissTopModal()
 {
 	if (pUI && pUI->keyboard() && pUI->keyboard()->visible()) {
-		pUI->keyboard()->setVisible(false);
+		pUI->keyboard()->hide();
 		return;
 	}
 	if (pUI && pUI->scoreboard() && pUI->scoreboard()->visible()) {
@@ -427,7 +427,7 @@ void ButtonPanel::handleHardwareKey(int androidKeyCode, bool isDown)
 	// If in-game ImGui keyboard is open, only allow ESC
 	if (pUI->keyboard() && pUI->keyboard()->visible()) {
 		if (androidKeyCode == 111 /* KEYCODE_ESCAPE */ && isDown) {
-			pUI->keyboard()->setVisible(false);
+			pUI->keyboard()->hide();
 		}
 		return;
 	}
@@ -464,8 +464,8 @@ void ButtonPanel::handleHardwareKey(int androidKeyCode, bool isDown)
 				if (Settings::systemkeyboard()) {
 					if (g_java) g_java->showKeyboard(true);
 				}
-				else if (pUI->keyboard()) {
-					pUI->keyboard()->setVisible(true);
+				else if (pUI->keyboard() && pUI->chat()) {
+					pUI->keyboard()->show(pUI->chat());
 				}
 			}
 			break;

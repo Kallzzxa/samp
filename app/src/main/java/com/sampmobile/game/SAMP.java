@@ -357,6 +357,12 @@ public class SAMP extends GTASA {
 */
 
     @Override
+    protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+    }
+
+    @Override
     public void onStart() {
         Log.i(TAG, "**** onStart");
         super.onStart();
@@ -406,8 +412,7 @@ public class SAMP extends GTASA {
             ui.destroy();
         }
         super.onDestroy();
-        if (isFinishing()) {
-            android.os.Process.killProcess(android.os.Process.myPid());
-        }
+        // Native libGTASA/libSAMPMOBILE globals cannot survive in-process Activity recreation.
+        android.os.Process.killProcess(android.os.Process.myPid());
     }
 }

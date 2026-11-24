@@ -8,6 +8,7 @@
 #include "Proto/Sync.h"
 #include <RakNet/SAMP/NetCapHook.h>
 #include "../UI/UI.h"
+#include "../Java/Java.h"
 #include "../Java/EditObject.h"
 #include "../Game/Animation.h"
 #include "RakNet/SAMP/samp_auth.h"
@@ -429,6 +430,9 @@ void NetGame::ShutdownForGameModeRestart(SessionState::ResetReason reason)
 	if (EditObject::m_visible) {
 		EditObject::cancelEdit();
 	}
+	if (g_java) {
+		g_java->hideDialog();
+	}
 	if (pUI && pUI->spawn()) {
 		pUI->spawn()->setVisible(false);
 	}
@@ -464,10 +468,8 @@ void NetGame::ShutdownForGameModeRestart(SessionState::ResetReason reason)
 		ScriptCommand(&toggle_widescreen, 0);
 	}
 
-	if (Settings::voice()) {
-		Network::OnRaknetDisconnect();
-		SpeakerList::Hide();
-	}
+	Network::OnRaknetDisconnect();
+	SpeakerList::Hide();
 
 	if (pUI) {
 		pUI->chat()->addInfoMessage("The server is restarting..");
@@ -537,8 +539,6 @@ void NetGame::ProcessConnecting()
 	}
 }
 
-void gen_auth_key(char buf[260], char* auth_in);
-
 void NetGame::Packet_AuthKey(Packet* pkt)
 {
 	if (!pkt || !pkt->data || pkt->length < 1) return;
@@ -566,7 +566,7 @@ void NetGame::Packet_AuthKey(Packet* pkt)
 	if (!auth_key) {
 		// table only covers 0.3.7 challenge names; 0.3.DL (and newer 0.3.7)
 		// servers may send anything - compute the real algorithm
-		gen_auth_key(szGenKey, const_cast<char*>(req.key.c_str()));
+		gen_auth_key(szGenKey, req.key.c_str());
 		auth_key = szGenKey;
 		spdlog::info("[AUTH] challenge not in table, computed: {}", req.key);
 	}
@@ -622,11 +622,10 @@ void NetGame::Packet_DisconnectionNotification(Packet* pkt)
 		pAudioStream->Stop(true);
 	}
 
-	if (Settings::voice()) {
-		SpeakerList::Hide();
-	}
+	Network::OnRaknetDisconnect();
+	SpeakerList::Hide();
 
-	m_rakClient->Disconnect(2000);
+	m_rakClient->Disconnect(100);
 }
 
 void NetGame::Packet_ConnectionSucceeded(Packet* pkt)
@@ -681,6 +680,12 @@ void NetGame::Packet_ConnectionBanned(Packet* pkt)
 	if (pUI) {
 		pUI->chat()->addDebugMessage("You are banned from this server.");
 	}
+	if (pAudioStream) {
+		pAudioStream->Stop(true);
+	}
+	Network::OnRaknetDisconnect();
+	SpeakerList::Hide();
+	m_rakClient->Disconnect(0);
 }
 
 void NetGame::Packet_InvalidPassword(Packet* pkt)
@@ -688,6 +693,11 @@ void NetGame::Packet_InvalidPassword(Packet* pkt)
 	if (pUI) {
 		pUI->chat()->addDebugMessage("Wrong server password.");
 	}
+	if (pAudioStream) {
+		pAudioStream->Stop(true);
+	}
+	Network::OnRaknetDisconnect();
+	SpeakerList::Hide();
 	m_rakClient->Disconnect(0);
 }
 
@@ -795,6 +805,9 @@ void NetGame::Packet_VehicleSync(Packet* pkt)
 	icSync.byteLandingGearState = p.landingGearState ? 1 : 0;
 	if (p.hasTrainOrHydra) {
 		memcpy(&icSync.fTrainSpeed, &p.trainOrHydra, sizeof(icSync.fTrainSpeed));
+		if (!std::isfinite(icSync.fTrainSpeed)) {
+			icSync.fTrainSpeed = 0.0f;
+		}
 	}
 	if (p.hasTrailer) {
 		icSync.TrailerID = p.trailerId;
@@ -867,6 +880,7 @@ void NetGame::Packet_PassengerSync(Packet* pkt)
 	proto::Reader reader(pkt->data, pkt->length * 8);
 	proto::InboundPassengerSync p{};
 	if (!p.serialize(reader, proto::ProtoVersion::V037)) return;
+	if (!isFiniteVec3(p.position.x, p.position.y, p.position.z)) return;
 
 	PASSENGER_SYNC_DATA psSync{};
 	psSync.VehicleID = p.vehicleId;

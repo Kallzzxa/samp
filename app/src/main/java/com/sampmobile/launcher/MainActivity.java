@@ -796,14 +796,7 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
             if (!ensureGameDataOrPrompt()) {
                 return;
             }
-            try {
-                Intent intent = new Intent(this, com.sampmobile.game.SAMP.class);
-                intent.putExtra("extra_check", "sampmobile1337");
-                startActivity(intent);
-                prefs.edit().putBoolean("open_hud_edit_on_start", false).apply();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            launchGameProcess(prefs);
         });
 
         if (!isFinishing() && !isDestroyed()) {
@@ -885,17 +878,58 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
                     if (!ensureGameDataOrPrompt()) {
                         return;
                     }
-                    try {
-                        Intent intent = new Intent(this, com.sampmobile.game.SAMP.class);
-                        intent.putExtra("extra_check", "sampmobile1337");
-                        startActivity(intent);
-                        prefs.edit().putBoolean("open_hud_edit_on_start", false).apply();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
+                    launchGameProcess(prefs);
                 })
                 .setNegativeButton(R.string.no, null)
                 .show();
+    }
+
+    private void launchGameProcess(SharedPreferences prefs) {
+        try {
+            android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            if (am != null) {
+                String targetProc = getPackageName() + ":game";
+                java.util.List<android.app.ActivityManager.RunningAppProcessInfo> procs = am.getRunningAppProcesses();
+                boolean killed = false;
+                if (procs != null) {
+                    for (android.app.ActivityManager.RunningAppProcessInfo info : procs) {
+                        if (targetProc.equals(info.processName) && info.pid != android.os.Process.myPid()) {
+                            android.os.Process.killProcess(info.pid);
+                            killed = true;
+                        }
+                    }
+                }
+                if (killed) {
+                    // Wait briefly for AMS to process AppDeathRecipient so startActivity spawns a fresh :game process.
+                    for (int attempt = 0; attempt < 20; ++attempt) {
+                        boolean stillAlive = false;
+                        java.util.List<android.app.ActivityManager.RunningAppProcessInfo> cur = am.getRunningAppProcesses();
+                        if (cur != null) {
+                            for (android.app.ActivityManager.RunningAppProcessInfo info : cur) {
+                                if (targetProc.equals(info.processName)) {
+                                    stillAlive = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!stillAlive) break;
+                        try {
+                            Thread.sleep(15);
+                        } catch (InterruptedException ignored) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+                }
+            }
+
+            Intent intent = new Intent(this, com.sampmobile.game.SAMP.class);
+            intent.putExtra("extra_check", "sampmobile1337");
+            startActivity(intent);
+            prefs.edit().putBoolean("open_hud_edit_on_start", false).apply();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override

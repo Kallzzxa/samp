@@ -18,6 +18,7 @@ class Plugin {
 public:
 	static bool OnPluginLoad() noexcept;
 	static bool OnSampLoad() noexcept;
+	static void SyncVoiceVolume() noexcept;
 
 private:
 	static void OnInitGame() noexcept;

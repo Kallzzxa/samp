@@ -16,6 +16,7 @@ public:
 
 	static bool GetSoundEnable() noexcept;
 	static int GetSoundVolume() noexcept;
+	static float GetVoiceVolumeScale() noexcept;
 	static bool GetSoundBalancer() noexcept;
 	static bool GetSoundFilter() noexcept;
 

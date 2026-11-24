@@ -87,3 +87,16 @@ void LoadBassLibrary()
 	BASS_ChannelSet3DPosition = (int (*)(uint32_t, const BASS_3DVECTOR*, const BASS_3DVECTOR*, const BASS_3DVECTOR*))dlsym(v0, "BASS_ChannelSet3DPosition");
 	BASS_SetVolume = (int (*)(float))dlsym(v0, "BASS_SetVolume");
 }
+
+bool IsBassLoaded()
+{
+	return BASS_Init != nullptr
+		&& BASS_IsStarted != nullptr
+		&& BASS_ErrorGetCode != nullptr
+		&& BASS_StreamCreateURL != nullptr
+		&& BASS_StreamCreate != nullptr
+		&& BASS_StreamFree != nullptr
+		&& BASS_ChannelPlay != nullptr
+		&& BASS_ChannelStop != nullptr
+		&& BASS_ChannelSetAttribute != nullptr;
+}

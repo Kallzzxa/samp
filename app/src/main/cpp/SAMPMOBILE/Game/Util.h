@@ -70,6 +70,7 @@ void GamePrepareTrain(sa::CVehicle* pGtaVehicle);
 void GameResetStats();
 
 void ProjectMatrix(sa::CVector* vecOut, sa::CMatrix* mat, sa::CVector* vecPos);
+void ProjectMatrix(RwV3d* vecOut, const RwMatrix* mat, const RwV3d* vecPos);
 int RwMatrixRotate(RwMatrix* mat, int axis, float angle);
 void RwMatrixScale(RwMatrix* mat, sa::CVector* vecScale);
 

@@ -78,7 +78,7 @@ public:
 	virtual void touchEvent(const ImVec2& pos, TouchType type) override;
 
 	// Thread-safe touch bridge for NVEvent thread -> GameMain thread
-	void enqueueTouchEvent(const ImVec2& pos, TouchType type, bool isCancel = false);
+	void enqueueTouchEvent(const ImVec2& pos, TouchType type, bool isCancel = false, int pointerId = 0);
 	void processPendingTouchEvents();
 	void updateTouchSnapshot();
 	bool isModalOpenSnapshot() const { return m_snapModalOpen.load(std::memory_order_acquire); }
@@ -89,10 +89,13 @@ protected:
 	void drawList() override;
 
 private:
+	bool hitsAnyInteractiveChild(const ImVec2& pos);
+
 	struct PendingTouch {
 		ImVec2 pos;
 		TouchType type;
 		bool isCancel;
+		int pointerId;
 	};
 
 	Keyboard* m_keyboard = nullptr;
@@ -113,6 +116,9 @@ private:
 	ImVec2 m_snapButtonPanelPos{0.0f, 0.0f};
 	ImVec2 m_snapButtonPanelSize{0.0f, 0.0f};
 	ImVec2 m_snapDisplaySize{1920.0f, 1080.0f};
+	int m_activeTouchId = -1;
+	bool m_deferredPopPending = false;
+	ImVec2 m_deferredPopPos{0.0f, 0.0f};
 
 public:
 	bool m_needClearMousePos = false;

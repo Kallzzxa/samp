@@ -203,6 +203,23 @@ void CPlaceable::SetMatrix(CMatrix& matrix)
 	*static_cast<CMatrix*>(m_matrix) = matrix;
 }
 
+void CPlaceable::SetMatrix(const RwMatrix& matrix)
+{
+	if (!m_matrix) {
+		if (matrix.at.z == 1.0F) {
+			auto fHeading = std::atan2(-matrix.up.x, matrix.up.y);
+
+			m_placement.m_vPosn = matrix.pos;
+			m_placement.m_fHeading = fHeading;
+			return;
+		}
+		CPlaceable::AllocateMatrix();
+	}
+
+	m_matrix->UpdateMatrix(const_cast<RwMatrix*>(&matrix));
+	m_matrix->UpdateRW();
+}
+
 float CPlaceable::GetRoll() const
 {
 	if (!m_matrix) {

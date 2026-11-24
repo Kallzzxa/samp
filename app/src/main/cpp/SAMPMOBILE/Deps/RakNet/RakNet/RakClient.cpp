@@ -49,10 +49,18 @@ bool RakClient::Connect( const char* host, unsigned short serverPort, unsigned s
 	
 	RakPeer::Initialize( 1, clientPort, threadSleepTimer );
 	
-	if ( host[ 0 ] < '0' || host[ 0 ] > '2' )
+	if (!host || !host[0])
+		return false;
+
+	if ( inet_addr( host ) == INADDR_NONE )
 	{
 #if !defined(_COMPATIBILITY_1)
 		host = ( char* ) SocketLayer::Instance()->DomainNameToIP( host );
+		if (!host)
+		{
+			RakPeer::Disconnect( 0 );
+			return false;
+		}
 #else
 		return false;
 #endif
@@ -567,6 +575,8 @@ void RakClient::AdvertiseSystem( const char *host, unsigned short remotePort, co
 
 RakNetStatisticsStruct* const RakClient::GetStatistics( void )
 {
+	if (!remoteSystemList || maximumNumberOfPeers == 0)
+		return 0;
 	return RakPeer::GetStatistics( remoteSystemList[ 0 ].playerId );
 }
 

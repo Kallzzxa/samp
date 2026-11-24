@@ -53,6 +53,9 @@ private:
 	jmethodID m_setWantedLevel = nullptr;
 
 	jmethodID m_exitGame = nullptr;
+
+	int m_cachedWantedVisible = -1;
+	int m_cachedWantedLevel = -1;
 };
 
 extern Java* g_java;

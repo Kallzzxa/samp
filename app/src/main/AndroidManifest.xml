@@ -80,7 +80,7 @@
 
         <activity
             android:name="com.sampmobile.game.SAMP"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode"
             android:exported="false"
             android:launchMode="singleTask"
             android:process=":game"

@@ -92,15 +92,17 @@ namespace DataStructures
 	bool RangeList<range_type>::Deserialize(RakNet::BitStream *out)
 	{
 		ranges.Clear();
-		unsigned short count;
-		out->ReadCompressed(count);
+		unsigned short count = 0;
+		if (out->ReadCompressed(count) == false)
+			return false;
 		unsigned short i;
-		range_type min,max;
-		bool maxEqualToMin;
+		range_type min{}, max{};
+		bool maxEqualToMin = false;
 
 		for (i=0; i < count; i++)
 		{
-			out->Read(maxEqualToMin);
+			if (out->Read(maxEqualToMin) == false)
+				return false;
 			if (out->Read(min)==false)
 				return false;
 			if (maxEqualToMin==false)

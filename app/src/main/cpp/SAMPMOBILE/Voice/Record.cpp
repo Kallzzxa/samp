@@ -12,7 +12,7 @@ bool Record::Init(const uint32_t bitrate) noexcept
 		return false;
 	}
 
-	if (BASS_IsStarted() == 0) {
+	if (!IsBassLoaded() || BASS_IsStarted() == 0) {
 		return false;
 	}
 
@@ -179,7 +179,7 @@ bool Record::Init(const uint32_t bitrate) noexcept
 		PluginConfig::SetDeviceName(Record::deviceNamesList[Record::usedDeviceIndex]);
 	}
 
-	Record::recordChannel = BASS_RecordStart(SV::kFrequency1, 1,
+	Record::recordChannel = BASS_RecordStart(SV::kFrequency, 1,
 			BASS_RECORD_PAUSE, nullptr, nullptr);
 
 	if (Record::recordChannel == NULL) {
@@ -190,7 +190,7 @@ bool Record::Init(const uint32_t bitrate) noexcept
 
 	SVMemory::ScopeExit channelResetScope{[] { BASS_ChannelStop(Record::recordChannel); }};
 
-	Record::checkChannel = BASS_StreamCreate(SV::kFrequency1, 1,
+	Record::checkChannel = BASS_StreamCreate(SV::kFrequency, 1,
 			NULL, STREAMPROC_PUSH, nullptr);
 
 	if (Record::checkChannel == NULL) {

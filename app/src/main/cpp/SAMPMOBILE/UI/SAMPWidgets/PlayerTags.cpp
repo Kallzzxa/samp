@@ -27,7 +27,14 @@ void PlayerTags::Render(ImGuiRenderer* renderer)
 
 		matLocal = pLocalPed->m_ped->GetMatrix().ToRwMatrix();
 
-		for (PLAYERID playerId = 0; playerId < MAX_PLAYERS; playerId++) {
+		const PLAYERID maxPlayerId = static_cast<PLAYERID>(
+			(pPlayerPool->m_iLastPlayerID >= 0 && pPlayerPool->m_iLastPlayerID < MAX_PLAYERS)
+				? pPlayerPool->m_iLastPlayerID
+				: (MAX_PLAYERS - 1));
+		const float screenW = pUI ? pUI->size().x : 1920.0f;
+		const float screenH = pUI ? pUI->size().y : 1080.0f;
+
+		for (PLAYERID playerId = 0; playerId <= maxPlayerId; playerId++) {
 			if (pPlayerPool->GetSlotState(playerId)) {
 				CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(playerId);
 
@@ -35,7 +42,8 @@ void PlayerTags::Render(ImGuiRenderer* renderer)
 					CPlayerPed* pPlayerPed = pRemotePlayer->GetPlayerPed();
 					if (!pPlayerPed) continue;
 
-					if (pPlayerPed->GetDistanceFromCamera() <= pNetGame->m_netSet->nameTagDrawDistance) {
+					const float dist = pPlayerPed->GetDistanceFromCamera();
+					if (dist <= pNetGame->m_netSet->nameTagDrawDistance) {
 						if (pRemotePlayer->GetState() == PLAYER_STATE_DRIVER && pRemotePlayer->m_pCurrentVehicle && pRemotePlayer->m_pCurrentVehicle->m_pVehicle && pRemotePlayer->m_pCurrentVehicle->IsRCVehicle()) {
 							matPlayer = pRemotePlayer->m_pCurrentVehicle->m_pVehicle->GetMatrix().ToRwMatrix();
 							vecPos.x = matPlayer.pos.x;
@@ -50,9 +58,21 @@ void PlayerTags::Render(ImGuiRenderer* renderer)
 							pPlayerPed->m_ped->GetBonePosition(&vecPos, 8, false);
 						}
 
+						// Frustum/screen cull before running expensive 3D get_line_of_sight raycast
+						RwV3d vecTagProbe = vecPos;
+						vecTagProbe.z += 0.3f + (dist * 0.0475f);
+						RwV3d vecScreen{};
+						CalcScreenCoors(&vecTagProbe, &vecScreen, 0.0f, 0.0f, false, false);
+						if (vecScreen.z < 1.0f
+								|| vecScreen.x < -250.0f || vecScreen.x > screenW + 250.0f
+								|| vecScreen.y < -150.0f || vecScreen.y > screenH + 150.0f) {
+							continue;
+						}
+
 						CAMERA_AIM* pCam = GameGetInternalAim();
 
 						if (pNetGame->m_netSet->nameTagLOS) {
+							if (!pCam) continue;
 							hitEntity = ScriptCommand(&get_line_of_sight, vecPos.x, vecPos.y, vecPos.z, pCam->pos1x, pCam->pos1y, pCam->pos1z, 1, 0, 0, 1, 0);
 						}
 
@@ -60,7 +80,7 @@ void PlayerTags::Render(ImGuiRenderer* renderer)
 							char* szPlayerName = pPlayerPool->GetPlayerName(playerId);
 							snprintf(szNickBuf, sizeof(szNickBuf), "%s (%d)", Encoding::cp2utf(szPlayerName ? szPlayerName : "").c_str(), playerId);
 							drawTag(renderer, &vecPos, szNickBuf, pRemotePlayer->GetPlayerColor(),
-									pPlayerPed->GetDistanceFromCamera(), pRemotePlayer->m_fReportedHealth,
+									dist, pRemotePlayer->m_fReportedHealth,
 									pRemotePlayer->m_fReportedArmour, pRemotePlayer->m_bIsAFK,
 									pPlayerPed->GetCurrentWeapon());
 						}

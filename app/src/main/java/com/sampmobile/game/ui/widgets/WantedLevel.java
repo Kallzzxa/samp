@@ -15,7 +15,11 @@ import com.sampmobile.launcher.R;
 
 @Obfuscate
 public class WantedLevel {
-    private int wanted_level;
+    private static final int COLOR_ACTIVE = Color.parseColor("#F6BE00");
+    private static final int COLOR_INACTIVE = Color.parseColor("#353535");
+
+    private int wanted_level = -1;
+    private int shown_state = -1;
 
     private final FrameLayout wanted_layout;
     private final RelativeLayout wanted_stars_layout;
@@ -43,14 +47,23 @@ public class WantedLevel {
         star_6 = wanted_layout.findViewById(R.id.star_6);
 
         show(false);
+        setLevel(0);
     }
 
     public void setLevel(int level) {
+        if (wanted_level == level) {
+            return;
+        }
         wanted_level = level;
         updateStars();
     }
 
     public void show(boolean z) {
+        int next = z ? 1 : 0;
+        if (shown_state == next) {
+            return;
+        }
+        shown_state = next;
         wanted_layout.setVisibility(z ? View.VISIBLE : View.GONE);
         updateStars();
     }
@@ -61,12 +74,12 @@ public class WantedLevel {
         } else {
             wanted_stars_layout.setVisibility(View.VISIBLE);
 
-            star_1.setColorFilter(wanted_level >= 6 ? Color.parseColor("#F6BE00") : Color.parseColor("#353535"));
-            star_2.setColorFilter(wanted_level >= 5 ? Color.parseColor("#F6BE00") : Color.parseColor("#353535"));
-            star_3.setColorFilter(wanted_level >= 4 ? Color.parseColor("#F6BE00") : Color.parseColor("#353535"));
-            star_4.setColorFilter(wanted_level >= 3 ? Color.parseColor("#F6BE00") : Color.parseColor("#353535"));
-            star_5.setColorFilter(wanted_level >= 2 ? Color.parseColor("#F6BE00") : Color.parseColor("#353535"));
-            star_6.setColorFilter(wanted_level >= 1 ? Color.parseColor("#F6BE00") : Color.parseColor("#353535"));
+            star_1.setColorFilter(wanted_level >= 6 ? COLOR_ACTIVE : COLOR_INACTIVE);
+            star_2.setColorFilter(wanted_level >= 5 ? COLOR_ACTIVE : COLOR_INACTIVE);
+            star_3.setColorFilter(wanted_level >= 4 ? COLOR_ACTIVE : COLOR_INACTIVE);
+            star_4.setColorFilter(wanted_level >= 3 ? COLOR_ACTIVE : COLOR_INACTIVE);
+            star_5.setColorFilter(wanted_level >= 2 ? COLOR_ACTIVE : COLOR_INACTIVE);
+            star_6.setColorFilter(wanted_level >= 1 ? COLOR_ACTIVE : COLOR_INACTIVE);
         }
     }
 }

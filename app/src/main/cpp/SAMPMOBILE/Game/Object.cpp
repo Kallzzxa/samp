@@ -95,7 +95,7 @@ CObject::CObject(int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDraw
 
 		RwMatrix mat = m_entity->GetMatrix().ToRwMatrix();
 		mat.pos = vecPos;
-		m_entity->SetMatrix((sa::CMatrix&) mat);
+		m_entity->SetMatrix(mat);
 		SetRotation(&vecRot);
 
 		// out-of-bounds and long-draw-distance entities may bypass the world's
@@ -747,7 +747,7 @@ void CObject::AttachToObject(CObject* pObject)
 		RotateMatrix(m_vecAttachedRot);
 		mat = m_matTarget;
 		mat.pos = pos;
-		m_entity->SetMatrix((sa::CMatrix&) mat);
+		m_entity->SetMatrix(mat);
 		UpdateRwMatrixAndFrame();
 	}
 }
@@ -778,7 +778,7 @@ void CObject::ApplyMoveSpeed()
 		mat.pos.x += fTimeStep * m_entity->GetMoveSpeed().x;
 		mat.pos.y += fTimeStep * m_entity->GetMoveSpeed().y;
 		mat.pos.z += fTimeStep * m_entity->GetMoveSpeed().z;
-		m_entity->SetMatrix((sa::CMatrix&) mat);
+		m_entity->SetMatrix(mat);
 	}
 }
 

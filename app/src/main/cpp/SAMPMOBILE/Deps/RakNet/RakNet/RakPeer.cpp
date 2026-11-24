@@ -606,8 +606,7 @@ bool RakPeer::Connect(const char* host, unsigned short remotePort, char* passwor
 //		memcpy(outgoingPassword, passwordData, passwordDataLength);
 //	outgoingPasswordLength=(unsigned char) passwordDataLength;
 
-	// If the host starts with something other than 0, 1, or 2 it's (probably) a domain name.
-	if (host[0] < '0' || host[0] > '2')
+	if (inet_addr(host) == INADDR_NONE)
 	{
 #if !defined(_COMPATIBILITY_1)
 		host = (char*)SocketLayer::Instance()->DomainNameToIP(host);
@@ -717,6 +716,7 @@ void RakPeer::Disconnect(unsigned int blockDuration, unsigned char orderingChann
 #ifdef _RAKNET_THREADSAFE
 	rakPeerMutexes[transferToPacketQueue_Mutex].Lock();
 #endif
+	pthread_mutex_lock(&RakNetFixMutex);
 	packet = packetSingleProducerConsumer.ReadLock();
 	while (packet)
 	{
@@ -725,6 +725,7 @@ void RakPeer::Disconnect(unsigned int blockDuration, unsigned char orderingChann
 		packet = packetSingleProducerConsumer.ReadLock();
 	}
 	packetSingleProducerConsumer.Clear();
+	pthread_mutex_unlock(&RakNetFixMutex);
 #ifdef _RAKNET_THREADSAFE
 	rakPeerMutexes[transferToPacketQueue_Mutex].Unlock();
 #endif
@@ -732,7 +733,7 @@ void RakPeer::Disconnect(unsigned int blockDuration, unsigned char orderingChann
 #ifdef _RAKNET_THREADSAFE
 	rakPeerMutexes[packetPool_Mutex].Lock();
 #endif
-	for (i = 0; i < packetPool.Size(); i++)
+	while (packetPool.Size() > 0)
 	{
 		DeallocatePacket(packetPool.Pop());
 	}
@@ -1056,7 +1057,7 @@ void RakPeer::DeallocatePacket(Packet* packet)
 		return;
 
 	if (packet->deleteData)
-		delete packet->data;
+		delete[] packet->data;
 	free(packet);
 }
 
@@ -1513,7 +1514,7 @@ void RakPeer::ClearBanList(void)
 	for (; index < banList.Size(); index++)
 	{
 		delete[] banList[index]->IP;
-		delete[] banList[index];
+		delete banList[index];
 	}
 
 	banList.Clear();
@@ -2590,7 +2591,7 @@ void RakPeer::ParseConnectionRequestPacket(RakPeer::RemoteSystemStruct* remoteSy
 	{
 		unsigned char c = ID_NO_FREE_INCOMING_CONNECTIONS;
 		// SocketLayer::Instance()->SendTo( rakPeer->connectionSocket, ( char* ) & c, sizeof( char ), systemAddress.binaryAddress, systemAddress.port );
-		SendImmediate((char*)&c, sizeof(char) * 8, SYSTEM_PRIORITY, RELIABLE, 0, playerId, false, false, RakNet::GetTime());
+		SendImmediate((char*)&c, sizeof(char) * 8, SYSTEM_PRIORITY, RELIABLE, 0, playerId, false, false, RakNet::GetTimeNS());
 		remoteSystem->connectMode = RemoteSystemStruct::DISCONNECT_ASAP_SILENTLY;
 	}
 	else
@@ -2629,7 +2630,7 @@ void RakPeer::ParseConnectionRequestPacket(RakPeer::RemoteSystemStruct* remoteSy
 			// This one we only send once since we don't care if it arrives.
 			unsigned char c = ID_INVALID_PASSWORD;
 			// SocketLayer::Instance()->SendTo( rakPeer->connectionSocket, ( char* ) & c, sizeof( char ), systemAddress.binaryAddress, systemAddress.port );
-			SendImmediate((char*)&c, sizeof(char) * 8, SYSTEM_PRIORITY, RELIABLE, 0, playerId, false, false, RakNet::GetTime());
+			SendImmediate((char*)&c, sizeof(char) * 8, SYSTEM_PRIORITY, RELIABLE, 0, playerId, false, false, RakNet::GetTimeNS());
 			remoteSystem->connectMode = RemoteSystemStruct::DISCONNECT_ASAP_SILENTLY;
 		}
 	}
@@ -2671,7 +2672,7 @@ void RakPeer::OnConnectionRequest(RakPeer::RemoteSystemStruct* remoteSystem, uns
 		bitStream.Write(_uiRndSrvChallenge); // RAKSAMP SERVER HACK PONPON
 #endif
 
-		SendImmediate((char*)bitStream.GetData(), bitStream.GetNumberOfBitsUsed(), SYSTEM_PRIORITY, RELIABLE, 0, remoteSystem->playerId, false, false, RakNet::GetTime());
+		SendImmediate((char*)bitStream.GetData(), bitStream.GetNumberOfBitsUsed(), SYSTEM_PRIORITY, RELIABLE, 0, remoteSystem->playerId, false, false, RakNet::GetTimeNS());
 
 		// Don't set secure connections immediately because we need the ack from the remote system to know ID_CONNECTION_REQUEST_ACCEPTED
 		// As soon as a 16 byte packet arrives, we will turn on AES.  This works because all encrypted packets are multiples of 16 and the
@@ -2702,7 +2703,7 @@ void RakPeer::NotifyAndFlagForDisconnect(const PlayerID playerId, bool performIm
 	temp.Write((unsigned char)ID_DISCONNECTION_NOTIFICATION);
 	if (performImmediate)
 	{
-		SendImmediate((char*)temp.GetData(), temp.GetNumberOfBitsUsed(), LOW_PRIORITY, RELIABLE_ORDERED, orderingChannel, playerId, false, false, RakNet::GetTime());
+		SendImmediate((char*)temp.GetData(), temp.GetNumberOfBitsUsed(), LOW_PRIORITY, RELIABLE_ORDERED, orderingChannel, playerId, false, false, RakNet::GetTimeNS());
 		RemoteSystemStruct* rss = GetRemoteSystemFromPlayerID(playerId, true, true);
 		rss->connectMode = RemoteSystemStruct::DISCONNECT_ASAP;
 	}
@@ -2951,39 +2952,33 @@ bool RakPeer::HandleRPCPacket(const char* data, int length, PlayerID playerId)
 	}
 	else
 	{
-		if (incomingBitStream.GetNumberOfUnreadBits() == 0)
+		const int unreadBits = incomingBitStream.GetNumberOfUnreadBits();
+		if (unreadBits <= 0 || rpcParms.numberOfBitsOfData > static_cast<unsigned int>(unreadBits))
 		{
-#ifdef _DEBUG
-			assert(0);
-#endif
-			return false; // No data was appended!
+			return false;
 		}
 
 		// We have to copy into a new data chunk because the user data might not be byte aligned.
+		const size_t allocBytes = BITS_TO_BYTES(rpcParms.numberOfBitsOfData);
 		bool usedAlloca = false;
 #if !defined(_COMPATIBILITY_1)
-		if (BITS_TO_BYTES(incomingBitStream.GetNumberOfUnreadBits()) < MAX_ALLOCA_STACK_ALLOCATION)
+		if (allocBytes < MAX_ALLOCA_STACK_ALLOCATION)
 		{
-			userData = (unsigned char*)alloca(BITS_TO_BYTES(incomingBitStream.GetNumberOfUnreadBits()));
+			userData = (unsigned char*)alloca(allocBytes);
 			usedAlloca = true;
 		}
 		else
 #endif
-			userData = new unsigned char[BITS_TO_BYTES(incomingBitStream.GetNumberOfUnreadBits())];
+			userData = new unsigned char[allocBytes];
 
 
 		// The false means read out the internal representation of the bitstream data rather than
 		// aligning it as we normally would with user data.  This is so the end user can cast the data received
 		// into a bitstream for reading
-		if (incomingBitStream.ReadBits((unsigned char*)userData, rpcParms.numberOfBitsOfData, false) == false)
+		if (incomingBitStream.ReadBits((unsigned char*)userData, static_cast<int>(rpcParms.numberOfBitsOfData), false) == false)
 		{
-#ifdef _DEBUG
-			assert(0);
-#endif
-#if defined(_COMPATIBILITY_1)
-			delete[] userData;
-#endif
-
+			if (!usedAlloca)
+				delete[] userData;
 			return false; // Not enough data to read
 		}
 
@@ -4265,7 +4260,7 @@ bool RakPeer::RunUpdateCycle(void)
 
 			callerDataAllocationUsed = SendImmediate((char*)bcs->data, bcs->numberOfBitsToSend, bcs->priority, bcs->reliability, bcs->orderingChannel, bcs->playerId, bcs->broadcast, true, timeNS);
 			if (callerDataAllocationUsed == false)
-				delete bcs->data;
+				delete[] bcs->data;
 
 			// Set the new connection state AFTER we call sendImmediate in case we are setting it to a disconnection state, which does not allow further sends
 			if (bcs->connectionMode != RemoteSystemStruct::NO_ACTION && bcs->playerId != UNASSIGNED_PLAYER_ID)
@@ -4663,7 +4658,7 @@ bool RakPeer::RunUpdateCycle(void)
 						timeMS = RakNet::GetTime();
 						timeNS = RakNet::GetTimeNS();
 						outBitStream.Write(timeMS);
-						SendImmediate((char*)outBitStream.GetData(), outBitStream.GetNumberOfBitsUsed(), SYSTEM_PRIORITY, UNRELIABLE, 0, playerId, false, false, timeMS);
+						SendImmediate((char*)outBitStream.GetData(), outBitStream.GetNumberOfBitsUsed(), SYSTEM_PRIORITY, UNRELIABLE, 0, playerId, false, false, timeNS);
 
 						delete[] data;
 					}
@@ -4881,7 +4876,7 @@ bool RakPeer::RunUpdateCycle(void)
 							// As soon as a 16 byte packet arrives on the remote system, we will turn on AES.  This works because all encrypted packets are multiples of 16 and the
 							// packets I happen to be sending before this are less than 16 bytes.  Otherwise there is no way to know if a packet that arrived is
 							// encrypted or not so the other side won't know to turn on encryption or not.
-							SendImmediate((char*)outBitStream.GetData(), outBitStream.GetNumberOfBitsUsed(), SYSTEM_PRIORITY, RELIABLE, 0, playerId, false, false, RakNet::GetTime());
+							SendImmediate((char*)outBitStream.GetData(), outBitStream.GetNumberOfBitsUsed(), SYSTEM_PRIORITY, RELIABLE, 0, playerId, false, false, RakNet::GetTimeNS());
 
 							if (alreadyConnected == false)
 							{

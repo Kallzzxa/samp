@@ -112,7 +112,7 @@ CPlayerPed::CPlayerPed(int iNum, int iSkin, float fX, float fY, float fZ, float 
 		mat.pos.x = fX;
 		mat.pos.y = fY;
 		mat.pos.z = fZ + 0.15f;
-		m_ped->SetMatrix((sa::CMatrix&) mat);
+		m_ped->SetMatrix(mat);
 	}
 
 	for (auto& m_attachedObject : m_attachedObjects) {
@@ -2472,7 +2472,7 @@ void CPlayerPed::ProcessAttachedObjects()
 
 					RwMatrixScale(&boneMatrix, &m_attachedObject.info.vecScale);
 
-					m_attachedObject.object->m_entity->SetMatrix((sa::CMatrix&) boneMatrix);
+					m_attachedObject.object->m_entity->SetMatrix(boneMatrix);
 					m_attachedObject.object->UpdateRwMatrixAndFrame();
 
 					// Ped-attached objects are not in CObjectPool, so drive UVAnim here

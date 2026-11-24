@@ -72,13 +72,12 @@ public:
 	static constexpr uintptr_t CRadar_DrawEntityBlip_patch = !VER_x32 ? 0x525E14 : 0x4409AE;
 	static constexpr uintptr_t FindPlayerInfoForThisPlayerPed_patch = !VER_x32 ? 0x59BAD0 : 0x4A5398;
 
-	// Radar color-translation patches (Patches.cpp: fix black markers)
-	static constexpr uintptr_t CRadar_Draw3dMarkers_colorBranch = !VER_x32 ? 0x52737C : 0x442120;
-	static constexpr uintptr_t CRadar_Draw3dMarkers_colorMov    = !VER_x32 ? 0x5273F4 : 0x44217C;
-	static constexpr uintptr_t CRadar_DrawEntityBlip_colorBranch = !VER_x32 ? 0x5258D8 : 0x4404C0;
-	static constexpr uintptr_t CRadar_DrawEntityBlip_colorMov    = !VER_x32 ? 0x525960 : 0x440538;
-	static constexpr uintptr_t CRadar_DrawCoordBlip_colorBranch  = !VER_x32 ? 0x524F58 : 0x43FB5E;
-	static constexpr uintptr_t CRadar_DrawCoordBlip_colorMov     = !VER_x32 ? 0x524E88 : 0x43FB86;
+	// Radar color-translation patches (Patches.cpp: fix black markers without clobbering CHudColours* this)
+	static constexpr uintptr_t CRadar_Draw3dMarkers_colorBranch   = !VER_x32 ? 0x52737C : 0x442120;
+	static constexpr uintptr_t CRadar_DrawEntityBlip_colorBranch  = !VER_x32 ? 0x5258D8 : 0x4404C0;
+	static constexpr uintptr_t CRadar_DrawEntityBlip_colorMov_x32 = 0x440534;
+	static constexpr uintptr_t CRadar_DrawCoordBlip_colorBranch   = !VER_x32 ? 0x524F58 : 0x43FB5E;
+	static constexpr uintptr_t CRadar_DrawCoordBlip_colorMov_x32  = 0x43FB82;
 
 	// FPS limiter immediate patches (Settings.cpp)
 	static constexpr uintptr_t FpsLimit_patch1_arm32 = 0x5E49E0;

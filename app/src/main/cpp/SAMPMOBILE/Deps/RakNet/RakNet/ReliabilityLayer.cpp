@@ -420,6 +420,8 @@ bool ReliabilityLayer::HandleSocketReceiveFromConnectedPlayer( const char *buffe
 				{
 					lastAckTime = time; // Just got an ack.  Record when we got it so we know the connection is alive
 				}
+				if (messageNumber == incomingAcks.ranges[i].maxIndex)
+					break;
 			}
 		}
 	}
@@ -1881,7 +1883,7 @@ InternalPacket* ReliabilityLayer::CreateInternalPacketFromBitStream( RakNet::Bit
 		//assert( bitStreamSucceeded );
 #endif
 
-		if ( bitStreamSucceeded == false )
+		if ( bitStreamSucceeded == false || internalPacket->splitPacketCount == 0 || internalPacket->splitPacketIndex >= internalPacket->splitPacketCount || internalPacket->splitPacketCount > 8192 )
 		{
 			internalPacketPool.ReleasePointer( internalPacket );
 			return 0;
@@ -2198,8 +2200,35 @@ void ReliabilityLayer::InsertIntoSplitPacketList( InternalPacket * internalPacke
 	index=splitPacketChannelList.GetIndexFromKey(internalPacket->splitPacketId, &objectExists);
 	if (objectExists==false)
 	{
+		if (splitPacketChannelList.Size() >= 64)
+		{
+			delete [] internalPacket->data;
+			internalPacketPool.ReleasePointer(internalPacket);
+			return;
+		}
 		SplitPacketChannel *newChannel = new SplitPacketChannel;
         index=splitPacketChannelList.Insert(internalPacket->splitPacketId, newChannel);
+	}
+	else
+	{
+		SplitPacketChannel *ch = splitPacketChannelList[index];
+		if (ch->splitPacketList.Size() > 0)
+		{
+			if (ch->splitPacketList[0]->splitPacketCount != internalPacket->splitPacketCount)
+			{
+				delete [] internalPacket->data;
+				internalPacketPool.ReleasePointer(internalPacket);
+				return;
+			}
+			bool chunkExists = false;
+			ch->splitPacketList.GetIndexFromKey(internalPacket->splitPacketIndex, &chunkExists);
+			if (chunkExists)
+			{
+				delete [] internalPacket->data;
+				internalPacketPool.ReleasePointer(internalPacket);
+				return;
+			}
+		}
 	}
 	splitPacketChannelList[index]->splitPacketList.Insert(internalPacket->splitPacketIndex, internalPacket);
 	splitPacketChannelList[index]->lastUpdateTime=time;
@@ -2250,9 +2279,8 @@ InternalPacket * ReliabilityLayer::BuildPacketFromSplitPacketList( SplitPacketId
 	bool objectExists;
 
 	i=splitPacketChannelList.GetIndexFromKey(splitPacketId, &objectExists);
-#ifdef _DEBUG
-	assert(objectExists);
-#endif
+	if (!objectExists)
+		return 0;
 
 	if (splitPacketChannelList[i]->splitPacketList.Size()==splitPacketChannelList[i]->splitPacketList[0]->splitPacketCount)
 	{
@@ -2292,8 +2320,9 @@ void ReliabilityLayer::DeleteOldUnreliableSplitPackets( RakNetTimeNS time )
 	i=0;
 	while (i < splitPacketChannelList.Size())
 	{
-		if (time > splitPacketChannelList[i]->lastUpdateTime + 10000000 &&
-			(splitPacketChannelList[i]->splitPacketList[0]->reliability==UNRELIABLE || splitPacketChannelList[i]->splitPacketList[0]->reliability==UNRELIABLE_SEQUENCED))
+		const bool isUnreliable = (splitPacketChannelList[i]->splitPacketList[0]->reliability==UNRELIABLE || splitPacketChannelList[i]->splitPacketList[0]->reliability==UNRELIABLE_SEQUENCED);
+		const RakNetTimeNS maxAgeUs = isUnreliable ? 10000000ULL : 30000000ULL;
+		if (time > splitPacketChannelList[i]->lastUpdateTime + maxAgeUs)
 		{
 			for (j=0; j < splitPacketChannelList[i]->splitPacketList.Size(); j++)
 			{

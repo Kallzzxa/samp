@@ -5,11 +5,10 @@
 */
 
 //#include "main.h"
+#include "samp_netencr.h"
 #include <cstdlib>
 #include <cstring>
-
-int dblSpace;
-char buf[131072];
+#include <cstdint>
 
 char GetChar(char _char)
 {
@@ -19,7 +18,7 @@ char GetChar(char _char)
 	return _char;
 }
 
-unsigned char encrBuffer[4092];
+thread_local unsigned char encrBuffer[4092];
 #ifndef RAKSAMP_CLIENT
 unsigned char decrBuffer[4092];
 #endif
@@ -46,6 +45,13 @@ unsigned char sampEncrTable[256] =
 
 void kyretardizeDatagram(unsigned char *buf, int len, int port, int unk)
 {
+	if (!buf || len < 0) {
+		encrBuffer[0] = 0;
+		return;
+	}
+	if (len > static_cast<int>(sizeof(encrBuffer) - 1)) {
+		len = static_cast<int>(sizeof(encrBuffer) - 1);
+	}
     unsigned char bChecksum = 0;
     for(int i = 0; i < len; i++)
     {

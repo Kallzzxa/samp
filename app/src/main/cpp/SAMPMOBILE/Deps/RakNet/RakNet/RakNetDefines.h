@@ -18,4 +18,4 @@
 #define __BITSTREAM_NATIVE_END
 
 /// Maximum (stack) size to use with _alloca before using new and delete instead.
-#define MAX_ALLOCA_STACK_ALLOCATION 1048576
+#define MAX_ALLOCA_STACK_ALLOCATION 8192

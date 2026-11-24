@@ -80,6 +80,7 @@ private:
 	static inline std::atomic<uint32_t> voiceEpoch{0};
 	static inline std::thread voiceThread;
 	static inline std::string serverIp;
+	static inline uint32_t serverResolvedAddr{INADDR_NONE};
 	static inline uint32_t serverKey{NULL};
 
 	static inline std::vector<ConnectCallback> connectCallbacks;

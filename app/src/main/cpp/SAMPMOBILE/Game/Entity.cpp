@@ -81,7 +81,7 @@ void CEntity::TeleportTo(float fX, float fY, float fZ)
 			if (fX > 3000.0f || fX < -3000.0f || fY > 3000.0f || fY < -3000.0f) {
 				mat = m_entity->GetMatrix().ToRwMatrix();
 				mat.pos = sa::CVector{fX, fY, fZ};
-				m_entity->SetMatrix((sa::CMatrix&) mat);
+				m_entity->SetMatrix(mat);
 				UpdateRwMatrixAndFrame();
 			}
 			else {
@@ -115,14 +115,19 @@ void CEntity::SetModelIndex(uint uiModel)
 		return;
 	}
 
+	if (!GetModelInfoByID(static_cast<int>(uiModel))) {
+		return;
+	}
+
 	int iTryCount = 0;
 	if (!pGame->IsModelLoaded(uiModel) && !GetModelRWObject(uiModel)) {
 		pGame->RequestModel(uiModel);
 		pGame->LoadRequestedModels();
 		while (!pGame->IsModelLoaded(uiModel)) {
 			usleep(1000);
+			pGame->LoadRequestedModels();
 
-			if (iTryCount > 2000) {
+			if (iTryCount > 200) {
 				if (pUI && pUI->chat()) {
 					pUI->chat()->addDebugMessage("Warning: Model %u wouldn't load in time!", uiModel);
 				}
@@ -264,7 +269,7 @@ void CEntity::UpdateMatrix(RwMatrix matrix)
 
 	if (m_entity && m_entity->m_matrix) {
 		m_entity->Remove();
-		m_entity->SetMatrix((sa::CMatrix&) matrix);
+		m_entity->SetMatrix(matrix);
 		UpdateRwMatrixAndFrame();
 		m_entity->Add();
 	}
@@ -333,7 +338,7 @@ bool CEntity::EnforceWorldBoundries(float fPX, float fZX, float fPY, float fNY)
 
 		m_entity->SetVelocity(vecMoveSpeed);
 		matWorld.pos.z += 0.04f;
-		m_entity->SetMatrix((sa::CMatrix&) matWorld);
+		m_entity->SetMatrix(matWorld);
 		return true;
 	}
 	else if (matWorld.pos.x < fZX) {
@@ -344,7 +349,7 @@ bool CEntity::EnforceWorldBoundries(float fPX, float fZX, float fPY, float fNY)
 
 		m_entity->SetVelocity(vecMoveSpeed);
 		matWorld.pos.z += 0.04f;
-		m_entity->SetMatrix((sa::CMatrix&) matWorld);
+		m_entity->SetMatrix(matWorld);
 		return true;
 	}
 	else if (matWorld.pos.y > fPY) {
@@ -355,7 +360,7 @@ bool CEntity::EnforceWorldBoundries(float fPX, float fZX, float fPY, float fNY)
 
 		m_entity->SetVelocity(vecMoveSpeed);
 		matWorld.pos.z += 0.04f;
-		m_entity->SetMatrix((sa::CMatrix&) matWorld);
+		m_entity->SetMatrix(matWorld);
 		return true;
 	}
 	else if (matWorld.pos.y < fNY) {
@@ -366,7 +371,7 @@ bool CEntity::EnforceWorldBoundries(float fPX, float fZX, float fPY, float fNY)
 
 		m_entity->SetVelocity(vecMoveSpeed);
 		matWorld.pos.z += 0.04f;
-		m_entity->SetMatrix((sa::CMatrix&) matWorld);
+		m_entity->SetMatrix(matWorld);
 		return true;
 	}
 

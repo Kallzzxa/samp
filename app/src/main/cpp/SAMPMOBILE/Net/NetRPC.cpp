@@ -5,6 +5,8 @@
 #include "Proto/RpcOutbound.h"
 #include "../UI/UI.h"
 #include "../Java/Java.h"
+#include "../Voice/Network.h"
+#include "../Voice/SpeakerList.h"
 #include <RakNet/GetTime.h>
 #include <cmath>
 
@@ -304,7 +306,9 @@ void RpcHandlers::OnConnectionRejected(const proto::ConnectionRejected& p)
 			break;
 	}
 
-	pNetGame->GetRakClient()->Disconnect(500);
+	Network::OnRaknetDisconnect();
+	SpeakerList::Hide();
+	pNetGame->GetRakClient()->Disconnect(100);
 }
 
 void RpcHandlers::OnGameModeRestart(const proto::GameModeRestart&)

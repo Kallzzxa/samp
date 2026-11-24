@@ -1,4 +1,5 @@
 #include "Stream.h"
+#include "Playback.h"
 
 #include "SetController.h"
 #include "SlideController.h"
@@ -139,6 +140,23 @@ void Stream::EffectDelete(const uint32_t effect)
 	this->effects.erase(effect);
 }
 
+void Stream::SyncVoiceVolume() noexcept
+{
+	const float scale = Playback::GetVoiceVolumeScale();
+	const float vol = 8.0f * scale;
+	for (const auto& channel : this->channels) {
+		if (!channel) continue;
+		BASS_ChannelSetAttribute(channel->GetHandle(), BASS_ATTRIB_VOL, vol);
+		if (scale > 0.0f) {
+			for (const auto& parameter : this->parameters) {
+				if (parameter.second) {
+					parameter.second->Apply(*channel);
+				}
+			}
+		}
+	}
+}
+
 std::size_t Stream::AddPlayCallback(PlayCallback playCallback)
 {
 	for (std::size_t i{0}; i < this->playCallbacks.size(); ++i) {
@@ -185,7 +203,7 @@ void Stream::RemoveStopCallback(const std::size_t callback) noexcept
 
 void Stream::OnChannelCreate(const Channel& channel)
 {
-	BASS_ChannelSetAttribute(channel.GetHandle(), BASS_ATTRIB_VOL, 8.f);
+	BASS_ChannelSetAttribute(channel.GetHandle(), BASS_ATTRIB_VOL, 8.0f * Playback::GetVoiceVolumeScale());
 
 	for (const auto& parameter : this->parameters) {
 		parameter.second->Apply(channel);

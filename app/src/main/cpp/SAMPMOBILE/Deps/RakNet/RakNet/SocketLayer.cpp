@@ -39,6 +39,8 @@ typedef int socklen_t;
 #include <string.h> // memcpy
 #include <unistd.h>
 #include <fcntl.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #endif
 
 #include "ExtendedOverlappedPool.h"
@@ -299,19 +301,52 @@ SOCKET SocketLayer::CreateBoundSocket( unsigned short port, bool blockingSocket,
 #if !defined(_COMPATIBILITY_1) && !defined(_COMPATIBILITY_2)
 const char* SocketLayer::DomainNameToIP( const char *domainName )
 {
+	if (!domainName || !domainName[0])
+		return 0;
+
+#if !defined(_WIN32)
+	static thread_local char s_resolvedIp[INET_ADDRSTRLEN];
+	struct in_addr directAddr{};
+	if (inet_pton(AF_INET, domainName, &directAddr) == 1)
+	{
+		if (inet_ntop(AF_INET, &directAddr, s_resolvedIp, sizeof(s_resolvedIp)))
+			return s_resolvedIp;
+	}
+
+	struct addrinfo hints{};
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_DGRAM;
+	struct addrinfo *res = nullptr;
+	if (getaddrinfo(domainName, nullptr, &hints, &res) != 0 || !res)
+		return 0;
+
+	const char *out = nullptr;
+	for (struct addrinfo *p = res; p != nullptr; p = p->ai_next)
+	{
+		if (p->ai_family == AF_INET && p->ai_addr)
+		{
+			const auto *sin = reinterpret_cast<const struct sockaddr_in *>(p->ai_addr);
+			if (inet_ntop(AF_INET, &sin->sin_addr, s_resolvedIp, sizeof(s_resolvedIp)))
+			{
+				out = s_resolvedIp;
+				break;
+			}
+		}
+	}
+	freeaddrinfo(res);
+	return out;
+#else
 	struct hostent * phe = gethostbyname( domainName );
 
 	if ( phe == 0 || phe->h_addr_list[ 0 ] == 0 )
 	{
-		//cerr << "Yow! Bad host lookup." << endl;
 		return 0;
 	}
 
 	struct in_addr addr;
-
 	memcpy( &addr, phe->h_addr_list[ 0 ], sizeof( struct in_addr ) );
-
 	return inet_ntoa( addr );
+#endif
 }
 #endif
 
@@ -489,7 +524,7 @@ int SocketLayer::RecvFrom( const SOCKET s, RakPeer *rakPeer, int *errorCode )
 #endif
 int SocketLayer::SendTo( SOCKET s, const char *data, int length, unsigned int binaryAddress, unsigned short port )
 {
-	if ( s == INVALID_SOCKET )
+	if ( s == INVALID_SOCKET || !data || length < 0 || length >= 4092 )
 	{
 		return -1;
 	}

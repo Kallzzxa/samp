@@ -33,7 +33,9 @@ CPlayerPool::~CPlayerPool()
 
 void CPlayerPool::Process()
 {
-	for (PLAYERID playerId = 0; playerId < MAX_PLAYERS; playerId++) {
+	const PLAYERID maxId = static_cast<PLAYERID>(
+		(m_iLastPlayerID >= 0 && m_iLastPlayerID < MAX_PLAYERS) ? m_iLastPlayerID : (MAX_PLAYERS - 1));
+	for (PLAYERID playerId = 0; playerId <= maxId; playerId++) {
 		if (m_bPlayerSlotState[playerId]) {
 			CRemotePlayer* pRemotePlayer = GetAt(playerId);
 			if (pRemotePlayer) {
@@ -216,7 +218,8 @@ void CPlayerPool::UpdatePlayerPing(PLAYERID playerId, int iPing)
 PLAYERID CPlayerPool::FindRemotePlayerIDFromGtaPtr(sa::CPed* pActor)
 {
 	if (!pActor) return INVALID_PLAYER_ID;
-	for (int i = 0; i < MAX_PLAYERS; i++) {
+	const int maxId = (m_iLastPlayerID >= 0 && m_iLastPlayerID < MAX_PLAYERS) ? m_iLastPlayerID : (MAX_PLAYERS - 1);
+	for (int i = 0; i <= maxId; i++) {
 		CRemotePlayer* pRemotePlayer = GetAt(i);
 		if (pRemotePlayer) {
 			CPlayerPed* pPlayerPed = pRemotePlayer->GetPlayerPed();
@@ -257,7 +260,9 @@ void CPlayerPool::ProcessAttachedObjects()
 		}
 	}
 
-	for (PLAYERID playerId = 0; playerId < MAX_PLAYERS; playerId++) {
+	const PLAYERID maxId = static_cast<PLAYERID>(
+		(m_iLastPlayerID >= 0 && m_iLastPlayerID < MAX_PLAYERS) ? m_iLastPlayerID : (MAX_PLAYERS - 1));
+	for (PLAYERID playerId = 0; playerId <= maxId; playerId++) {
 		CRemotePlayer* pRemotePlayer = GetAt(playerId);
 		if (pRemotePlayer) {
 			CPlayerPed* pPlayerPed = pRemotePlayer->GetPlayerPed();
@@ -273,8 +278,10 @@ void CPlayerPool::ApplyCollisionChecking()
 {
 	CRemotePlayer* pRemotePlayer = nullptr;
 	CPlayerPed* pPlayerPed = nullptr;
+	const PLAYERID maxId = static_cast<PLAYERID>(
+		(m_iLastPlayerID >= 0 && m_iLastPlayerID < MAX_PLAYERS) ? m_iLastPlayerID : (MAX_PLAYERS - 1));
 
-	for (PLAYERID playerId = 0; playerId < MAX_PLAYERS; playerId++) {
+	for (PLAYERID playerId = 0; playerId <= maxId; playerId++) {
 		pRemotePlayer = GetAt(playerId);
 		if (pRemotePlayer) {
 			pPlayerPed = pRemotePlayer->GetPlayerPed();
@@ -292,8 +299,10 @@ void CPlayerPool::ResetCollisionChecking()
 {
 	CRemotePlayer* pRemotePlayer = nullptr;
 	CPlayerPed* pPlayerPed = nullptr;
+	const PLAYERID maxId = static_cast<PLAYERID>(
+		(m_iLastPlayerID >= 0 && m_iLastPlayerID < MAX_PLAYERS) ? m_iLastPlayerID : (MAX_PLAYERS - 1));
 
-	for (PLAYERID playerId = 0; playerId < MAX_PLAYERS; playerId++) {
+	for (PLAYERID playerId = 0; playerId <= maxId; playerId++) {
 		pRemotePlayer = GetAt(playerId);
 		if (pRemotePlayer) {
 			pPlayerPed = pRemotePlayer->GetPlayerPed();

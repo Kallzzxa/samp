@@ -113,29 +113,87 @@ void UI::render()
 	updateTouchSnapshot();
 }
 
-void UI::enqueueTouchEvent(const ImVec2& pos, TouchType type, bool isCancel)
+void UI::enqueueTouchEvent(const ImVec2& pos, TouchType type, bool isCancel, int pointerId)
 {
 	std::lock_guard<std::mutex> lock(m_touchMutex);
 	if (m_pendingTouches.size() >= 128) {
 		m_pendingTouches.pop_front();
 	}
-	m_pendingTouches.push_back({pos, type, isCancel});
+	m_pendingTouches.push_back({pos, type, isCancel, pointerId});
+}
+
+bool UI::hitsAnyInteractiveChild(const ImVec2& pos)
+{
+	for (Widget* child : children()) {
+		if (child && child->visible() && child->width() > 0.0f && child->height() > 0.0f && child->contains(pos)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void UI::processPendingTouchEvents()
 {
+	if (m_deferredPopPending) {
+		m_deferredPopPending = false;
+		m_activeTouchId = -1;
+		touchEvent(m_deferredPopPos, TouchType::pop);
+	}
+
 	std::deque<PendingTouch> queue;
 	{
 		std::lock_guard<std::mutex> lock(m_touchMutex);
 		if (m_pendingTouches.empty()) return;
 		queue.swap(m_pendingTouches);
 	}
+
+	bool pushedThisFrame = false;
 	for (const auto& ev : queue) {
 		if (ev.isCancel) {
+			m_activeTouchId = -1;
+			m_deferredPopPending = false;
+			pushedThisFrame = false;
 			touchEvent(ImVec2(-10000.0f, -10000.0f), TouchType::pop);
+			continue;
 		}
-		else {
-			touchEvent(ev.pos, ev.type);
+
+		if (ev.type == TouchType::push) {
+			if (m_activeTouchId == -1) {
+				if (hitsAnyInteractiveChild(ev.pos)) {
+					if (m_deferredPopPending) {
+						m_deferredPopPending = false;
+						touchEvent(m_deferredPopPos, TouchType::pop);
+					}
+					m_activeTouchId = ev.pointerId;
+					pushedThisFrame = true;
+					touchEvent(ev.pos, TouchType::push);
+				}
+				else {
+					// Background tap outside all SAMP widgets: deactivate any active SAMP widget
+					// without locking m_activeTouchId onto the GTA joystick/camera finger.
+					touchEvent(ev.pos, TouchType::push);
+					touchEvent(ImVec2(-10000.0f, -10000.0f), TouchType::pop);
+				}
+			}
+		}
+		else if (ev.type == TouchType::move) {
+			if (ev.pointerId == m_activeTouchId) {
+				touchEvent(ev.pos, TouchType::move);
+			}
+		}
+		else if (ev.type == TouchType::pop) {
+			if (ev.pointerId == m_activeTouchId) {
+				if (pushedThisFrame) {
+					// Sub-frame tap (push + pop within one render frame): hold MouseDown[0]
+					// across one ImGui::NewFrame() so ImGui Selectable/Button sees the click.
+					m_deferredPopPending = true;
+					m_deferredPopPos = ev.pos;
+				}
+				else {
+					m_activeTouchId = -1;
+					touchEvent(ev.pos, TouchType::pop);
+				}
+			}
 		}
 	}
 }

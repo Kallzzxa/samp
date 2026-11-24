@@ -89,9 +89,6 @@ void SpeakerList::Render()
 				if (playerName) {
 					if (!SpeakerList::playerStreams[playerId].empty()) {
 						for (const auto& playerStream : SpeakerList::playerStreams[playerId]) {
-							if (pAudioStream) {
-								pAudioStream->Stop(false);
-							}
 							if (playerStream.second.GetType() == StreamType::LocalStreamAtPlayer) {
 								sa::CVector VecPos{0.0f, 0.0f, 0.0f};
 
@@ -105,9 +102,6 @@ void SpeakerList::Render()
 						}
 
 						if (curTextLine < 4 && playerName && strlen(playerName)) {
-							if (pAudioStream) {
-								pAudioStream->Stop(false);
-							}
 							if (SpeakerList::tSpeakerIcon && SpeakerList::tSpeakerIcon->raster) {
 								ImVec2 a = ImVec2(textPos.x, textPos.y);
 								ImVec2 b = ImVec2(textPos.x + pUI->GetFontSize() / 2, textPos.y + pUI->GetFontSize() / 2);

@@ -130,30 +130,40 @@ volatile pid_t g_gameThreadTid = -1;
 std::atomic<bool> g_processRan{false};
 std::atomic<bool> g_worldReady{false};
 
-void Client::initialize(const std::string& gameDir, bool offlineMode)
+static struct sigaction s_prevFatalAction[32]{};
+
+static void installFatalSignalHandlers()
 {
-	// Fatal-signal handler: async-signal-safe only (no malloc/spdlog/unwind —
-	// those deadlock if the faulting thread held their locks, which turns any
-	// crash into a frozen process with no tombstone). Write a minimal
-	// breadcrumb, then restore the default disposition and return so the
-	// faulting instruction re-executes and debuggerd writes a real tombstone.
 	struct sigaction sig_action{};
 	sig_action.sa_sigaction = [](int signum, siginfo_t* info, void* ctx) {
 		static std::atomic_flag in_handler = ATOMIC_FLAG_INIT;
 		if (in_handler.test_and_set()) {
-			// nested fault inside the crash breadcrumb - bail out immediately
 			_exit(128 + signum);
 		}
 		crash_breadcrumb(signum, info, ctx);
+		if (signum > 0 && signum < 32) {
+			const struct sigaction& prev = s_prevFatalAction[signum];
+			sigaction(signum, &prev, nullptr);
+			if ((prev.sa_flags & SA_SIGINFO) && prev.sa_sigaction) {
+				prev.sa_sigaction(signum, info, ctx);
+				return;
+			}
+			if (prev.sa_handler != SIG_DFL && prev.sa_handler != SIG_IGN && prev.sa_handler != nullptr) {
+				prev.sa_handler(signum);
+				return;
+			}
+		}
 		signal(signum, SIG_DFL);
 	};
 	sigemptyset(&sig_action.sa_mask);
-	sig_action.sa_flags = SA_SIGINFO;
-	sigaction(SIGSEGV, &sig_action, nullptr);
-	sigaction(SIGBUS, &sig_action, nullptr);
-	sigaction(SIGILL, &sig_action, nullptr);
-	sigaction(SIGABRT, &sig_action, nullptr);
+	sig_action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+	for (int sig : {SIGSEGV, SIGBUS, SIGILL, SIGABRT, SIGFPE}) {
+		sigaction(sig, &sig_action, &s_prevFatalAction[sig]);
+	}
+}
 
+void Client::initialize(const std::string& gameDir, bool offlineMode)
+{
 	// capture library load bases once so crash breadcrumbs can report pc as
 	// an offset into libSAMPMOBILE/libGTASA (see crash_breadcrumb)
 	dl_iterate_phdr([](struct dl_phdr_info* info, size_t, void*) -> int {
@@ -165,22 +175,24 @@ void Client::initialize(const std::string& gameDir, bool offlineMode)
 	}, nullptr);
 
 	// SIGUSR2 = async-signal-safe thread identification breadcrumb only
-	// (calling spdlog/_Unwind_Backtrace/dladdr inside a signal handler can deadlock).
 	struct sigaction dump_action{};
 	dump_action.sa_sigaction = [](int, siginfo_t*, void*) {
-		char comm[64] = {};
+		char msg[128] = "Thread dump comm=";
+		size_t pos = strlen(msg);
 		int fd = open("/proc/self/comm", O_RDONLY);
 		if (fd >= 0) {
-			ssize_t n = read(fd, comm, sizeof(comm) - 1);
-			if (n > 0) comm[n] = 0;
+			ssize_t n = read(fd, msg + pos, sizeof(msg) - pos - 1);
+			if (n > 0) {
+				pos += static_cast<size_t>(n);
+				while (pos > 0 && (msg[pos - 1] == '\n' || msg[pos - 1] == '\r')) --pos;
+			}
 			close(fd);
 		}
-		char msg[128];
-		snprintf(msg, sizeof(msg), "Thread dump tid=%d comm=%s", (int) gettid(), comm);
+		msg[pos] = '\0';
 		__android_log_write(ANDROID_LOG_WARN, "SAMPMOBILE", msg);
 	};
 	sigemptyset(&dump_action.sa_mask);
-	dump_action.sa_flags = SA_SIGINFO;
+	dump_action.sa_flags = SA_SIGINFO | SA_ONSTACK;
 	sigaction(SIGUSR2, &dump_action, nullptr);
 
 	init_logger(gameDir);
@@ -204,6 +216,8 @@ void Client::initialize(const std::string& gameDir, bool offlineMode)
 		spdlog::info("Crashlytics initialized");
 		firebase::crashlytics::SetUserId(Settings::nick());
 	}
+	// Install after Crashlytics so we chain to debuggerd / Crashlytics cleanly without clobbering
+	installFatalSignalHandlers();
 
 	// index order must match the launcher's version list (SettingsPageFragment / join dialog)
 	static const struct { const char* name; int netgame; } kSampVersions[] = {
@@ -296,7 +310,7 @@ void Client::initialize(const std::string& gameDir, bool offlineMode)
 
 }
 
-void Client::process()
+void Client::process(bool canRender2d)
 {
 	static bool gameInited = false;
 	static bool netgameInited = false;
@@ -391,7 +405,7 @@ void Client::process()
 				if (pLocal->m_ped) {
 					RwMatrix mat = pLocal->m_ped->GetMatrix().ToRwMatrix();
 					mat.pos = {2090.6255, 1164.5679, 11.6484};
-					pLocal->m_ped->SetMatrix((sa::CMatrix&) mat);
+					pLocal->m_ped->SetMatrix(mat);
 					pLocal->SetTargetRotation(72.8293);
 					pGame->NewVehicle(411, mat.pos.x, mat.pos.y + 5.0f, mat.pos.z, 0.0f, false);
 				}
@@ -410,7 +424,9 @@ void Client::process()
 
 	if (!netgameInited && !offline_mode) {
 		spdlog::info("Initializing netgame...");
-		pNetGame = new NetGame(Settings::ip(), Settings::port(), Settings::nick(), Settings::pass());
+		NetGame* netGame = new NetGame(Settings::ip(), Settings::port(), Settings::nick(), Settings::pass());
+		std::atomic_thread_fence(std::memory_order_release);
+		pNetGame = netGame;
 		netgameInited = true;
 	}
 
@@ -431,7 +447,7 @@ void Client::process()
 		CTextDrawPool* pTextDrawPool = pNetGame->GetTextDrawPool();
 		if (pTextDrawPool) {
 			pTextDrawPool->processPendingTouches();
-			if (!pUI || !pUI->scoreboard() || !pUI->scoreboard()->visible()) {
+			if (canRender2d && !Game::IsGamePaused() && (!pUI || !pUI->scoreboard() || !pUI->scoreboard()->visible())) {
 				pTextDrawPool->Draw();
 			}
 		}

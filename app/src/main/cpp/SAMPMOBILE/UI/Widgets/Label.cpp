@@ -35,7 +35,8 @@ ImVec2 Label::calculateTextSize(const std::string& text) const
 
 	ImVec2 cur_size = {0.0f, 0.0f};
 
-	float font_size = m_fontSize == 0.0f ? ImGui::GetIO().Fonts->Fonts[0]->FontSize : m_fontSize;
+	ImFont* font = ImGui::GetIO().Fonts->Fonts[0];
+	float font_size = m_fontSize == 0.0f ? (font->FontSize * font->Scale) : m_fontSize;
 	const char* text_start = text.c_str();
 	const char* text_cur = text.c_str();
 	const char* text_end = text.c_str() + text.length();
@@ -96,7 +97,7 @@ ImVec2 Label::calculateTextSize(const std::string& text) const
 ImVec2 Label::calculateTextSize(const char* begin, const char* end) const
 {
 	ImFont* font = ImGui::GetIO().Fonts->Fonts[0];
-	const float sz = (m_fontSize == 0.0f ? font->FontSize : m_fontSize) * font->Scale;
+	const float sz = m_fontSize == 0.0f ? (font->FontSize * font->Scale) : m_fontSize;
 	return font->CalcTextSizeA(sz, FLT_MAX, 0.0f, begin, end);
 }
 
@@ -139,7 +140,8 @@ ImVec2 LabelImage::calculateTextSize(const std::string& text) const
 
 	ImVec2 cur_size = {0.0f, 0.0f};
 
-	float font_size = m_fontSize == 0.0f ? ImGui::GetIO().Fonts->Fonts[0]->FontSize : m_fontSize;
+	ImFont* font = ImGui::GetIO().Fonts->Fonts[0];
+	float font_size = m_fontSize == 0.0f ? (font->FontSize * font->Scale) : m_fontSize;
 	const char* text_start = text.c_str();
 	const char* text_cur = text.c_str();
 	const char* text_end = text.c_str() + text.length();
@@ -200,5 +202,6 @@ ImVec2 LabelImage::calculateTextSize(const std::string& text) const
 ImVec2 LabelImage::calculateTextSize(const char* begin, const char* end) const
 {
 	ImFont* font = ImGui::GetIO().Fonts->Fonts[0];
-	return font->CalcTextSizeA(m_fontSize == 0.0f ? font->FontSize : m_fontSize, FLT_MAX, 0.0f, begin, end);
+	const float sz = m_fontSize == 0.0f ? (font->FontSize * font->Scale) : m_fontSize;
+	return font->CalcTextSizeA(sz, FLT_MAX, 0.0f, begin, end);
 }

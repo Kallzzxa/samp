@@ -4,6 +4,7 @@
 #include "MultiTouch.h"
 #include "NV_Event.h"
 
+#include <android/input.h>
 #include <unistd.h>
 
 extern UI* pUI;
@@ -262,29 +263,8 @@ extern "C"
 JNIEXPORT jboolean JNICALL Java_com_sampmobile_game_SAMP_multiTouchEvent4Ex(JNIEnv* env, jobject obj, jint action,
 		jint pointer, jint x1, jint y1, jint x2, jint y2, jint x3, jint y3, jint x4, jint y4)
 {
-	static jclass motionEvent = env->FindClass("android/view/MotionEvent");
-
-	static jfieldID ACTION_DOWN_id = env->GetStaticFieldID(motionEvent, "ACTION_DOWN", "I");
-	static jfieldID ACTION_UP_id = env->GetStaticFieldID(motionEvent, "ACTION_UP", "I");
-
-	static jfieldID ACTION_POINTER_DOWN_id = env->GetStaticFieldID(motionEvent, "ACTION_POINTER_DOWN", "I");
-	static jfieldID ACTION_POINTER_UP_id = env->GetStaticFieldID(motionEvent, "ACTION_POINTER_UP", "I");
-
-	static jfieldID ACTION_CANCEL_id = env->GetStaticFieldID(motionEvent, "ACTION_CANCEL", "I");
-	static jfieldID ACTION_POINTER_INDEX_SHIFT_id = env->GetStaticFieldID(motionEvent, "ACTION_POINTER_ID_SHIFT", "I");
-	static jfieldID ACTION_POINTER_INDEX_MASK_id = env->GetStaticFieldID(motionEvent, "ACTION_POINTER_ID_MASK", "I");
-	static jfieldID ACTION_MASK_id = env->GetStaticFieldID(motionEvent, "ACTION_MASK", "I");
-
-	static int ACTION_DOWN = env->GetStaticIntField(motionEvent, ACTION_DOWN_id);
-	static int ACTION_UP = env->GetStaticIntField(motionEvent, ACTION_UP_id);
-
-	static int ACTION_POINTER_DOWN = env->GetStaticIntField(motionEvent, ACTION_POINTER_DOWN_id);
-	static int ACTION_POINTER_UP = env->GetStaticIntField(motionEvent, ACTION_POINTER_UP_id);
-
-	static int ACTION_CANCEL = env->GetStaticIntField(motionEvent, ACTION_CANCEL_id);
-	static int ACTION_POINTER_INDEX_MASK = env->GetStaticIntField(motionEvent, ACTION_POINTER_INDEX_MASK_id);
-	static int ACTION_POINTER_INDEX_SHIFT = env->GetStaticIntField(motionEvent, ACTION_POINTER_INDEX_SHIFT_id);
-	static int ACTION_MASK = env->GetStaticIntField(motionEvent, ACTION_MASK_id);
+	(void) env;
+	(void) obj;
 
 	NVEvent ev;
 	memset(&ev, 0, sizeof(ev));
@@ -294,25 +274,27 @@ JNIEXPORT jboolean JNICALL Java_com_sampmobile_game_SAMP_multiTouchEvent4Ex(JNIE
 	uint32_t actionType = NV_MULTITOUCH_MOVE;
 	uint32_t extraFlags = 0;
 
-	if (action == ACTION_UP) {
-		actionType = NV_MULTITOUCH_UP;
-		extraFlags |= kMultiTouchPrimaryBit;
-	}
-	else if (action == ACTION_DOWN) {
-		actionType = NV_MULTITOUCH_DOWN;
-		extraFlags |= kMultiTouchPrimaryBit;
-	}
-	else if (action == ACTION_POINTER_DOWN) {
-		actionType = NV_MULTITOUCH_DOWN;
-	}
-	else if (action == ACTION_POINTER_UP) {
-		actionType = NV_MULTITOUCH_UP;
-	}
-	else if (action == ACTION_CANCEL) {
-		actionType = NV_MULTITOUCH_CANCEL;
-	}
-	else {
-		actionType = NV_MULTITOUCH_MOVE;
+	switch (action) {
+		case AMOTION_EVENT_ACTION_UP:
+			actionType = NV_MULTITOUCH_UP;
+			extraFlags |= kMultiTouchPrimaryBit;
+			break;
+		case AMOTION_EVENT_ACTION_DOWN:
+			actionType = NV_MULTITOUCH_DOWN;
+			extraFlags |= kMultiTouchPrimaryBit;
+			break;
+		case AMOTION_EVENT_ACTION_POINTER_DOWN:
+			actionType = NV_MULTITOUCH_DOWN;
+			break;
+		case AMOTION_EVENT_ACTION_POINTER_UP:
+			actionType = NV_MULTITOUCH_UP;
+			break;
+		case AMOTION_EVENT_ACTION_CANCEL:
+			actionType = NV_MULTITOUCH_CANCEL;
+			break;
+		default:
+			actionType = NV_MULTITOUCH_MOVE;
+			break;
 	}
 
 	const uint32_t actionPtr = static_cast<uint32_t>(pointer) & 0xFFu;

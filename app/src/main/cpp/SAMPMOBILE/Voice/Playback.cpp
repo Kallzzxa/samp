@@ -5,6 +5,7 @@
 #include "../Game/Game.h"
 
 #include "Playback.h"
+#include "Plugin.h"
 
 #include "PluginConfig.h"
 #include "Header.h"
@@ -14,7 +15,7 @@ extern Game* pGame;
 
 bool Playback::Init() noexcept
 {
-	if (Playback::initStatus) {
+	if (Playback::initStatus || !IsBassLoaded()) {
 		return false;
 	}
 
@@ -75,6 +76,17 @@ int Playback::GetSoundVolume() noexcept
 	return PluginConfig::GetSoundVolume();
 }
 
+float Playback::GetVoiceVolumeScale() noexcept
+{
+	if (!PluginConfig::GetSoundEnable()) {
+		return 0.0f;
+	}
+	int vol = PluginConfig::GetSoundVolume();
+	if (vol < 0) vol = 0;
+	else if (vol > 100) vol = 100;
+	return static_cast<float>(vol) / 100.0f;
+}
+
 bool Playback::GetSoundBalancer() noexcept
 {
 	return PluginConfig::GetSoundBalancer();
@@ -90,9 +102,8 @@ void Playback::SetSoundEnable(const bool soundEnable) noexcept
 	if (!Playback::loadStatus) return;
 
 	PluginConfig::SetSoundEnable(soundEnable);
-
-	if (!PluginConfig::GetSoundEnable()) { BASS_SetConfig(BASS_CONFIG_GVOL_STREAM, 0); }
-	else { BASS_SetConfig(BASS_CONFIG_GVOL_STREAM, 100 * PluginConfig::GetSoundVolume()); }
+	// Scale only Voice channels instead of global BASS_CONFIG_GVOL_STREAM so AudioStream is unaffected.
+	Plugin::SyncVoiceVolume();
 }
 
 void Playback::SetSoundVolume(const int soundVolume) noexcept
@@ -104,11 +115,7 @@ void Playback::SetSoundVolume(const int soundVolume) noexcept
 	else if (soundVolume > 100) iSoundVolume = 100;
 
 	PluginConfig::SetSoundVolume(iSoundVolume);
-	//PluginConfig::SetSoundVolume(std::clamp(soundVolume, 0, 100));
-
-	if (PluginConfig::GetSoundEnable()) {
-		BASS_SetConfig(BASS_CONFIG_GVOL_STREAM, 100 * PluginConfig::GetSoundVolume());
-	}
+	Plugin::SyncVoiceVolume();
 }
 
 void Playback::SetSoundBalancer(const bool soundBalancer) noexcept
@@ -218,11 +225,14 @@ bool Playback::BassInitHookFunc() noexcept
 		"freq:%u, flags:0x%x, win:0x%x, dsguid:0x%x)...", device, freq, flags, win, dsguid);*/
 
 	LogVoice("[sv:dbg:playback:bassinithook] : calling function BASS_Init(device:-1, "
-			 "freq:%u, flags:0x%x)...", SV::kFrequency, BASS_DEVICE_MONO | BASS_DEVICE_3D);
+			 "freq:%u, flags:0x%x)...", SV::kFrequency, BASS_DEVICE_3D);
 
-	if (BASS_Init(-1, SV::kFrequency, BASS_DEVICE_MONO | BASS_DEVICE_3D) == 0) {
-		LogVoice("[sv:err:playback:bassinithook] : failed to init bass library (code:%d)", BASS_ErrorGetCode());
-		return false;
+	if (BASS_Init(-1, SV::kFrequency, BASS_DEVICE_3D) == 0) {
+		const int err = BASS_ErrorGetCode();
+		if (err != BASS_ERROR_ALREADY) {
+			LogVoice("[sv:err:playback:bassinithook] : failed to init bass library (code:%d)", err);
+			return false;
+		}
 	}
 
 	/*if(HIWORD(BASS_FX_GetVersion()) != BASSVERSION)

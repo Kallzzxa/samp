@@ -160,15 +160,15 @@ DECL_HOOK(void, AND_TouchEvent, int type, int num, int posX, int posY)
 		switch (type)
 		{
 		case 2: // push
-			pUI->enqueueTouchEvent(ImVec2(posX, posY), TouchType::push);
+			pUI->enqueueTouchEvent(ImVec2(posX, posY), TouchType::push, false, num);
 			break;
 
 		case 3: // move
-			pUI->enqueueTouchEvent(ImVec2(posX, posY), TouchType::move);
+			pUI->enqueueTouchEvent(ImVec2(posX, posY), TouchType::move, false, num);
 			break;
 
 		case 1: // pop
-			pUI->enqueueTouchEvent(ImVec2(posX, posY), TouchType::pop);
+			pUI->enqueueTouchEvent(ImVec2(posX, posY), TouchType::pop, false, num);
 			break;
 		}
 
@@ -815,12 +815,16 @@ void Hooks::openAdjustableHud()
 // never reaches Idle()/Render2dStuff(). Client::process() therefore has to
 // be driven from here as well or StartGame() can never fire and the client
 // sits in the menu forever behind the Java loading overlay.
+static bool s_clientProcessedThisFrame = false;
+extern volatile pid_t g_gameThreadTid;
+
 DECL_HOOK(void, FrontendIdle)
 {
 	static bool fired = false;
 	if (!fired) {
 		fired = true;
-		spdlog::info("hook fired: FrontendIdle tid={}", (int) gettid());
+		g_gameThreadTid = gettid();
+		spdlog::info("hook fired: FrontendIdle tid={}", (int) g_gameThreadTid);
 	}
 	FrontendIdle();
 
@@ -833,7 +837,7 @@ DECL_HOOK(void, FrontendIdle)
 		}
 	}
 
-	Client::process();
+	Client::process(false);
 }
 
 DECL_HOOK(void, Render2dStuff)
@@ -853,7 +857,8 @@ DECL_HOOK(void, Render2dStuff)
 
 	Render2dStuff();
 
-	Client::process();
+	s_clientProcessedThisFrame = true;
+	Client::process(true);
 
 	// touch-widget watchdog: DeleteAll (CGame::Shutdown / gamemode restart /
 	// death) or AML plugins like libSAUtils64.so redirecting m_pWidgets can
@@ -890,7 +895,8 @@ DECL_HOOK(void, Render2dStuff)
 		UpdateTouchCombatVisuals();
 	}
 
-	// temp widget diagnostic (touch-controls investigation)
+	// temp widget diagnostic (only emit in debug log mode)
+	if (Client::isLogLevelDebug())
 	{
 		static int diagFrames = -1;
 		if (diagFrames >= 0 && diagFrames < 600) {
@@ -1046,16 +1052,9 @@ DECL_HOOK(void, Render2dStuff)
 
 static void SanitizeAllAlphaLinkLists();
 
-DECL_HOOK(uint32_t, Idle, void *param, bool firstFrame)
+static RwCamera* (*Idle_RwCameraEndUpdate_orig)(RwCamera* camera) = nullptr;
+static RwCamera* Idle_RwCameraEndUpdate_hook(RwCamera* camera)
 {
-	static bool fired = false;
-	if (!fired) {
-		fired = true;
-		spdlog::info("hook fired: Idle tid={}", (int) gettid());
-	}
-	SanitizeAllAlphaLinkLists();
-	uint32_t result = Idle(param, firstFrame);
-
 	if (pUI)
 	{
 		bool bCaptureWithHud = (s_pendingScreenshotMode.load() == 0);
@@ -1076,7 +1075,23 @@ DECL_HOOK(uint32_t, Idle, void *param, bool firstFrame)
 		}
 	}
 
-	RwCameraEndUpdate(sa::Scene->m_pRwCamera);
+	return Idle_RwCameraEndUpdate_orig ? Idle_RwCameraEndUpdate_orig(camera) : RwCameraEndUpdate(camera);
+}
+
+DECL_HOOK(uint32_t, Idle, void *param, bool firstFrame)
+{
+	static bool fired = false;
+	if (!fired) {
+		fired = true;
+		g_gameThreadTid = gettid();
+		spdlog::info("hook fired: Idle tid={}", (int) g_gameThreadTid);
+	}
+	SanitizeAllAlphaLinkLists();
+	s_clientProcessedThisFrame = false;
+	uint32_t result = Idle(param, firstFrame);
+	if (!s_clientProcessedThisFrame) {
+		Client::process(false);
+	}
 
 	return result;
 }
@@ -1102,10 +1117,11 @@ DECL_HOOK(void, CPools_Initialise)
 }
 
 ThreadOptimizer g_threadOpt;
-extern volatile pid_t g_gameThreadTid;
 DECL_HOOK(void, AND_RunThread, void *a1)
 {
-	g_gameThreadTid = gettid();
+	if (g_gameThreadTid == -1) {
+		g_gameThreadTid = gettid();
+	}
 	g_threadOpt.pushThread(gettid());
 	AND_RunThread(a1);
 }
@@ -1312,13 +1328,13 @@ DECL_HOOK(int, CWorld_FindPlayerSlotWithPedPointer, sa::CPed *pPlayersPed)
 	return -1;
 }
 
-int g_lastObjectModel = -1;
+std::atomic<int> g_lastObjectModel{-1};
 
 DECL_HOOK(int32_t, CObject_Render, sa::CObject *_this)
 {
 	if (_this)
 	{
-		g_lastObjectModel = _this->m_nModelIndex;
+		g_lastObjectModel.store(_this->m_nModelIndex, std::memory_order_relaxed);
 	}
 
 	// object material (covers both CObjectPool objects and CPlayerPed attached objects in O(1))
@@ -1333,7 +1349,7 @@ DECL_HOOK(int32_t, CObject_Render, sa::CObject *_this)
 	}
 
 	int32_t result = CObject_Render(_this);
-	g_lastObjectModel = -1;
+	g_lastObjectModel.store(-1, std::memory_order_relaxed);
 
 	if (pObject)
 	{
@@ -1753,7 +1769,7 @@ DECL_HOOK(int, rxOpenGLDefaultAtomicAllInOneNode, void *self, const void *params
 							{
 								--s_skipLogBudget;
 								spdlog::warn("rxOpenGLDefaultAtomicAllInOneNode: skip atomic with null verts & no repEntry (model={}, numMt={}, startMt={}, endMt={})",
-									g_lastObjectModel, numMorphTargets, startMt, endMt);
+									g_lastObjectModel.load(std::memory_order_relaxed), numMorphTargets, startMt, endMt);
 							}
 							return 1;
 						}
@@ -1910,17 +1926,10 @@ DECL_HOOK(void, CRadar_DrawRadarGangOverlay, bool bFullMap)
 	}
 }
 
-#if VER_x32
-DECL_HOOK(uint32_t, CHudColours_GetIntColour, uint32_t index)
-{
-	return TranslateColorCodeToRGBA(index);
-}
-#else
 DECL_HOOK(uint32_t, CHudColours_GetIntColour, uintptr_t _this, uint32_t index)
 {
 	return TranslateColorCodeToRGBA(index);
 }
-#endif
 
 DECL_HOOK(uint32_t, CAutoMobile_ProcessEntityCollision, sa::CVehicle *_this, sa::CEntity *pCollided, uintptr_t a3)
 {
@@ -2242,7 +2251,8 @@ void Hooks::install()
 	REG_HOOK(Boot, ANDRunThread, AND_RunThread, "Capture GameMain thread id");
 	REG_HOOK(Boot, FrontendIdle, FrontendIdle, "Auto-start game & adjustable HUD exit");
 	REG_HOOK(Boot, Render2dStuff, Render2dStuff, "ImGui HUD & SA-MP 2D overlay render");
-	REG_HOOK(Boot, Idle, Idle, "Main render frame & RwCameraEndUpdate");
+	REG_HOOK(Boot, Idle, Idle, "Main render frame & skipped-frame net pump");
+	REG_HOOK_BL(Boot, addr::RwCameraEndUpdate_patch, "Idle.RwCameraEndUpdate", Idle_RwCameraEndUpdate_hook, &Idle_RwCameraEndUpdate_orig, "Render ImGui UI & HUD screenshot before RwCameraEndUpdate");
 	REG_HOOK(Boot, AND_TouchEvent, AND_TouchEvent, "Touch routing (UI/CLEO/Monet/TextDraw)");
 	REG_HOOK(Boot, CLoadingScreen_DisplayPCScreen, DisplayScreen, "Custom loading splash screen");
 

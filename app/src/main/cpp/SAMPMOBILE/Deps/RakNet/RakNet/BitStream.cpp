@@ -25,6 +25,7 @@
 #include <string.h>
 #include <math.h>
 #include <float.h>
+#include <limits.h>
 #ifdef _COMPATIBILITY_1
 #include "Compatibility1Includes.h"
 #elif defined(_WIN32)
@@ -102,7 +103,7 @@ BitStream::BitStream( unsigned char* _data, unsigned int lengthInBytes, bool _co
 	{
 		if ( lengthInBytes > 0 )
 		{
-			if (lengthInBytes < BITSTREAM_STACK_ALLOCATION_SIZE)
+			if (lengthInBytes <= BITSTREAM_STACK_ALLOCATION_SIZE)
 			{
 				data = ( unsigned char* ) stackData;
 				numberOfBitsAllocated = BITSTREAM_STACK_ALLOCATION_SIZE << 3;
@@ -221,10 +222,14 @@ void BitStream::Write( BitStream *bitStream, int numberOfBits )
 // Read an array or casted stream
 bool BitStream::Read( char* output, const int numberOfBytes )
 {
+	if (numberOfBytes < 0)
+		return false;
+	if (numberOfBytes == 0)
+		return true;
 	// Optimization:
 	if ((readOffset & 7) == 0)
 	{
-		if ( readOffset + ( numberOfBytes << 3 ) > numberOfBitsUsed )
+		if ( readOffset < 0 || readOffset > numberOfBitsUsed || numberOfBytes > ((numberOfBitsUsed - readOffset) >> 3) )
 			return false;
 
 		// Write the data
@@ -235,6 +240,8 @@ bool BitStream::Read( char* output, const int numberOfBytes )
 	}
 	else
 	{
+		if (numberOfBytes > (INT_MAX >> 3))
+			return false;
 		return ReadBits( ( unsigned char* ) output, numberOfBytes * 8 );
 	}
 }
@@ -284,6 +291,8 @@ void BitStream::Write1( void )
 // Returns true if the next data read is a 1, false if it is a 0
 bool BitStream::ReadBit( void )
 {
+	if (readOffset < 0 || readOffset >= numberOfBitsUsed || !data)
+		return false;
 	return ( bool ) ( data[ readOffset >> 3 ] & ( 0x80 >> ( readOffset++ & 7 ) ) );
 }
 
@@ -316,7 +325,7 @@ bool BitStream::ReadAlignedBytes( unsigned char* output, const int numberOfBytes
 	// Byte align
 	AlignReadToByteBoundary();
 
-	if ( readOffset + ( numberOfBytesToRead << 3 ) > numberOfBitsUsed )
+	if ( readOffset < 0 || readOffset > numberOfBitsUsed || numberOfBytesToRead > ((numberOfBitsUsed - readOffset) >> 3) )
 		return false;
 
 	// Write the data
@@ -464,10 +473,10 @@ bool BitStream::ReadBits( unsigned char* output, int numberOfBitsToRead, const b
 #ifdef _DEBUG
 	assert( numberOfBitsToRead > 0 );
 #endif
-	if (numberOfBitsToRead<=0)
+	if (numberOfBitsToRead <= 0 || !output || !data)
 	  return false;
 	
-	if ( readOffset + numberOfBitsToRead > numberOfBitsUsed )
+	if ( readOffset < 0 || readOffset > numberOfBitsUsed || numberOfBitsToRead > numberOfBitsUsed - readOffset )
 		return false;
 		
 	int readOffsetMod8;

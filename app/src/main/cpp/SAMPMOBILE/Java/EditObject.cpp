@@ -96,7 +96,9 @@ void EditObject::enqueueOp(int kind, int button, bool state)
 {
 	uint32_t uPush = s_opPush.load(std::memory_order_relaxed);
 	uint32_t uPop = s_opPop.load(std::memory_order_acquire);
-	if (uPush - uPop >= OP_CAPACITY) {
+	// Reserve 2 slots so OP_SAVE / OP_EXIT are never dropped during a +/- click burst.
+	const uint32_t cap = (kind == OP_CLICK) ? (OP_CAPACITY - 2) : OP_CAPACITY;
+	if (uPush - uPop >= cap) {
 		return;
 	}
 	const uint32_t gen = s_sessionGen.load(std::memory_order_acquire);
@@ -169,9 +171,8 @@ void EditObject::applyClick(int button, bool state)
 		pAttach = &pPlayer->m_attachedObjects[EditObject::m_id].info;
 	}
 
-	// lazy to fix this
-	int BUTTON_LEFT_RIGHT = 1; // 0
-	int BUTTON_UP_DOWN = 0; // 1
+	int BUTTON_LEFT_RIGHT = 0;
+	int BUTTON_UP_DOWN = 1;
 	int BUTTON_PUSH_PULL = 2;
 	int BUTTON_SCALE = 3;
 	int BUTTON_ROT_X = 4;

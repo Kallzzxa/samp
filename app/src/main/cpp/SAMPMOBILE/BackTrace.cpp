@@ -10,7 +10,7 @@
 #include <cstring>
 
 extern std::atomic<uint16_t> g_lastScriptOpcode;
-extern int g_lastObjectModel;
+extern std::atomic<int> g_lastObjectModel;
 extern uintptr_t g_gtasaLibBase;
 
 void crash_log(const char* format, ...)
@@ -46,7 +46,7 @@ void logLastInfo()
 {
 	crash_log(" ");
 	crash_log("Last Script Command: 0x%04X", (unsigned int) g_lastScriptOpcode.load(std::memory_order_relaxed));
-	crash_log("Last Rendered Object Model: %d", g_lastObjectModel);
+	crash_log("Last Rendered Object Model: %d", g_lastObjectModel.load(std::memory_order_relaxed));
 	crash_log(" ");
 }
 
@@ -154,6 +154,63 @@ bool findModuleForAddrAsyncSafe(uintptr_t addr, char* outName, size_t outNameCap
 	return found;
 }
 
+void appendStrAsync(char* dst, size_t cap, size_t& pos, const char* s)
+{
+	if (!s || pos + 1 >= cap) return;
+	while (*s && pos + 1 < cap) {
+		dst[pos++] = *s++;
+	}
+	dst[pos] = '\0';
+}
+
+void appendHexAsync(char* dst, size_t cap, size_t& pos, uintptr_t v, int minDigits = 1)
+{
+	static const char kHex[] = "0123456789abcdef";
+	char tmp[20];
+	int n = 0;
+	do {
+		tmp[n++] = kHex[v & 0xFu];
+		v >>= 4;
+	} while (v != 0 && n < (int) sizeof(tmp));
+	while (n < minDigits && n < (int) sizeof(tmp)) {
+		tmp[n++] = '0';
+	}
+	while (n > 0 && pos + 1 < cap) {
+		dst[pos++] = tmp[--n];
+	}
+	if (cap > 0) dst[pos] = '\0';
+}
+
+void appendDecAsync(char* dst, size_t cap, size_t& pos, long v)
+{
+	if (v < 0) {
+		appendStrAsync(dst, cap, pos, "-");
+		unsigned long uv = static_cast<unsigned long>(-(v + 1)) + 1UL;
+		char tmp[24];
+		int n = 0;
+		do {
+			tmp[n++] = static_cast<char>('0' + (uv % 10UL));
+			uv /= 10UL;
+		} while (uv != 0 && n < (int) sizeof(tmp));
+		while (n > 0 && pos + 1 < cap) {
+			dst[pos++] = tmp[--n];
+		}
+		if (cap > 0) dst[pos] = '\0';
+		return;
+	}
+	unsigned long uv = static_cast<unsigned long>(v);
+	char tmp[24];
+	int n = 0;
+	do {
+		tmp[n++] = static_cast<char>('0' + (uv % 10UL));
+		uv /= 10UL;
+	} while (uv != 0 && n < (int) sizeof(tmp));
+	while (n > 0 && pos + 1 < cap) {
+		dst[pos++] = tmp[--n];
+	}
+	if (cap > 0) dst[pos] = '\0';
+}
+
 } // namespace
 
 void crash_breadcrumb(int signal, siginfo_t* info, void* ctx)
@@ -178,22 +235,36 @@ void crash_breadcrumb(int signal, siginfo_t* info, void* ctx)
 	uintptr_t lrModOff = 0;
 	findModuleForAddrAsyncSafe(lr, lrMod, sizeof(lrMod), lrModOff);
 
-	long sampOff = g_sampLibBase ? (long) (pc - g_sampLibBase) : -1;
-	long gtasaOff = g_gtasaLibBase ? (long) (pc - g_gtasaLibBase) : -1;
+	const uintptr_t faultAddr = info ? reinterpret_cast<uintptr_t>(info->si_addr) : 0;
+	const uint16_t lastOpcode = g_lastScriptOpcode.load(std::memory_order_relaxed);
+	const int lastObj = g_lastObjectModel.load(std::memory_order_relaxed);
 
 	char buf[512];
-	const uint16_t lastOpcode = g_lastScriptOpcode.load(std::memory_order_relaxed);
-	snprintf(buf, sizeof(buf),
-		"fatal signal %d (code %d), fault addr %p, pc 0x%lx (%s+0x%lx | samp+0x%lx gtasa+0x%lx), lr 0x%lx (%s+0x%lx), lastObjectModel %d, lastCmd 0x%04X",
-		signal, info ? info->si_code : 0,
-		info ? info->si_addr : nullptr,
-		(unsigned long) pc,
-		pcMod, (unsigned long) pcModOff,
-		sampOff, gtasaOff,
-		(unsigned long) lr,
-		lrMod, (unsigned long) lrModOff,
-		g_lastObjectModel,
-		(unsigned int) lastOpcode);
+	size_t pos = 0;
+	buf[0] = '\0';
+	appendStrAsync(buf, sizeof(buf), pos, "fatal signal ");
+	appendDecAsync(buf, sizeof(buf), pos, signal);
+	appendStrAsync(buf, sizeof(buf), pos, " (code ");
+	appendDecAsync(buf, sizeof(buf), pos, info ? info->si_code : 0);
+	appendStrAsync(buf, sizeof(buf), pos, "), fault 0x");
+	appendHexAsync(buf, sizeof(buf), pos, faultAddr);
+	appendStrAsync(buf, sizeof(buf), pos, ", pc 0x");
+	appendHexAsync(buf, sizeof(buf), pos, pc);
+	appendStrAsync(buf, sizeof(buf), pos, " (");
+	appendStrAsync(buf, sizeof(buf), pos, pcMod);
+	appendStrAsync(buf, sizeof(buf), pos, "+0x");
+	appendHexAsync(buf, sizeof(buf), pos, pcModOff);
+	appendStrAsync(buf, sizeof(buf), pos, "), lr 0x");
+	appendHexAsync(buf, sizeof(buf), pos, lr);
+	appendStrAsync(buf, sizeof(buf), pos, " (");
+	appendStrAsync(buf, sizeof(buf), pos, lrMod);
+	appendStrAsync(buf, sizeof(buf), pos, "+0x");
+	appendHexAsync(buf, sizeof(buf), pos, lrModOff);
+	appendStrAsync(buf, sizeof(buf), pos, "), lastObj ");
+	appendDecAsync(buf, sizeof(buf), pos, lastObj);
+	appendStrAsync(buf, sizeof(buf), pos, ", lastCmd 0x");
+	appendHexAsync(buf, sizeof(buf), pos, lastOpcode, 4);
+
 	__android_log_write(ANDROID_LOG_FATAL, "SAMPMOBILE", buf);
 }
 

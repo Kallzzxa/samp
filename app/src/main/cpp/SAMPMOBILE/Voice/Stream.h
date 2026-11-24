@@ -33,6 +33,7 @@ public:
 	void SlideParameter(uint8_t parameter, float startValue, float endValue, uint32_t time);
 	void EffectCreate(uint32_t effect, uint32_t number, int priority, const void* paramPtr, uint32_t paramSize);
 	void EffectDelete(uint32_t effect);
+	void SyncVoiceVolume() noexcept;
 
 	std::size_t AddPlayCallback(PlayCallback playCallback);
 	std::size_t AddStopCallback(StopCallback stopCallback);

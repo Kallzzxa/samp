@@ -42,6 +42,7 @@ public:
 	void AllocateStaticMatrix();
 	void AllocateMatrix();
 	void SetMatrix(CMatrix& matrix);
+	void SetMatrix(const RwMatrix& matrix);
 
 	// NOTSA
 	bool IsPointInRange(const CVector& point, float range);

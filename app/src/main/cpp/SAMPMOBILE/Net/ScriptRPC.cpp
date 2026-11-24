@@ -573,8 +573,10 @@ void RpcHandlers::OnSetPlayerAmmo(const proto::SetPlayerAmmo& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetPlayerAmmo");
 
-	CLocalPlayer* pLocalPlayer = pNetGame->GetPlayerPool()->GetLocalPlayer();
-	pLocalPlayer->GetPlayerPed()->SetAmmo(p.weapon, p.ammo);
+	CLocalPlayer* pLocalPlayer = pNetGame->GetPlayerPool() ? pNetGame->GetPlayerPool()->GetLocalPlayer() : nullptr;
+	if (pLocalPlayer && pLocalPlayer->GetPlayerPed()) {
+		pLocalPlayer->GetPlayerPed()->SetAmmo(p.weapon, p.ammo);
+	}
 }
 
 void RpcHandlers::OnSetVehicleHealth(const proto::SetVehicleHealth& p)
@@ -1138,7 +1140,9 @@ void RpcHandlers::OnSetCameraBehindPlayer(const proto::SetCameraBehindPlayer&)
 void RpcHandlers::OnTogglePlayerControllable(const proto::TogglePlayerControllable& p)
 {
 	spdlog::debug("ScriptRPC: ScrTogglePlayerControllable");
-	pGame->FindPlayerPed()->TogglePlayerControllable(p.controllable);
+	if (CPlayerPed* pPed = pGame ? pGame->FindPlayerPed() : nullptr) {
+		pPed->TogglePlayerControllable(p.controllable);
+	}
 }
 
 void RpcHandlers::OnPlayerPlaySound(const proto::PlayerPlaySound& p)
@@ -1171,7 +1175,9 @@ void RpcHandlers::OnGivePlayerMoney(const proto::GivePlayerMoney& p)
 void RpcHandlers::OnSetPlayerFacingAngle(const proto::SetPlayerFacingAngle& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetPlayerFacingAngle");
-	pGame->FindPlayerPed()->SetTargetRotation(p.angle);
+	if (CPlayerPed* pPed = pGame ? pGame->FindPlayerPed() : nullptr) {
+		pPed->SetTargetRotation(p.angle);
+	}
 }
 
 void RpcHandlers::OnResetPlayerMoney(const proto::ResetPlayerMoney&)
@@ -1183,7 +1189,10 @@ void RpcHandlers::OnResetPlayerMoney(const proto::ResetPlayerMoney&)
 void RpcHandlers::OnResetPlayerWeapons(const proto::ResetPlayerWeapons&)
 {
 	spdlog::debug("ScriptRPC: ScrResetPlayerWeapons");
-	pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed()->ClearWeapons();
+	if (pNetGame->GetPlayerPool() && pNetGame->GetPlayerPool()->GetLocalPlayer()
+			&& pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed()) {
+		pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed()->ClearWeapons();
+	}
 }
 
 void RpcHandlers::OnLinkVehicleToInterior(const proto::LinkVehicleToInterior& p)
@@ -1202,8 +1211,10 @@ void RpcHandlers::OnSetPlayerArmour(const proto::SetPlayerArmour& p)
 {
 	spdlog::debug("ScriptRPC: ScrSetPlayerArmour");
 
-	CLocalPlayer* pLocalPlayer = pNetGame->GetPlayerPool()->GetLocalPlayer();
-	pLocalPlayer->GetPlayerPed()->SetArmour(p.armour);
+	CLocalPlayer* pLocalPlayer = pNetGame->GetPlayerPool() ? pNetGame->GetPlayerPool()->GetLocalPlayer() : nullptr;
+	if (pLocalPlayer && pLocalPlayer->GetPlayerPed()) {
+		pLocalPlayer->GetPlayerPed()->SetArmour(p.armour);
+	}
 }
 
 void RpcHandlers::OnSetArmedWeapon(const proto::SetArmedWeapon& p)

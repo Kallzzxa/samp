@@ -69,6 +69,7 @@ bool addEntryLocked(Entry&& e)
 		return false;
 	}
 	const uintptr_t norm = normalizeTarget(e.kind, e.targetAddr);
+	e.targetAddr = norm;
 	const size_t idx = g_entries.size();
 	g_byName.emplace(e.name, idx);
 	if (norm != 0) {

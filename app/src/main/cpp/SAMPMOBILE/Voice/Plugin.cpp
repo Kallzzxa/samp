@@ -116,9 +116,6 @@ void Plugin::MainLoop()
 
 	if (!Plugin::muteStatus) {
 		if (vbutton && vbutton->recording() && Plugin::recordStatus == 0) {
-			if (pAudioStream) {
-				pAudioStream->Stop(false);
-			}
 			if (PluginConfig::GetMicroEnable()) {
 				LogVoice("[sv:dbg:plugin] : activation key(%hhu) pressed", defaultKey);
 
@@ -490,6 +487,15 @@ void Plugin::DisconnectHandler()
 	Plugin::recordBusy = false;
 
 	Record::Free();
+}
+
+void Plugin::SyncVoiceVolume() noexcept
+{
+	for (const auto& entry : Plugin::streamTable) {
+		if (entry.second) {
+			entry.second->SyncVoiceVolume();
+		}
+	}
 }
 
 void Plugin::OnDeviceInit()

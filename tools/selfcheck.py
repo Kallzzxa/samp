@@ -27,7 +27,7 @@ REPO_JNILIBS = {
         "libmonetloader.so",
         "libluajit-5.1.so",
         "libBASS.so",
-        "libBASS_SSL.so",
+        "libbass_ssl.so",
         "libOpenAL64.so",
         "libc++_shared.so",
     ],
@@ -216,17 +216,29 @@ def check_anti_regression(r: Runner) -> None:
     else:
         r.fail("AML overlay occlusion guard", "AmlCoreSettings.showModsOverlay must default to false")
 
+    addr_h = read_text("app/src/main/cpp/SAMPMOBILE/Addr.h")
+    symbols_cpp = read_text("app/src/main/cpp/SAMPMOBILE/Game/Engine/Symbols.cpp")
     util_cpp = read_text("app/src/main/cpp/SAMPMOBILE/Game/Util.cpp")
     settings_cpp = read_text("app/src/main/cpp/SAMPMOBILE/Settings.cpp")
-    if "0x850910" in util_cpp and "0x679474" in util_cpp:
-        r.ok("Live GOT widget table guard", "GetTouchWidgets reads live GOT slot")
+    if (
+        "eng::live::touchWidgets" in util_cpp
+        and "GOT_CTouchInterface_m_pWidgets" in symbols_cpp
+        and "0x850910" in addr_h
+        and "0x679474" in addr_h
+    ):
+        r.ok("Live GOT widget table guard", "GetTouchWidgets reads live GOT slot via eng::live::touchWidgets")
     else:
-        r.fail("Live GOT widget table guard", "missing live GOT offsets (0x850910 / 0x679474) in Game/Util.cpp")
+        r.fail("Live GOT widget table guard", "missing live GOT touchWidgets chain (0x850910 / 0x679474)")
 
-    if "0x851498" in settings_cpp and "0x679A3C" in settings_cpp:
-        r.ok("Live GOT MobileSettings guard", "getLiveMobileSettings reads live GOT slot")
+    if (
+        "eng::live::mobileSettings" in settings_cpp
+        and "GOT_MobileSettings_settings" in symbols_cpp
+        and "0x851498" in addr_h
+        and "0x679A3C" in addr_h
+    ):
+        r.ok("Live GOT MobileSettings guard", "getLiveMobileSettings reads live GOT slot via eng::live::mobileSettings")
     else:
-        r.fail("Live GOT MobileSettings guard", "missing live GOT offsets (0x851498 / 0x679A3C) in Settings.cpp")
+        r.fail("Live GOT MobileSettings guard", "missing live GOT mobileSettings chain (0x851498 / 0x679A3C)")
 
     scoreboard_cpp = read_text("app/src/main/cpp/SAMPMOBILE/UI/SAMPWidgets/Scoreboard.cpp")
     push_cnt = len(re.findall(r"ImGui::PushID\s*\(", scoreboard_cpp))

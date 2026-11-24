@@ -19,6 +19,7 @@
 #define __SINGLE_PRODUCER_CONSUMER_H
 
 #include <assert.h>
+#include <atomic>
 
 static const int MINIMUM_LIST_SIZE=8;
 
@@ -82,184 +83,178 @@ namespace DataStructures
 	private:
 		struct DataPlusPtr
 		{
-			SingleProducerConsumerType object;
-
-			// Ready to read is so we can use an equality boolean comparison, in case the writePointer var is trashed while context switching.
-			volatile bool readyToRead;
-			volatile DataPlusPtr *next;
+			SingleProducerConsumerType object{};
+			std::atomic<bool> readyToRead{false};
+			std::atomic<DataPlusPtr*> next{nullptr};
 		};
-		volatile DataPlusPtr *readAheadPointer;
-		volatile DataPlusPtr *writeAheadPointer;
-		volatile DataPlusPtr *readPointer;
-		volatile DataPlusPtr *writePointer;
-		unsigned readCount, writeCount;
+		DataPlusPtr *readAheadPointer = nullptr;
+		DataPlusPtr *writeAheadPointer = nullptr;
+		std::atomic<DataPlusPtr*> readPointer{nullptr};
+		std::atomic<DataPlusPtr*> writePointer{nullptr};
+		std::atomic<unsigned> readCount{0}, writeCount{0};
 	};
 
 	template <class SingleProducerConsumerType>
 		SingleProducerConsumer<SingleProducerConsumerType>::SingleProducerConsumer()
 	{
-		// Preallocate
-		readPointer = new DataPlusPtr;
-		writePointer=readPointer;
-		readPointer->next = new DataPlusPtr;
-		int listSize;
-#ifdef _DEBUG
-		assert(MINIMUM_LIST_SIZE>=3);
-#endif
-		for (listSize=2; listSize < MINIMUM_LIST_SIZE; listSize++)
+		DataPlusPtr *first = new DataPlusPtr();
+		DataPlusPtr *cur = first;
+		for (int listSize = 1; listSize < MINIMUM_LIST_SIZE; listSize++)
 		{
-			readPointer=readPointer->next;
-			readPointer->next = new DataPlusPtr;
+			DataPlusPtr *nxt = new DataPlusPtr();
+			cur->next.store(nxt, std::memory_order_relaxed);
+			cur = nxt;
 		}
-		readPointer->next->next=writePointer; // last to next = start
-		readPointer=writePointer;
-		readAheadPointer=readPointer;
-		writeAheadPointer=writePointer;
-		readCount=writeCount=0;
+		cur->next.store(first, std::memory_order_relaxed);
+		readPointer.store(first, std::memory_order_relaxed);
+		writePointer.store(first, std::memory_order_relaxed);
+		readAheadPointer = first;
+		writeAheadPointer = first;
+		readCount.store(0, std::memory_order_relaxed);
+		writeCount.store(0, std::memory_order_relaxed);
 	}
 
 	template <class SingleProducerConsumerType>
 		SingleProducerConsumer<SingleProducerConsumerType>::~SingleProducerConsumer()
 	{
-		volatile DataPlusPtr *next;
-		readPointer=writeAheadPointer->next;
-		while (readPointer!=writeAheadPointer)
+		DataPlusPtr *stop = writeAheadPointer;
+		if (!stop) return;
+		DataPlusPtr *cur = stop->next.load(std::memory_order_relaxed);
+		while (cur && cur != stop)
 		{
-			next=readPointer->next;
-			delete (char*) readPointer;
-			readPointer=next;
+			DataPlusPtr *nxt = cur->next.load(std::memory_order_relaxed);
+			delete cur;
+			cur = nxt;
 		}
-		delete (char*) readPointer;
+		delete stop;
 	}
 
 	template <class SingleProducerConsumerType>
 		SingleProducerConsumerType* SingleProducerConsumer<SingleProducerConsumerType>::WriteLock( void )
 	{
-		if (writeAheadPointer->next==readPointer ||
-			writeAheadPointer->next->readyToRead==true)
+		DataPlusPtr *nextNode = writeAheadPointer->next.load(std::memory_order_acquire);
+		if (nextNode == readPointer.load(std::memory_order_acquire) ||
+			nextNode->readyToRead.load(std::memory_order_acquire))
 		{
-			volatile DataPlusPtr *originalNext=writeAheadPointer->next;
-			writeAheadPointer->next=new DataPlusPtr;
-			assert(writeAheadPointer->next);
-			writeAheadPointer->next->next=originalNext;
+			DataPlusPtr *inserted = new DataPlusPtr();
+			inserted->next.store(nextNode, std::memory_order_relaxed);
+			writeAheadPointer->next.store(inserted, std::memory_order_release);
+			nextNode = inserted;
 		}
 
-		volatile DataPlusPtr *last;
-		last=writeAheadPointer;
-		writeAheadPointer=writeAheadPointer->next;
+		DataPlusPtr *last = writeAheadPointer;
+		writeAheadPointer = nextNode;
 
-		return (SingleProducerConsumerType*) last;
+		return &last->object;
 	}
 
 	template <class SingleProducerConsumerType>
 		void SingleProducerConsumer<SingleProducerConsumerType>::CancelWriteLock( SingleProducerConsumerType* cancelToLocation )
 	{
-		writeAheadPointer=(DataPlusPtr *)cancelToLocation;
+		writeAheadPointer = reinterpret_cast<DataPlusPtr*>(cancelToLocation);
 	}
 
 	template <class SingleProducerConsumerType>
 		void SingleProducerConsumer<SingleProducerConsumerType>::WriteUnlock( void )
 	{
-		//	DataPlusPtr *dataContainer = (DataPlusPtr *)structure;
-
+		DataPlusPtr *cur = writePointer.load(std::memory_order_relaxed);
 #ifdef _DEBUG
-		assert(writePointer->next!=readPointer);
-		assert(writePointer!=writeAheadPointer);
+		assert(cur->next.load(std::memory_order_acquire) != readPointer.load(std::memory_order_acquire));
+		assert(cur != writeAheadPointer);
 #endif
-
-		writeCount++;
-		// User is done with the data, allow send by updating the write pointer
-		writePointer->readyToRead=true;
-		writePointer=writePointer->next;
+		DataPlusPtr *nxt = cur->next.load(std::memory_order_acquire);
+		writeCount.fetch_add(1, std::memory_order_relaxed);
+		cur->readyToRead.store(true, std::memory_order_release);
+		writePointer.store(nxt, std::memory_order_release);
 	}
 
 	template <class SingleProducerConsumerType>
 		SingleProducerConsumerType* SingleProducerConsumer<SingleProducerConsumerType>::ReadLock( void )
 	{
-			if (readAheadPointer==writePointer ||
-				readAheadPointer->readyToRead==false)
-			{
-				return 0;
-			}
+		if (readAheadPointer == writePointer.load(std::memory_order_acquire) ||
+			!readAheadPointer->readyToRead.load(std::memory_order_acquire))
+		{
+			return 0;
+		}
 
-			volatile DataPlusPtr *last;
-			last=readAheadPointer;
-			readAheadPointer=readAheadPointer->next;
-			return (SingleProducerConsumerType*)last;
+		DataPlusPtr *last = readAheadPointer;
+		readAheadPointer = readAheadPointer->next.load(std::memory_order_acquire);
+		return &last->object;
 	}
 
 	template <class SingleProducerConsumerType>
 		void SingleProducerConsumer<SingleProducerConsumerType>::CancelReadLock( SingleProducerConsumerType* cancelToLocation )
 	{
 #ifdef _DEBUG
-		assert(readPointer!=writePointer);
+		assert(readPointer.load(std::memory_order_acquire) != writePointer.load(std::memory_order_acquire));
 #endif
-		readAheadPointer=(DataPlusPtr *)cancelToLocation;
+		readAheadPointer = reinterpret_cast<DataPlusPtr*>(cancelToLocation);
 	}
 
 	template <class SingleProducerConsumerType>
 		void SingleProducerConsumer<SingleProducerConsumerType>::ReadUnlock( void )
 	{
+		DataPlusPtr *cur = readPointer.load(std::memory_order_relaxed);
 #ifdef _DEBUG
-		assert(readAheadPointer!=readPointer); // If hits, then called ReadUnlock before ReadLock
-		assert(readPointer!=writePointer); // If hits, then called ReadUnlock when Read returns 0
+		assert(readAheadPointer != cur);
+		assert(cur != writePointer.load(std::memory_order_acquire));
 #endif
-		readCount++;
-
-		// Allow writes to this memory block
-		readPointer->readyToRead=false;
-		readPointer=readPointer->next;
+		DataPlusPtr *nxt = cur->next.load(std::memory_order_acquire);
+		readCount.fetch_add(1, std::memory_order_relaxed);
+		cur->readyToRead.store(false, std::memory_order_release);
+		readPointer.store(nxt, std::memory_order_release);
 	}
 
 	template <class SingleProducerConsumerType>
 		void SingleProducerConsumer<SingleProducerConsumerType>::Clear( void )
 	{
-		// Shrink the list down to MINIMUM_LIST_SIZE elements
-		volatile DataPlusPtr *next;
-		writePointer=readPointer->next;
+		DataPlusPtr *rp = readPointer.load(std::memory_order_relaxed);
+		if (!rp) return;
+		DataPlusPtr *cur = rp->next.load(std::memory_order_relaxed);
 
-		int listSize=1;
-		next=readPointer->next;
-		while (next!=readPointer)
+		int listSize = 1;
+		DataPlusPtr *scan = cur;
+		while (scan != rp)
 		{
 			listSize++;
-			next=next->next;
+			scan->readyToRead.store(false, std::memory_order_relaxed);
+			scan = scan->next.load(std::memory_order_relaxed);
 		}
+		rp->readyToRead.store(false, std::memory_order_relaxed);
 
 		while (listSize-- > MINIMUM_LIST_SIZE)
 		{
-			next=writePointer->next;
-#ifdef _DEBUG
-			assert(writePointer!=readPointer);
-#endif
-			delete (char*) writePointer;
-			writePointer=next;
+			DataPlusPtr *nxt = cur->next.load(std::memory_order_relaxed);
+			delete cur;
+			cur = nxt;
 		}
 
-		readPointer->next=writePointer;
-		writePointer=readPointer;
-		readAheadPointer=readPointer;
-		writeAheadPointer=writePointer;
-		readCount=writeCount=0;
+		rp->next.store(cur, std::memory_order_relaxed);
+		writePointer.store(rp, std::memory_order_release);
+		readAheadPointer = rp;
+		writeAheadPointer = rp;
+		readCount.store(0, std::memory_order_relaxed);
+		writeCount.store(0, std::memory_order_relaxed);
 	}
 
 	template <class SingleProducerConsumerType>
 		int SingleProducerConsumer<SingleProducerConsumerType>::Size( void ) const
 	{
-		return writeCount-readCount;
+		return static_cast<int>(writeCount.load(std::memory_order_relaxed) - readCount.load(std::memory_order_relaxed));
 	}
 
 	template <class SingleProducerConsumerType>
 		bool SingleProducerConsumer<SingleProducerConsumerType>::CheckReadUnlockOrder(const SingleProducerConsumerType* data) const
 	{
-		return const_cast<const SingleProducerConsumerType *>(&readPointer->object) == data;
+		DataPlusPtr *rp = readPointer.load(std::memory_order_relaxed);
+		return rp && (&rp->object == data);
 	}
 
 
 	template <class SingleProducerConsumerType>
 		bool SingleProducerConsumer<SingleProducerConsumerType>::ReadIsLocked(void) const
 	{
-		return readAheadPointer!=readPointer;
+		return readAheadPointer != readPointer.load(std::memory_order_relaxed);
 	}	
 }
 

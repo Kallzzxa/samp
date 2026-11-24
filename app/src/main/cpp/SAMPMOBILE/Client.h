@@ -34,7 +34,7 @@ public:
 	Client() = default;
 
 	static void initialize(const std::string& gameDir, bool offlineMode);
-	static void process();
+	static void process(bool canRender2d = true);
 	static void initializeUI();
 
 	static JavaVM* javaVM() { return java_vm; }

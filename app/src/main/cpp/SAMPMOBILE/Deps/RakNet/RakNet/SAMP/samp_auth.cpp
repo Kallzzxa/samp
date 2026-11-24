@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <cstdint>
 
 // for SA 2.10 arm64
 char AuthKeyTable[512][2][128] =
@@ -523,108 +524,96 @@ char AuthKeyTable[512][2][128] =
                 {"15F838D177F569DC", "38ADAAD5DF8775AEEF22B865506D1341C2A1DA57"}
         };
 
-#define endian_swap8(x) (x)
-#define endian_swap16(x) ((x>>8) | (x<<8))
-#define endian_swap32(x) ((x>>24) | ((x<<8) & 0x00FF0000) | ((x>>8) & 0x0000FF00) | (x<<24))
-#define endian_swap64(x) ((x>>56) | ((x<<40) & 0x00FF000000000000) | \
-		((x<<24) & 0x0000FF0000000000) | ((x<<8)  & 0x000000FF00000000) | \
-		((x>>8)  & 0x00000000FF000000) | ((x>>24) & 0x0000000000FF0000) | \
-        ((x>>40) & 0x000000000000FF00) | (x<<56))
+static inline uint32_t rotl32_auth(uint32_t value, unsigned int shift)
+{
+	return (value << shift) | (value >> (32u - shift));
+}
 
-#define ROTL(value, shift) ((value << shift) | (value >> (sizeof(value)*8 - shift)))
-#define ROTR(value, shift) ((value >> shift) | (value << (sizeof(value)*8 - shift)))
-#define swap(x,y,T) {T tmp = x; x = y; y = tmp;}
+void SHA1(const char *message, uint32_t out[5])
+{
+	if (!message || !out) return;
 
-void SHA1(char *message, unsigned long *out)
-{	
-	unsigned long h0 = 0x67452301;
-	unsigned long h1 = 0xEFCDAB89;
-	unsigned long h2 = 0x98BADCFE;
-	unsigned long h3 = 0x10325476;
-	unsigned long h4 = 0xC3D2E1F0;
+	uint32_t h0 = 0x67452301u;
+	uint32_t h1 = 0xEFCDAB89u;
+	uint32_t h2 = 0x98BADCFEu;
+	uint32_t h3 = 0x10325476u;
+	uint32_t h4 = 0xC3D2E1F0u;
 
-	unsigned long len = 0;
-	unsigned long long bitlen = 0;
-	
-	while (message[len])
-	{
-		len++;
-		bitlen += 8;
-	}
-	
-	unsigned long complement = (55 - (len%56)) + 8*(((len+8)/64));
-	unsigned long newlen = len + complement + 8 + 1;
-	char *pMessage = new char[newlen];
-	if (!pMessage)
-		return;
+	const size_t len = strlen(message);
+	const uint64_t bitlen = static_cast<uint64_t>(len) * 8ULL;
+	const size_t rem = (len + 1u) % 64u;
+	const size_t zeroPad = (rem <= 56u) ? (56u - rem) : (120u - rem);
+	const size_t totalLen = len + 1u + zeroPad + 8u;
 
+	uint8_t *pMessage = new uint8_t[totalLen];
 	memcpy(pMessage, message, len);
-	pMessage[len] = -128;
-	memset(pMessage+len+1, 0, complement);
+	pMessage[len] = 0x80u;
+	if (zeroPad > 0) {
+		memset(pMessage + len + 1u, 0, zeroPad);
+	}
+	for (size_t i = 0; i < 8u; ++i) {
+		pMessage[totalLen - 1u - i] = static_cast<uint8_t>((bitlen >> (i * 8u)) & 0xFFu);
+	}
 
-	*(unsigned long long*)&pMessage[len + 1 + complement] = endian_swap64(bitlen);
+	const size_t chunks = totalLen / 64u;
+	uint32_t w[80];
 
-	unsigned long chunks = newlen/64;
-	unsigned long w[80];
-
-	for (unsigned long x = 0; x < chunks; x++)
+	for (size_t x = 0; x < chunks; ++x)
 	{
-		for (unsigned long i = 0; i < 16; i++)
-			w[i] = endian_swap32(*(unsigned long*)(&pMessage[x*64 + i*4]));
+		const uint8_t *blk = pMessage + x * 64u;
+		for (size_t i = 0; i < 16u; ++i) {
+			w[i] = (static_cast<uint32_t>(blk[i * 4u + 0u]) << 24) |
+			       (static_cast<uint32_t>(blk[i * 4u + 1u]) << 16) |
+			       (static_cast<uint32_t>(blk[i * 4u + 2u]) << 8) |
+			       (static_cast<uint32_t>(blk[i * 4u + 3u]));
+		}
+		for (size_t i = 16u; i < 80u; ++i) {
+			w[i] = rotl32_auth(w[i - 3u] ^ w[i - 8u] ^ w[i - 14u] ^ w[i - 16u], 1u);
+		}
 
-		memset(&w[16], 0, 64*4);
+		uint32_t a = h0;
+		uint32_t b = h1;
+		uint32_t c = h2;
+		uint32_t d = h3;
+		uint32_t e = h4;
 
-		for (unsigned long i = 16; i <= 79; i++)
-			w[i] = ROTL((w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16]), 1);
-
-		unsigned long a = h0;
-		unsigned long b = h1;
-		unsigned long c = h2;
-		unsigned long d = h3;
-		unsigned long e = h4;
-
-		for (unsigned long i = 0; i <= 79; i++)
+		for (size_t i = 0; i < 80u; ++i)
 		{
-			unsigned long f;
-			unsigned long k;
-
-			if (0 <= i && i <= 19)
-			{
+			uint32_t f = 0;
+			uint32_t k = 0;
+			if (i < 20u) {
 				f = (b & c) | ((~b) & d);
-				k = 0x5A827999;
+				k = 0x5A827999u;
 			}
-			else if (20 <= i && i <= 39)
-			{
+			else if (i < 40u) {
 				f = b ^ c ^ d;
-				k = 0x6ED9EBA1;
+				k = 0x6ED9EBA1u;
 			}
-			else if (40 <= i && i <= 59)
-			{
+			else if (i < 60u) {
 				f = (b & c) | (b & d) | (c & d);
-				k = 0x8F1BBCDC;
+				k = 0x8F1BBCDCu;
 			}
-			else if (60 <= i && i <= 79)
-			{
+			else {
 				f = b ^ c ^ d;
-				k = 0xCA62C1D6;
+				k = 0xCA62C1D6u;
 			}
 
-			unsigned long temp = (ROTL(a, 5) + f + e + k + w[i])&0xFFFFFFFF;
+			const uint32_t temp = rotl32_auth(a, 5u) + f + e + k + w[i];
 			e = d;
 			d = c;
-			c = ROTL(b, 30);
+			c = rotl32_auth(b, 30u);
 			b = a;
 			a = temp;
 		}
 
-		h0 = (h0 + a)&0xFFFFFFFF;
-		h1 = (h1 + b)&0xFFFFFFFF;
-		h2 = (h2 + c)&0xFFFFFFFF;
-		h3 = (h3 + d)&0xFFFFFFFF;
-		h4 = (h4 + e)&0xFFFFFFFF;
+		h0 += a;
+		h1 += b;
+		h2 += c;
+		h3 += d;
+		h4 += e;
 	}
 
-	delete [] pMessage;
+	delete[] pMessage;
 
 	out[0] = h0;
 	out[1] = h1;
@@ -633,12 +622,12 @@ void SHA1(char *message, unsigned long *out)
 	out[4] = h4;
 }
 
-void SHA1(char *message, char buf[64])
+void SHA1(const char *message, char buf[64])
 {
-	if (!buf) return;
-	unsigned long out[5];
+	if (!buf || !message) return;
+	uint32_t out[5]{};
 	SHA1(message, out);
-	sprintf(buf, "%.8X%.8X%.8X%.8X%.8X", out[0], out[1], out[2], out[3], out[4]);
+	snprintf(buf, 64, "%08X%08X%08X%08X%08X", out[0], out[1], out[2], out[3], out[4]);
 }
 
 /*
@@ -712,14 +701,17 @@ void auth_stringify(char *out, uint8_t* hash)
 	out[i] = '\0';
 }
 
-void gen_auth_key(char buf[260], char* auth_in)
+void gen_auth_key(char buf[260], const char* auth_in)
 {
-	char message[260];
-	if(!auth_in) return;
-	sprintf(message, "%s", auth_in);
+	if (!buf) return;
+	buf[0] = '\0';
+	if (!auth_in) return;
 
-	unsigned long out[5];
-	uint8_t *pb_out = (uint8_t*)&out;
+	char message[260];
+	snprintf(message, sizeof(message), "%s", auth_in);
+
+	uint32_t out[5]{};
+	uint8_t *pb_out = reinterpret_cast<uint8_t*>(out);
 
 	SHA1(message, out);
 

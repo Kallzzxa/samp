@@ -2,43 +2,91 @@
 
 #include <spdlog/spdlog.h>
 #include <iconv.h>
+#include <cstring>
+#include <mutex>
 #include <stdexcept>
 
 // Server codepage used for decoding (cp2utf) and encoding (utf2cp).
 // Default is GBK so that Chinese servers display correctly out of the box.
 // Can be changed at runtime via Encoding::setCharset (e.g. "CP1251", "GBK", "BIG5").
+static std::mutex g_charsetMutex;
 static std::string g_charset = "GBK";
 
 void Encoding::setCharset(const std::string& cs)
 {
 	if (!cs.empty()) {
+		std::lock_guard<std::mutex> lock(g_charsetMutex);
 		g_charset = cs;
 	}
 }
 
 const std::string& Encoding::charset()
 {
+	std::lock_guard<std::mutex> lock(g_charsetMutex);
 	return g_charset;
 }
 
-static std::string iconv_convert(const std::string& s, const char* to, const char* from)
+namespace {
+struct CachedIconv {
+	iconv_t cd = reinterpret_cast<iconv_t>(-1);
+	std::string to;
+	std::string from;
+
+	~CachedIconv()
+	{
+		if (cd != reinterpret_cast<iconv_t>(-1)) {
+			iconv_close(cd);
+		}
+	}
+
+	iconv_t get(const char* wantTo, const char* wantFrom)
+	{
+		if (cd != reinterpret_cast<iconv_t>(-1) && to == wantTo && from == wantFrom) {
+			// Reset multibyte shift state before reuse
+			iconv(cd, nullptr, nullptr, nullptr, nullptr);
+			return cd;
+		}
+		if (cd != reinterpret_cast<iconv_t>(-1)) {
+			iconv_close(cd);
+		}
+		cd = iconv_open(wantTo, wantFrom);
+		if (cd != reinterpret_cast<iconv_t>(-1)) {
+			to = wantTo;
+			from = wantFrom;
+		}
+		else {
+			to.clear();
+			from.clear();
+		}
+		return cd;
+	}
+};
+
+bool is_pure_ascii(const std::string& s)
 {
-	iconv_t cd = iconv_open(to, from);
-	if (cd == (iconv_t) -1) {
+	for (unsigned char c : s) {
+		if (c >= 0x80) return false;
+	}
+	return true;
+}
+} // namespace
+
+static std::string iconv_convert(const std::string& s, const char* to, const char* from, CachedIconv& cache)
+{
+	iconv_t cd = cache.get(to, from);
+	if (cd == reinterpret_cast<iconv_t>(-1)) {
 		spdlog::error("iconv_open failed ({} -> {}): {}", from, to, strerror(errno));
 		return s;
 	}
 
-	std::string in = s;
 	std::string out;
-	out.resize(in.size() * 4 + 4);
-	char* inbuf = const_cast<char*>(in.data());
-	char* outbuf = const_cast<char*>(out.data());
-	size_t inbytesleft = in.size();
+	out.resize(s.size() * 4 + 4);
+	char* inbuf = const_cast<char*>(s.data());
+	char* outbuf = out.data();
+	size_t inbytesleft = s.size();
 	size_t outbytesleft = out.size();
 	size_t res = iconv(cd, &inbuf, &inbytesleft, &outbuf, &outbytesleft);
-	iconv_close(cd);
-	if (res == (size_t) -1) {
+	if (res == static_cast<size_t>(-1)) {
 		spdlog::error("iconv failed ({} -> {}): {}", from, to, strerror(errno));
 		return s;
 	}
@@ -78,20 +126,31 @@ static bool is_valid_utf8(const std::string& s)
 
 std::string Encoding::cp2utf(const std::string& s)
 {
-	if (s.empty()) return s;
-	if (g_charset == "UTF-8" || g_charset == "utf8") {
-		// UTF-8 selected: pass valid UTF-8 through, but treat invalid
-		// sequences as GBK so a legacy-charset server still decodes.
-		if (is_valid_utf8(s)) return s;
-		return iconv_convert(s, "UTF-8", "GBK");
-	}
+	if (s.empty() || is_pure_ascii(s)) return s;
 	if (is_valid_utf8(s)) return s;
-	return iconv_convert(s, "UTF-8", g_charset.c_str());
+
+	std::string cs;
+	{
+		std::lock_guard<std::mutex> lock(g_charsetMutex);
+		cs = g_charset;
+	}
+	thread_local CachedIconv s_cp2utfCache;
+	if (cs == "UTF-8" || cs == "utf8") {
+		return iconv_convert(s, "UTF-8", "GBK", s_cp2utfCache);
+	}
+	return iconv_convert(s, "UTF-8", cs.c_str(), s_cp2utfCache);
 }
 
 std::string Encoding::utf2cp(const std::string& s)
 {
-	if (s.empty()) return s;
-	if (g_charset == "UTF-8" || g_charset == "utf8") return s;
-	return iconv_convert(s, g_charset.c_str(), "UTF-8");
+	if (s.empty() || is_pure_ascii(s)) return s;
+
+	std::string cs;
+	{
+		std::lock_guard<std::mutex> lock(g_charsetMutex);
+		cs = g_charset;
+	}
+	if (cs == "UTF-8" || cs == "utf8") return s;
+	thread_local CachedIconv s_utf2cpCache;
+	return iconv_convert(s, cs.c_str(), "UTF-8", s_utf2cpCache);
 }

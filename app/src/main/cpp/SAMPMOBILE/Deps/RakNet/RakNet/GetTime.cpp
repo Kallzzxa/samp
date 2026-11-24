@@ -15,91 +15,67 @@
 /// option) any later version.
 
 #include "GetTime.h"
+#include <cstdint>
 #ifdef _COMPATIBILITY_1
-#include "Compatibility1Includes.h" // Developers of a certain platform will know what to do here.
+#include "Compatibility1Includes.h"
 #elif defined(_WIN32)
 #include <windows.h>
-#elif defined(_COMPATIBILITY_2)
-#include "Compatibility2Includes.h"
-#include <sys/time.h>
-#include <unistd.h>
 #else
-#include <sys/time.h>
-#include <unistd.h>
+#include <time.h>
 #endif
 
-static bool initialized=false;
-#ifdef _WIN32
-static LARGE_INTEGER yo;
-#else
-static timeval tp, initialTime;
+namespace {
+#if !defined(_WIN32) && !defined(_COMPATIBILITY_1)
+uint64_t monotonicNowUs()
+{
+	struct timespec ts{};
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return static_cast<uint64_t>(ts.tv_sec) * 1000000ULL + static_cast<uint64_t>(ts.tv_nsec / 1000);
+}
+
+uint64_t monotonicBaseUs()
+{
+	static const uint64_t s_base = monotonicNowUs();
+	return s_base;
+}
 #endif
+} // namespace
 
 RakNetTime RakNet::GetTime( void )
 {
-	if ( initialized == false )
-	{
 #ifdef _WIN32
-		QueryPerformanceFrequency( &yo );
-		// The original code shifted right 10 bits
-		//counts = yo.QuadPart >> 10;
-		// It gives the wrong value since 2^10 is not 1000
-	//	counts = yo.QuadPart;// / 1000;
+	static LARGE_INTEGER yo = []() {
+		LARGE_INTEGER f{};
+		QueryPerformanceFrequency(&f);
+		return f;
+	}();
+	LARGE_INTEGER PerfVal{};
+	QueryPerformanceCounter(&PerfVal);
+	return static_cast<RakNetTime>(PerfVal.QuadPart * 1000 / yo.QuadPart);
+#elif !defined(_COMPATIBILITY_1)
+	const uint64_t elapsedUs = monotonicNowUs() - monotonicBaseUs();
+	return static_cast<RakNetTime>(elapsedUs / 1000ULL);
 #else
-		gettimeofday( &initialTime, 0 );
-#endif
-		
-		initialized = true;
-	}
-	
-#ifdef _WIN32
-	LARGE_INTEGER PerfVal;
-	
-	QueryPerformanceCounter( &PerfVal );
-	
-	return (RakNetTime)(PerfVal.QuadPart*1000 / yo.QuadPart);
-#else
-	gettimeofday( &tp, 0 );
-	
-	// Seconds to ms and microseconds to ms
-	return ( tp.tv_sec - initialTime.tv_sec ) * 1000 + ( tp.tv_usec - initialTime.tv_usec ) / 1000;
-	
+	return 0;
 #endif
 }
 
-
 RakNetTimeNS RakNet::GetTimeNS( void )
 {
-	if ( initialized == false )
-	{
 #ifdef _WIN32
-		QueryPerformanceFrequency( &yo );
-		// The original code shifted right 10 bits
-		//counts = yo.QuadPart >> 10;
-		// It gives the wrong value since 2^10 is not 1000
-		//	counts = yo.QuadPart;// / 1000;
+	static LARGE_INTEGER yo = []() {
+		LARGE_INTEGER f{};
+		QueryPerformanceFrequency(&f);
+		return f;
+	}();
+	LARGE_INTEGER PerfVal{};
+	QueryPerformanceCounter(&PerfVal);
+	__int64 quotient = ((PerfVal.QuadPart * 1000) / yo.QuadPart);
+	__int64 remainder = ((PerfVal.QuadPart * 1000) % yo.QuadPart);
+	return static_cast<RakNetTimeNS>(quotient * 1000 + (remainder * 1000 / yo.QuadPart));
+#elif !defined(_COMPATIBILITY_1)
+	return static_cast<RakNetTimeNS>(monotonicNowUs() - monotonicBaseUs());
 #else
-		gettimeofday( &initialTime, 0 );
-#endif
-
-		initialized = true;
-	}
-
-#ifdef _WIN32
-	LARGE_INTEGER PerfVal;
-
-	QueryPerformanceCounter( &PerfVal );
-
-	__int64 quotient, remainder;
-	quotient=((PerfVal.QuadPart*1000) / yo.QuadPart);
-	remainder=((PerfVal.QuadPart*1000) % yo.QuadPart);
-	//return (PerfVal.QuadPart*1000 / (yo.QuadPart/1000));
-	return quotient*1000 + (remainder*1000 / yo.QuadPart);
-
-#else
-	gettimeofday( &tp, 0 );
-
-	return ( tp.tv_sec - initialTime.tv_sec ) * (RakNetTimeNS) 1000000 + ( tp.tv_usec - initialTime.tv_usec );
-
+	return 0;
 #endif
 }

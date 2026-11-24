@@ -123,6 +123,11 @@ bool AudioStream::Initialize()
 {
 	spdlog::info("AudioStream::Initialize()");
 
+	if (!IsBassLoaded()) {
+		spdlog::error("AudioStream::Initialize: libBASS.so is not loaded");
+		return false;
+	}
+
 	{
 		std::lock_guard<std::mutex> lock(g_audioStreamMutex);
 		if (g_bassStream) {

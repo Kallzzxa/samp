@@ -67,7 +67,10 @@ inline static void readMemory(uintptr_t srcAddr, uintptr_t dstBuf, size_t len)
 inline static void writeMemory(uintptr_t dest, uintptr_t src, size_t len)
 {
 	if (!dest || !src || len == 0) return;
-	WriteMemory((void*) dest, (void*) src, len, true);
+	// Guard against libGlossHook SetMemoryPermission off-by-one when size == 1
+	// on a page boundary (addr + 1 + pagesize - 2 < next page -> mprotect len=0).
+	Unprotect(dest, len < 2 ? 2 : len);
+	WriteMemory((void*) dest, (void*) src, len, false);
 }
 
 static void gotHook(uintptr_t addr, uintptr_t hook_func, uintptr_t* orig_func = nullptr)
@@ -118,7 +121,11 @@ static void* hookBL(void* addr, void* hook_func, void** orig_func)
 #ifdef __aarch64__
 	return GlossHookBranchBL((void*) (addr), (void*) (hook_func), (void**) (orig_func), $ARM64);
 #else
-	return GlossHookBranchBL((void*) (addr), (void*) (hook_func), (void**) (orig_func), $THUMB);
+	const uintptr_t aligned = reinterpret_cast<uintptr_t>(addr) & ~uintptr_t(1);
+	if (Gloss::Inst::GetBranch(aligned, $THUMB) == Gloss::Inst::branchs::BLX) {
+		return GlossHookBranchBLX(reinterpret_cast<void*>(aligned), hook_func, orig_func, $THUMB);
+	}
+	return GlossHookBranchBL(reinterpret_cast<void*>(aligned), hook_func, orig_func, $THUMB);
 #endif
 }
 
@@ -136,34 +143,48 @@ static void saveBytesToMap(uintptr_t addr, uint32_t byte_count, std::unordered_m
 inline static void nop(uintptr_t addr, unsigned int word_count)
 {
 	if (!addr || word_count == 0) return;
+#ifdef __aarch64__
+	if ((word_count & 1u) != 0u) {
+		spdlog::error("Memory::nop odd word_count={} on arm64 at 0x{:X}", word_count, addr);
+		return;
+	}
+	const uintptr_t alignedAddr = addr;
+#else
+	const uintptr_t alignedAddr = addr & ~uintptr_t(1);
+#endif
 	g_nopCalls.fetch_add(1, std::memory_order_relaxed);
 	unsigned int byte_count = word_count * 2;
-	saveBytesToMap(addr, byte_count, nopOrigBytesMap);
+	saveBytesToMap(alignedAddr, byte_count, nopOrigBytesMap);
 	// Write contiguous NOP instructions directly via writeMemory (flushes I-cache)
 	// instead of Gloss::Inst::MakeArm64NOP/MakeThumb32NOP which have a stride-16 bug.
 #ifdef __aarch64__
 	unsigned int insnCount = byte_count / 4;
 	if (insnCount == 0) return;
 	std::vector<uint32_t> nops(insnCount, 0xD503201Fu); // ARM64 NOP
-	writeMemory(addr, reinterpret_cast<uintptr_t>(nops.data()), insnCount * sizeof(uint32_t));
+	writeMemory(alignedAddr, reinterpret_cast<uintptr_t>(nops.data()), insnCount * sizeof(uint32_t));
 #else
 	std::vector<uint16_t> nops(word_count, 0xBF00u); // Thumb-16 NOP
-	writeMemory(addr, reinterpret_cast<uintptr_t>(nops.data()), word_count * sizeof(uint16_t));
+	writeMemory(alignedAddr, reinterpret_cast<uintptr_t>(nops.data()), word_count * sizeof(uint16_t));
 #endif
 }
 
 inline static void restoreNop(uintptr_t addr)
 {
 	if (!addr) return;
+#ifdef __aarch64__
+	const uintptr_t alignedAddr = addr;
+#else
+	const uintptr_t alignedAddr = addr & ~uintptr_t(1);
+#endif
 	g_restoreNopCalls.fetch_add(1, std::memory_order_relaxed);
 	std::vector<uint8_t> bytes;
 	{
 		std::lock_guard<std::mutex> lock(patchMapMutex);
-		auto it = nopOrigBytesMap.find(addr);
+		auto it = nopOrigBytesMap.find(alignedAddr);
 		if (it == nopOrigBytesMap.end()) return;
 		bytes = it->second;
 	}
-	Memory::writeMemory(addr, reinterpret_cast<uintptr_t>(bytes.data()), bytes.size());
+	Memory::writeMemory(alignedAddr, reinterpret_cast<uintptr_t>(bytes.data()), bytes.size());
 }
 
 inline static void ret(uintptr_t addr)

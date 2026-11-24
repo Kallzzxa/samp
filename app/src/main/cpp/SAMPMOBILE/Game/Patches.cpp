@@ -141,8 +141,6 @@ void Patches::apply()
 	// ---- Boot-scope patches (active in both online & offline modes) ----
 	patches::registerNop("StartGameScreen.SkipMenuSwitchOff", "NOP Menu_SwitchOffToGame in OnNewGameCheck",
 		patches::Scope::Boot, addr::Menu_SwitchOffToGame_StartGameScreen_OnNewGameCheck, 2, false);
-	patches::registerNop("Idle.RwCameraEndUpdate", "NOP RwCameraEndUpdate for Idle hook",
-		patches::Scope::Boot, addr::RwCameraEndUpdate_patch, 2, false);
 
 	// Reveal all zones
 	if (uintptr_t zonesVisited = eng::addr(eng::Sym::CTheZones_ZonesVisited)) {
@@ -200,21 +198,17 @@ void Patches::apply()
 			patches::Scope::Online, eng::addr(eng::Sym::RunUVAnim));
 	}
 
-	// fix black markers (CRadar color translation)
+	// fix black markers (CRadar color translation; preserve r0/x0 = &HudColour for CHudColours::GetIntColour)
 #if VER_x32
-	patches::registerBytes("CRadar.Draw3dMarkers.branch", "Radar 3D marker color branch", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_Draw3dMarkers_colorBranch), "\x2C\xE0", 2);
-	patches::registerBytes("CRadar.Draw3dMarkers.mov", "Radar 3D marker color mov", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_Draw3dMarkers_colorMov), "\x30\x46", 2);
-	patches::registerBytes("CRadar.DrawEntityBlip.branch", "Radar entity blip color branch", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawEntityBlip_colorBranch), "\x3A\xE0", 2);
-	patches::registerBytes("CRadar.DrawEntityBlip.mov", "Radar entity blip color mov", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawEntityBlip_colorMov), "\x30\x46", 2);
-	patches::registerBytes("CRadar.DrawCoordBlip.branch", "Radar coord blip color branch", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawCoordBlip_colorBranch), "\x12\xE0", 2);
-	patches::registerBytes("CRadar.DrawCoordBlip.mov", "Radar coord blip color mov", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawCoordBlip_colorMov), "\x48\x46", 2);
+	patches::registerBytes("CRadar.Draw3dMarkers.branch", "Radar 3D marker color branch", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_Draw3dMarkers_colorBranch), "\x31\x46\x2B\xE0", 4);
+	patches::registerBytes("CRadar.DrawEntityBlip.branch", "Radar entity blip color branch", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawEntityBlip_colorBranch), "\x36\xE0", 2);
+	patches::registerBytes("CRadar.DrawEntityBlip.mov", "Radar entity blip color arg r1", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawEntityBlip_colorMov_x32), "\x31\x46", 2);
+	patches::registerBytes("CRadar.DrawCoordBlip.branch", "Radar coord blip color branch", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawCoordBlip_colorBranch), "\x0F\xE0", 2);
+	patches::registerBytes("CRadar.DrawCoordBlip.mov", "Radar coord blip color arg r1", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawCoordBlip_colorMov_x32), "\x49\x46", 2);
 #else
-	patches::registerBytes("CRadar.Draw3dMarkers.branch", "Radar 3D marker color branch", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_Draw3dMarkers_colorBranch), "\x1E\x00\x00\x14", 4);
-	patches::registerBytes("CRadar.Draw3dMarkers.mov", "Radar 3D marker color mov", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_Draw3dMarkers_colorMov), "\xE1\x03\x14\x2A", 4);
-	patches::registerBytes("CRadar.DrawEntityBlip.branch", "Radar entity blip color branch", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawEntityBlip_colorBranch), "\x22\x00\x00\x14", 4);
-	patches::registerBytes("CRadar.DrawEntityBlip.mov", "Radar entity blip color mov", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawEntityBlip_colorMov), "\xE1\x03\x16\x2A", 4);
-	patches::registerBytes("CRadar.DrawCoordBlip.branch", "Radar coord blip color branch", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawCoordBlip_colorBranch), "\xCC\xFF\xFF\x17", 4);
-	patches::registerBytes("CRadar.DrawCoordBlip.mov", "Radar coord blip color mov", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawCoordBlip_colorMov), "\xE1\x03\x16\x2A", 4);
+	patches::registerBytes("CRadar.Draw3dMarkers.branch", "Radar 3D marker color arg w1 & branch", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_Draw3dMarkers_colorBranch), "\xE1\x03\x14\x2A\x1D\x00\x00\x14", 8);
+	patches::registerBytes("CRadar.DrawEntityBlip.branch", "Radar entity blip color arg w1 & branch", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawEntityBlip_colorBranch), "\xE1\x03\x16\x2A\x20\x00\x00\x14", 8);
+	patches::registerBytes("CRadar.DrawCoordBlip.branch", "Radar coord blip color arg w1 & branch", patches::Scope::Online, g_saSym->Abs<uintptr_t>(addr::CRadar_DrawCoordBlip_colorBranch), "\xE1\x03\x16\x2A\xCA\xFF\xFF\x17", 8);
 #endif
 
 	// CRealTimeShadowManager crash fixes

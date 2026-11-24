@@ -1,4 +1,5 @@
 #include "ImGuiWrapper.h"
+#include <chrono>
 #include "UISettings.h"
 #include "../Settings.h"
 #include "gbk_charset.h"
@@ -72,6 +73,7 @@ bool ImGuiWrapper::initialize()
 	ImGui::CreateContext();
 
 	ImGuiIO& io = ImGui::GetIO();
+	io.IniFilename = nullptr;
 	io.DisplaySize = m_displaySize;
 	io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 
@@ -144,6 +146,14 @@ bool ImGuiWrapper::initialize()
 
 void ImGuiWrapper::render()
 {
+	static auto s_lastFrameTime = std::chrono::steady_clock::now();
+	const auto now = std::chrono::steady_clock::now();
+	float dt = std::chrono::duration<float>(now - s_lastFrameTime).count();
+	s_lastFrameTime = now;
+	if (!(dt > 0.0f)) dt = 1.0f / 60.0f;
+	else if (dt > 0.25f) dt = 0.25f;
+	ImGui::GetIO().DeltaTime = dt;
+
 	ImGui::NewFrame();
 
 	drawList();

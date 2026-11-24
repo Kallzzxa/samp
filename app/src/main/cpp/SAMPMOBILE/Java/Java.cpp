@@ -184,12 +184,22 @@ JNIEnv* Java::getEnv()
 	JNIEnv* env = nullptr;
 	jint status = vm->GetEnv((void**) &env, JNI_VERSION_1_6);
 	if (status == JNI_EDETACHED) {
-		// Native threads (e.g. the GTA game thread) may not be attached to the
-		// JVM — attach on first use instead of silently dropping every call.
+		// Native threads (e.g. the GTA game thread) are not initially attached to the
+		// JVM — attach on first use and detach automatically if the thread exits.
 		if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) {
 			spdlog::error("Failed to attach thread to JVM");
 			return nullptr;
 		}
+		struct JvmThreadDetacher {
+			JavaVM* jvm = nullptr;
+			~JvmThreadDetacher() {
+				if (jvm) {
+					jvm->DetachCurrentThread();
+				}
+			}
+		};
+		thread_local JvmThreadDetacher s_detacher;
+		s_detacher.jvm = vm;
 	}
 	else if (status != JNI_OK) {
 		spdlog::error("Failed to get env");
@@ -234,6 +244,7 @@ jstring createJString(JNIEnv* env, const char* text)
 
 void Java::setPauseState(bool pause)
 {
+	m_cachedWantedVisible = -1;
 	JNIEnv* env = getEnv();
 	if (!env || !m_uiActivity || !m_setPauseState) {
 		return;
@@ -305,20 +316,29 @@ void Java::showEditObject(bool show)
 
 void Java::showWantedLevel(bool show)
 {
+	const int nextState = show ? 1 : 0;
+	if (m_cachedWantedVisible == nextState) {
+		return;
+	}
 	JNIEnv* env = getEnv();
 	if (!env || !m_uiActivity || !m_showWantedLevel) {
 		return;
 	}
+	m_cachedWantedVisible = nextState;
 	env->CallVoidMethod(m_uiActivity, m_showWantedLevel, static_cast<jboolean>(show));
 	clearJniException(env, "showWantedLevel");
 }
 
 void Java::setWantedLevel(int level)
 {
+	if (m_cachedWantedLevel == level) {
+		return;
+	}
 	JNIEnv* env = getEnv();
 	if (!env || !m_uiActivity || !m_setWantedLevel) {
 		return;
 	}
+	m_cachedWantedLevel = level;
 	env->CallVoidMethod(m_uiActivity, m_setWantedLevel, level);
 	clearJniException(env, "setWantedLevel");
 }

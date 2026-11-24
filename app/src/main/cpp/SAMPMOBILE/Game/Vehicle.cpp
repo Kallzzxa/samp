@@ -111,7 +111,7 @@ CVehicle::CVehicle(int iType, float fX, float fY, float fZ, float fRotation, boo
 				mat.pos.z += 0.25f;
 			}
 
-			m_pVehicle->SetMatrix((sa::CMatrix&) mat);
+			m_pVehicle->SetMatrix(mat);
 		}
 	}
 	else if ((iType == TRAIN_PASSENGER_LOCO) ||

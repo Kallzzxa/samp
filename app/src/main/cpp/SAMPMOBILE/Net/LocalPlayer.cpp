@@ -2220,7 +2220,7 @@ void CLocalPlayer::ProcessSurfing()
 				RwMatrix matPed = m_pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
 				RwMatrix matOut{};
 				RwMatrixInvert(&matOut, &matVeh);
-				ProjectMatrix(&m_surfSync.vecOffsetPos, (sa::CMatrix*) (&matOut), (sa::CVector*) &matPed.pos);
+				ProjectMatrix(&m_surfSync.vecOffsetPos, &matOut, &matPed.pos);
 				m_surfSync.bIsActive = true;
 				return;
 			}
@@ -2245,7 +2245,7 @@ void CLocalPlayer::ProcessSurfing()
 					RwMatrix matPed = m_pPlayerPed->m_ped->GetMatrix().ToRwMatrix();
 					RwMatrix matOut{};
 					RwMatrixInvert(&matOut, &matObj);
-					ProjectMatrix(&m_surfSync.vecOffsetPos, (sa::CMatrix*) (&matOut), (sa::CVector*) &matPed.pos);
+					ProjectMatrix(&m_surfSync.vecOffsetPos, &matOut, &matPed.pos);
 					m_surfSync.bIsActive = true;
 					return;
 				}
@@ -2313,12 +2313,12 @@ void CLocalPlayer::UpdateSurfing()
 				if (lrAnalog || udAnalog) {
 					static RwMatrix matOut;
 					RwMatrixInvert(&matOut, &surfInstMatrix);
-					ProjectMatrix(&m_surfSync.vecOffsetPos, (sa::CMatrix*) &matOut, (sa::CVector*) &surfPedMatrix.pos);
+					ProjectMatrix(&m_surfSync.vecOffsetPos, &matOut, &surfPedMatrix.pos);
 				}
 				else {
-					ProjectMatrix((sa::CVector*) &surfPedMatrix.pos, (sa::CMatrix*) &surfInstMatrix, &m_surfSync.vecOffsetPos);
+					ProjectMatrix(&surfPedMatrix.pos, &surfInstMatrix, &m_surfSync.vecOffsetPos);
 
-					m_pPlayerPed->m_ped->SetMatrix((sa::CMatrix&) surfPedMatrix);
+					m_pPlayerPed->m_ped->SetMatrix(surfPedMatrix);
 					sa::CVector vecMoveSpeed;
 					vecMoveSpeed = m_pPlayerPed->m_ped->GetMoveSpeed();
 					m_pPlayerPed->m_ped->SetVelocity(sa::CVector{surfInstMoveSpeed.x, surfInstMoveSpeed.y, vecMoveSpeed.z});
@@ -2351,12 +2351,12 @@ void CLocalPlayer::UpdateSurfing()
 					if (lrAnalog || udAnalog) {
 						static RwMatrix matOut;
 						RwMatrixInvert(&matOut, &surfInstMatrix);
-						ProjectMatrix(&m_surfSync.vecOffsetPos, (sa::CMatrix*) &matOut, (sa::CVector*) &surfPedMatrix.pos);
+						ProjectMatrix(&m_surfSync.vecOffsetPos, &matOut, &surfPedMatrix.pos);
 					}
 					else {
-						ProjectMatrix((sa::CVector*) &surfPedMatrix.pos, (sa::CMatrix*) &surfInstMatrix, &m_surfSync.vecOffsetPos);
+						ProjectMatrix(&surfPedMatrix.pos, &surfInstMatrix, &m_surfSync.vecOffsetPos);
 
-						m_pPlayerPed->m_ped->SetMatrix((sa::CMatrix&) surfPedMatrix);
+						m_pPlayerPed->m_ped->SetMatrix(surfPedMatrix);
 						sa::CVector vecMoveSpeed = m_pPlayerPed->m_ped->GetMoveSpeed();
 						m_pPlayerPed->m_ped->SetVelocity(sa::CVector{surfInstMoveSpeed.x, surfInstMoveSpeed.y, vecMoveSpeed.z});
 

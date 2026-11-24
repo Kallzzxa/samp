@@ -1,6 +1,7 @@
 #include "../Client.h"
 #include "../Game/Game.h"
 #include "../Net/NetGame.h"
+#include "RakNet/SocketLayer.h"
 
 #include "Network.h"
 
@@ -286,7 +287,8 @@ void Network::OnRaknetConnect(const char* ip, const uint32_t port) noexcept
 
 	LogVoice("[dbg:raknet:client:connect] : connecting to game server '*.*.*.*:****'...", ip, port);
 
-	Network::serverIp = ip;
+	Network::serverIp = ip ? ip : "";
+	Network::serverResolvedAddr = inet_addr(Network::serverIp.c_str());
 
 	if (Network::connectionStatus == ConnectionStatus::Disconnected) {
 		for (const auto& connectCallback : Network::connectCallbacks) {
@@ -334,6 +336,9 @@ bool Network::OnRaknetReceive(Packet* packet) noexcept
 	if (!packet || !packet->data || packet->length < 5) {
 		return false;
 	}
+	if (packet->playerId.binaryAddress != 0 && packet->playerId.binaryAddress != INADDR_NONE) {
+		Network::serverResolvedAddr = packet->playerId.binaryAddress;
+	}
 
 	auto controlPacketPtr = new ControlPacket();
 	controlPacketPtr->data = nullptr;
@@ -375,7 +380,22 @@ bool Network::OnRaknetReceive(Packet* packet) noexcept
 			sockaddr_in serverAddress{};
 
 			serverAddress.sin_family = AF_INET;
-			serverAddress.sin_addr.s_addr = inet_addr(Network::serverIp.c_str());
+			uint32_t resolvedAddr = inet_addr(Network::serverIp.c_str());
+			if (resolvedAddr == INADDR_NONE) {
+				resolvedAddr = Network::serverResolvedAddr;
+			}
+			if (resolvedAddr == INADDR_NONE) {
+				if (const char* ipStr = SocketLayer::Instance()->DomainNameToIP(Network::serverIp.c_str())) {
+					resolvedAddr = inet_addr(ipStr);
+				}
+			}
+			if (resolvedAddr == INADDR_NONE || resolvedAddr == 0) {
+				LogVoice("[sv:err:network:serverInfo] : failed to resolve server address");
+				delete[] controlPacketPtr->data;
+				delete controlPacketPtr;
+				return false;
+			}
+			serverAddress.sin_addr.s_addr = resolvedAddr;
 			serverAddress.sin_port = htons(stData.serverPort);
 
 			if (Network::voiceThread.joinable()) {
