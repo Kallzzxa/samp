@@ -144,6 +144,7 @@ SYM_FN(CCheat_WeaponSkillsCheat, "_ZN6CCheat17WeaponSkillsCheatEv", void, Requir
 SYM_FN(CClock_Update, "_ZN6CClock6UpdateEv", uintptr_t, Required) // CClock::Update()
 SYM_FN(CClothes_ConstructPedModel, "_ZN8CClothes17ConstructPedModelEjR15CPedClothesDescPKS0_b", void, Required) // CClothes::ConstructPedModel(unsigned int, CPedClothesDesc&, CPedClothesDesc const*, bool)
 SYM_FN(CClothes_RebuildPlayer, "_ZN8CClothes13RebuildPlayerEP10CPlayerPedb", uintptr_t, Required) // CClothes::RebuildPlayer(CPlayerPed*, bool)
+SYM_FN(CPedClothesDesc_SetTextureAndModel, "_ZN15CPedClothesDesc18SetTextureAndModelEPKcS1_i", void, Required) // CPedClothesDesc::SetTextureAndModel(const char*, const char*, int)
 SYM_FN(CColStore_AddRef, "_ZN9CColStore6AddRefEi", void, Required) // CColStore::AddRef(int)
 SYM_FN(CColStore_RemoveRef, "_ZN9CColStore9RemoveRefEi", void, Required) // CColStore::RemoveRef(int)
 SYM_FN(CCustomBuildingDNPipeline_CustomPipeRenderCB, "_ZN25CCustomBuildingDNPipeline18CustomPipeRenderCBEP10RwResEntryPvhj", void, Required) // CCustomBuildingDNPipeline::CustomPipeRenderCB(RwResEntry*, void*, unsigned char, unsigned int)

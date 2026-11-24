@@ -1703,6 +1703,38 @@ void CPlayerPed::ResetHealth()
 	m_ped->m_fHealth = 100;
 }
 
+static RpAtomic* CountClumpVerticesCB(RpAtomic* atomic, void* data)
+{
+	if (atomic && data) {
+		// Disassembly-verified RenderWare offsets in libGTASA.so v2.10 (matching Hooks.cpp)
+		constexpr size_t kAtomicGeomOff   = VER_x32 ? 24 : 48;
+		constexpr size_t kGeomNumVertsOff = VER_x32 ? 20 : 28;
+		const auto* rawAtomic = reinterpret_cast<const uint8_t*>(atomic);
+		const auto* geom = *reinterpret_cast<const uint8_t* const*>(rawAtomic + kAtomicGeomOff);
+		if (geom) {
+			const int32_t numVerts = *reinterpret_cast<const int32_t*>(geom + kGeomNumVertsOff);
+			if (numVerts > 0) {
+				*static_cast<int*>(data) += numVerts;
+			}
+		}
+	}
+	return atomic;
+}
+
+static int CountClumpVertices(RwObject* rwObj)
+{
+	if (!rwObj) {
+		return 0;
+	}
+	int totalVerts = 0;
+	using AtomicCB = RpAtomic* (*)(RpAtomic*, void*);
+	eng::fn::RpClumpForAllAtomics(
+		reinterpret_cast<RpClump*>(rwObj),
+		static_cast<AtomicCB>(&CountClumpVerticesCB),
+		&totalVerts);
+	return totalVerts;
+}
+
 void CPlayerPed::SetModelIndex(uint uiModel)
 {
 	spdlog::debug("SetModelIndex: {}", uiModel);
@@ -1722,42 +1754,57 @@ void CPlayerPed::SetModelIndex(uint uiModel)
 		uiModel = 0;
 	}
 
-	// P1-16: PC SA-MP keeps CClothes::RebuildPlayer patched to ret after initial CJ
-	// model creation. On Android, if skin 0's RwObject prototype was never built yet,
-	// build model 0 directly via CClothes::ConstructPedModel(0, ...) when player.img
-	// is present (no runtime .text unpatch and never touches local ped's current skin);
-	// if player.img is absent (stripped pack), fall back to skin 29 so CJ isn't invisible.
-	if (uiModel == 0 && !GetModelRWObject(0)) {
-		static int s_cjImgState = -1; // -1=unchecked, 0=missing, 1=present
-		if (s_cjImgState < 0) {
-			const char* dir = Client::gameDir();
-			std::string base = dir ? std::string(dir) : std::string();
-			if (!base.empty() && base.back() != '/') {
-				base.push_back('/');
-			}
-			const bool hasPlayerImg = !base.empty() && (
-				access((base + "texdb/player.img").c_str(), F_OK) == 0 ||
-				access((base + "TEXDB/PLAYER.IMG").c_str(), F_OK) == 0 ||
-				access((base + "texdb/PLAYER.IMG").c_str(), F_OK) == 0);
-			s_cjImgState = hasPlayerImg ? 1 : 0;
-			if (!hasPlayerImg) {
-				spdlog::warn("SetModelIndex(0): texdb/player.img missing; falling back to skin 29");
-			}
+	// P1-16: player.dff in gta3.img is a 1-atomic placeholder clump with only 2 triangles /
+	// 6 vertices (skeleton holder); because clean SAMP/main.scm runs 0053 (create_player)
+	// without 070D (rebuild_player), GetModelRWObject(0) is non-null with 1 atomic (6 verts)
+	// and CJ renders invisible. Detect the placeholder via vertex count (< 100) and run
+	// CClothes::ConstructPedModel(0, ...) once when texdb/player.img is present (no runtime
+	// .text unpatch); fall back to skin 29 if unavailable.
+	if (uiModel == 0) {
+		RwObject* rwModel0 = GetModelRWObject(0);
+		if (!rwModel0) {
+			pGame->RequestModel(0);
+			pGame->LoadRequestedModels();
+			rwModel0 = GetModelRWObject(0);
 		}
-
-		if (s_cjImgState == 1) {
-			sa::CPed* pLocalGtaPed = GamePool_FindPlayerPed();
-			if (pLocalGtaPed && pLocalGtaPed->m_pPlayerData && pLocalGtaPed->m_pPlayerData->m_pPedClothesDesc) {
-				eng::fn::CClothes_ConstructPedModel(
-					0u,
-					pLocalGtaPed->m_pPlayerData->m_pPedClothesDesc,
-					nullptr,
-					false);
+		if (CountClumpVertices(rwModel0) < 100) {
+			static int s_cjImgState = -1; // -1=unchecked, 0=missing, 1=present
+			if (s_cjImgState < 0) {
+				const char* dir = Client::gameDir();
+				std::string base = dir ? std::string(dir) : std::string();
+				if (!base.empty() && base.back() != '/') {
+					base.push_back('/');
+				}
+				const bool hasPlayerImg = !base.empty() && (
+					access((base + "texdb/player.img").c_str(), F_OK) == 0 ||
+					access((base + "TEXDB/PLAYER.IMG").c_str(), F_OK) == 0 ||
+					access((base + "texdb/PLAYER.IMG").c_str(), F_OK) == 0);
+				s_cjImgState = hasPlayerImg ? 1 : 0;
+				if (!hasPlayerImg) {
+					spdlog::warn("SetModelIndex(0): texdb/player.img missing; falling back to skin 29");
+				}
 			}
-		}
 
-		if (!GetModelRWObject(0)) {
-			uiModel = 29;
+			if (s_cjImgState == 1 && rwModel0) {
+				sa::CPed* pLocalGtaPed = GamePool_FindPlayerPed();
+				if (pLocalGtaPed && pLocalGtaPed->m_pPlayerData && pLocalGtaPed->m_pPlayerData->m_pPedClothesDesc) {
+					void* clothesDesc = pLocalGtaPed->m_pPlayerData->m_pPedClothesDesc;
+					// Default classic CJ outfit (white tank top, default head, blue jeans, black sneakers)
+					eng::fn::CPedClothesDesc_SetTextureAndModel(clothesDesc, "vest", "vest", 0);
+					eng::fn::CPedClothesDesc_SetTextureAndModel(clothesDesc, "player_face", "head", 1);
+					eng::fn::CPedClothesDesc_SetTextureAndModel(clothesDesc, "jeansdenim", "jeans", 2);
+					eng::fn::CPedClothesDesc_SetTextureAndModel(clothesDesc, "sneakerbincblk", "sneaker", 3);
+					eng::fn::CClothes_ConstructPedModel(0u, clothesDesc, static_cast<const void*>(nullptr), false);
+					rwModel0 = GetModelRWObject(0);
+					spdlog::info("SetModelIndex(0): CClothes::ConstructPedModel built {} vertices",
+						CountClumpVertices(rwModel0));
+				}
+			}
+
+			if (CountClumpVertices(rwModel0) < 100) {
+				spdlog::warn("SetModelIndex(0): model 0 still placeholder (<100 verts); falling back to skin 29");
+				uiModel = 29;
+			}
 		}
 	}
 
