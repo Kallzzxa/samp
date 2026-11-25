@@ -1,8 +1,12 @@
 #include "ObjectUVAnim.h"
 #include "Game.h"
 #include "Object.h"
+#include "Util.h"
+#include "Engine/Symbols.h"
 #include "../Client.h"
 #include "RenderWare/rpuvanim.h"
+#include <SA.h>
+#include <spdlog/spdlog.h>
 #include <cmath>
 #include <cstring>
 #include <unordered_set>

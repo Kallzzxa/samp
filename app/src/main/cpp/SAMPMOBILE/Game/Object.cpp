@@ -2,13 +2,25 @@
 // Created by ALYN on 2024/8/28.
 //
 
+#include "Object.h"
 #include "Game.h"
+#include "Common.h"
+#include "MaterialTextGenerator.h"
 #include "OobCollision.h"
 #include "ObjectUVAnim.h"
+#include "PlayerPed.h"
+#include "Scripting.h"
+#include "Util.h"
+#include "Vehicle.h"
+#include "Engine/Symbols.h"
 #include "../Net/NetGame.h"
+#include "../Net/RemotePlayer.h"
+#include "../Net/VehiclePool.h"
 #include "../Client.h"
 #include "RenderWare/rpuvanim.h"
 #include "Core/PtrNode.h"
+#include <SA.h>
+#include <spdlog/spdlog.h>
 #include <cmath>
 #include <strings.h>
 #include <unordered_map>

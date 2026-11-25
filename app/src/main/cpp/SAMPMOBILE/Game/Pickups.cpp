@@ -1,13 +1,17 @@
-#include "../Client.h"
-//
-// Created by ALYN on 18-Feb-25.
-//
-
-#include "Game.h"
 #include "Pickups.h"
+#include "Game.h"
+#include "PlayerPed.h"
+#include "Util.h"
 #include "Engine/PatchRegistry.h"
+#include "Engine/Symbols.h"
 #include "../Addr.h"
+#include "../Client.h"
 #include "../Net/NetGame.h"
+#include "../Net/LocalPlayer.h"
+#include "../Net/PickupPool.h"
+#include <Memory.h>
+#include <SA.h>
+#include <spdlog/spdlog.h>
 
 
 DECL_HOOK(void, CPickups_Update)

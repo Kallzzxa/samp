@@ -1,8 +1,16 @@
+#include "Scoreboard.h"
 #include "../UI.h"
+#include "../UISettings.h"
 #include "../../Client.h"
 #include "../../Game/Game.h"
+#include "../../Game/Util.h"
 #include "../../Net/NetGame.h"
+#include "../../Net/RemotePlayer.h"
 #include "../../Net/Proto/RpcOutbound.h"
+#include <RakNet/RakClientInterface.h>
+#include <RakNet/SAMP/SAMPRPC.h>
+#include <encoding.h>
+#include <sstream>
 
 
 struct _PLAYER_SCORE_INFO {

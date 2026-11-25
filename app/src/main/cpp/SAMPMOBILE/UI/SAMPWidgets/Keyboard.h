@@ -1,7 +1,9 @@
 #pragma once
 
-#include <jni.h>
 #include <list>
+#include <encoding.h>
+#include "../Widgets/Layout.h"
+#include "../Widgets/Button.h"
 
 class KeyboardInput : public Widget {
 public:

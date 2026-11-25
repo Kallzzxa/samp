@@ -18,9 +18,9 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.FragmentActivity;
 
+import com.sampmobile.launcher.utils.ClientSettings;
 import com.sampmobile.launcher.utils.ModAssetTool;
 import com.sampmobile.launcher.utils.ModManager;
-import com.sampmobile.launcher.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -274,9 +274,8 @@ final class ModAssetImportWizard {
                 );
 
                 boolean autoEnabledMaster = false;
-                if (!host.prefs.getBoolean("modloader", false)) {
-                    host.prefs.edit().putBoolean("modloader", true).commit();
-                    Utils.saveSettings(appCtx);
+                if (!ClientSettings.loadLauncher(appCtx).getBoolean("modloader")) {
+                    ClientSettings.setSync(appCtx, "modloader", true);
                     autoEnabledMaster = true;
                 }
                 final boolean enabledNow = autoEnabledMaster;

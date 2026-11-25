@@ -4,7 +4,6 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.net.Uri;
@@ -38,6 +37,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.joom.paranoid.Obfuscate;
 import com.sampmobile.launcher.R;
 import com.sampmobile.launcher.ui.widget.GtaTabStrip;
+import com.sampmobile.launcher.utils.ClientSettings;
 import com.sampmobile.launcher.utils.LauncherThemeManager;
 import com.sampmobile.launcher.utils.ModAssetTool;
 import com.sampmobile.launcher.utils.ModManager;
@@ -63,7 +63,6 @@ public class ModsManagerFragment extends Fragment implements LauncherThemeManage
     private static final int TAB_CLEO = 4;
 
     private int currentTab = TAB_MODLOADER;
-    SharedPreferences prefs;
     final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
     private final ModAssetImportWizard assetImportWizard = new ModAssetImportWizard(this);
     private final ModConfigDialogs configDialogs = new ModConfigDialogs(this);
@@ -126,7 +125,6 @@ public class ModsManagerFragment extends Fragment implements LauncherThemeManage
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View v = inflater.inflate(R.layout.fragment_mods_manager, container, false);
         rootView = v;
-        prefs = requireActivity().getSharedPreferences("samp_settings", Context.MODE_PRIVATE);
 
         TextView tvAbi = v.findViewById(R.id.tv_process_abi);
         tvAbi.setText(ModManager.getProcessAbiLabel());
@@ -215,20 +213,26 @@ public class ModsManagerFragment extends Fragment implements LauncherThemeManage
     void configureSectionPanel() {
         Context ctx = requireContext();
         String key = prefKeyForTab(currentTab);
-        boolean enabled = prefs.getBoolean(key, false);
+        ClientSettings settings = ClientSettings.loadLauncher(ctx);
+        boolean enabled = settings.getBoolean(key);
 
         switchSectionMaster.setOnCheckedChangeListener(null);
         switchSectionMaster.setChecked(enabled);
         switchSectionMaster.setOnCheckedChangeListener((btn, isChecked) -> {
-            prefs.edit().putBoolean(key, isChecked).commit();
             if (currentTab == TAB_JPATCH) {
-                if (isChecked && !prefs.getBoolean("aml_scripts", false)) {
-                    prefs.edit().putBoolean("aml_scripts", true).commit();
+                if (isChecked && !ClientSettings.loadLauncher(ctx).getBoolean("aml_scripts")) {
+                    java.util.Map<String, Object> updates = new java.util.HashMap<>();
+                    updates.put(key, true);
+                    updates.put("aml_scripts", true);
+                    ClientSettings.updateBatchSync(ctx, updates);
                     Toast.makeText(ctx, "已自动同步开启 AML（JPatch 依赖 AML 运行）", Toast.LENGTH_SHORT).show();
+                } else {
+                    ClientSettings.setSync(ctx, key, isChecked);
                 }
                 ioExecutor.execute(() -> ModManager.syncJPatchBinaryState(ctx.getApplicationContext(), isChecked));
+            } else {
+                ClientSettings.setSync(ctx, key, isChecked);
             }
-            Utils.saveSettings(ctx);
             reloadCurrentTab();
         });
 
@@ -707,8 +711,7 @@ public class ModsManagerFragment extends Fragment implements LauncherThemeManage
                     entry.file = renamed;
                     entry.enabled = isChecked;
                     if (entry.isJPatch) {
-                        prefs.edit().putBoolean("jpatch_enabled", isChecked).commit();
-                        Utils.saveSettings(appCtx);
+                        ClientSettings.setSync(appCtx, "jpatch_enabled", isChecked);
                     }
                 }
                 androidx.fragment.app.FragmentActivity act = getActivity();

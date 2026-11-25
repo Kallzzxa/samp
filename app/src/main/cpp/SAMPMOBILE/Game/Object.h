@@ -1,9 +1,18 @@
 #pragma once
 
+#include <cstdint>
 #include <vector>
+#include <Core/Vector.h>
+#include <Core/Quaternion.h>
+#include <RenderWare/rw.h>
+#include "Entity.h"
 
+namespace sa {
+class CEntity;
+}
 class CEntryInfoNode;
 class CPlayerPed;
+class CVehicle;
 
 enum {
 	MAX_MATERIALS = 16

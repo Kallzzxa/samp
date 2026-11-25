@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Core/Vector.h>
+#include "NetTypes.h"
 #include "../Game/Actor.h"
 
 #pragma pack(push, 1)

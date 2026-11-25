@@ -1,8 +1,24 @@
 #include "VehicleControl.h"
+#include "Camera.h"
+#include "Common.h"
+#include "Game.h"
+#include "Pad.h"
 #include "PadInternal.h"
+#include "PlayerPed.h"
 #include "PlayerContextScope.h"
+#include "Util.h"
+#include "Vehicle.h"
+#include "Engine/PatchRegistry.h"
+#include "Engine/Symbols.h"
+#include "../Addr.h"
 #include "../Net/NetGame.h"
+#include "../Net/LocalPlayer.h"
+#include "../Net/RemotePlayer.h"
+#include "../Net/VehiclePool.h"
 #include "../Client.h"
+#include <Memory.h>
+#include <SA.h>
+#include <spdlog/spdlog.h>
 #include <atomic>
 
 static inline void ApplyVehicleTyreBurstFix(sa::CVehicle* pVehicle)

@@ -2,8 +2,13 @@
 // Created by ALYN on 11-Jan-25.
 //
 
+#include "Actor.h"
 #include "Game.h"
+#include "Scripting.h"
+#include "Util.h"
 #include "../Client.h"
+#include <SA.h>
+#include <spdlog/spdlog.h>
 
 
 CActor::CActor(int iSkin, float fX, float fY, float fZ, float fAngle)

@@ -2,11 +2,21 @@
 // Created by ALYN on 2024/8/15.
 //
 
-#include "Game.h"
-#include "../Net/NetGame.h"
-#include "../UI/UI.h"
-#include "../Client.h"
 #include "Entity.h"
+#include "Camera.h"
+#include "Game.h"
+#include "Common.h"
+#include "PlayerPed.h"
+#include "Scripting.h"
+#include "Util.h"
+#include "Engine/Symbols.h"
+#include "../Net/NetGame.h"
+#include "../Net/LocalPlayer.h"
+#include "../UI/UI.h"
+#include "../UI/SAMPWidgets/Chat.h"
+#include "../Client.h"
+#include <SA.h>
+#include <spdlog/spdlog.h>
 
 
 void CEntity::Add()

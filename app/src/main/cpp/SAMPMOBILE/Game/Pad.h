@@ -1,5 +1,11 @@
 #pragma once
 
+#include <cstdint>
+
+#ifndef PLAYER_PED_SLOTS
+#define PLAYER_PED_SLOTS    210
+#endif
+
 enum ePadKeys {
 	// KEY_ 						OnFoot 				InCar
 	KEY_ACTION = 0,         // TAB 			| 	ALT GR/LCTRL/NUM0	|	1

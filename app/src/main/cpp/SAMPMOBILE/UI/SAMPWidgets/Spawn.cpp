@@ -1,5 +1,9 @@
-#include "../../Client.h"
+#include "Spawn.h"
+#include "Scoreboard.h"
 #include "../UI.h"
+#include "../UISettings.h"
+#include "../Widgets/Button.h"
+#include "../../Client.h"
 #include "../../Game/Game.h"
 #include "../../Net/NetGame.h"
 

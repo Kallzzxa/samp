@@ -1,6 +1,8 @@
 #include "../Client.h"
 #include "../Game/Game.h"
+#include "../Game/Object.h"
 #include "../Net/NetGame.h"
+#include <SA.h>
 
 #include "StreamAtObject.h"
 #include "StreamInfo.h"

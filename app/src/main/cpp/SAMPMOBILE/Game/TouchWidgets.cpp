@@ -1,10 +1,18 @@
 #include "TouchWidgets.h"
+#include "Common.h"
 #include "Game.h"
+#include "PlayerPed.h"
+#include "Scripting.h"
+#include "Util.h"
+#include "Vehicle.h"
+#include "Engine/Symbols.h"
 #include "../Net/NetGame.h"
+#include "../Net/VehiclePool.h"
 #include "../Client.h"
+#include "../InputArbiter.h"
 #include "../Settings.h"
-#include "../Java/Java.h"
-#include "../UI/UI.h"
+#include <SA.h>
+#include <spdlog/spdlog.h>
 
 // widget fix
 uintptr_t* g_pWidgets;
@@ -45,8 +53,7 @@ eWidgetState ProcessFixedWidget(uintptr_t pWidget)
 
 		case sa::WidgetIDs::WIDGET_RADAR:
 			if (!Settings::radarTapMap() || !Settings::showRadar() || !Settings::showGtaHud()
-					|| Java::isRadarSuppressedByKeyboard()
-					|| (pUI && pUI->keyboard() && pUI->keyboard()->visible())) {
+					|| InputArbiter::isRadarSuppressed()) {
 				return STATE_DISABLED;
 			}
 			break;

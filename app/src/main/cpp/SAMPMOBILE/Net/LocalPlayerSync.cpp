@@ -1,9 +1,21 @@
-#include "../Client.h"
-#include "../Game/Game.h"
-#include "../Game/Util.h"
+#include "LocalPlayer.h"
 #include "NetGame.h"
+#include "RemotePlayer.h"
+#include "VehiclePool.h"
 #include "Proto/RpcOutbound.h"
 #include "Proto/Sync.h"
+#include "../Client.h"
+#include "../Game/Game.h"
+#include "../Game/Aimstuff.h"
+#include "../Game/Common.h"
+#include "../Game/Pad.h"
+#include "../Game/PlayerPed.h"
+#include "../Game/Vehicle.h"
+#include "../Game/Util.h"
+#include <RakNet/RakClientInterface.h>
+#include <RakNet/PacketEnumerations.h>
+#include <RakNet/SAMP/SAMPRPC.h>
+#include <spdlog/spdlog.h>
 
 void ApplyEffectiveLocalOnFootKeys(CPlayerPed* pPlayerPed, uint16_t& wKeys, uint16_t& lrAnalog, uint16_t& udAnalog);
 

@@ -1,8 +1,12 @@
 #include "HookDomains.h"
 #include "../Hooks.h"
+#include "../Engine/Symbols.h"
 #include "../../UI/UI.h"
+#include "../../UI/SAMPWidgets/Chat.h"
 #include "../../Client.h"
 #include "../../Settings.h"
+#include <SA.h>
+#include <spdlog/spdlog.h>
 #include <GLES2/gl2.h>
 #include <zlib.h>
 #include <sys/stat.h>

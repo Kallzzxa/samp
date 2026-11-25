@@ -1,6 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <sys/types.h>
+#include <Core/Vector.h>
+#include <RenderWare/rw.h>
+
+namespace sa {
+class CPhysical;
+}
 
 class CEntity {
 public:

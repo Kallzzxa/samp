@@ -1,9 +1,20 @@
+#include "LocalPlayer.h"
+#include "NetGame.h"
+#include "RemotePlayer.h"
+#include "VehiclePool.h"
+#include "Proto/Sync.h"
 #include "../Client.h"
 #include "../Game/Game.h"
+#include "../Game/Camera.h"
+#include "../Game/Object.h"
+#include "../Game/Pad.h"
+#include "../Game/PlayerPed.h"
+#include "../Game/Scripting.h"
+#include "../Game/Vehicle.h"
 #include "../Game/Util.h"
-#include "NetGame.h"
-#include "Proto/Sync.h"
 #include "../UI/UI.h"
+#include <RakNet/RakClientInterface.h>
+#include <RakNet/PacketEnumerations.h>
 
 void CLocalPlayer::ToggleSpectating(bool bToggle)
 {

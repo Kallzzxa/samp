@@ -1,5 +1,7 @@
 #pragma once
 
+#include "NetTypes.h"
+
 #pragma pack(push, 1)
 typedef struct _PICKUP {
 	int iModel;

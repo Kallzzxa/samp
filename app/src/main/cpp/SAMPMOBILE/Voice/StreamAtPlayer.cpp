@@ -1,6 +1,9 @@
 #include "../Client.h"
 #include "../Game/Game.h"
+#include "../Game/PlayerPed.h"
 #include "../Net/NetGame.h"
+#include "../Net/RemotePlayer.h"
+#include <SA.h>
 
 #include "StreamAtPlayer.h"
 

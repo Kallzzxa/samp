@@ -1,5 +1,8 @@
-#include "../Client.h"
 #include "Font.h"
+#include "Engine/Symbols.h"
+#include "../Client.h"
+#include <SA.h>
+#include <encoding.h>
 
 namespace {
 static constexpr int g_asciiMap[][2] = {

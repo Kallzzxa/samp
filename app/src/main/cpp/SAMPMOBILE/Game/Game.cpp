@@ -1,14 +1,29 @@
-#include "Patches.h"
-//
-// Created by ALYN on 2024/7/30.
-//
-
 #include "Game.h"
+#include "Aimstuff.h"
+#include "Camera.h"
+#include "Font.h"
 #include "Hooks.h"
+#include "Object.h"
+#include "Patches.h"
+#include "PlayerPed.h"
+#include "RadarColors.h"
+#include "RemoveBuilding.h"
+#include "Scripting.h"
+#include "Util.h"
+#include "Vehicle.h"
+#include "Engine/PatchRegistry.h"
+#include "Engine/Symbols.h"
+#include "../Addr.h"
 #include "../Client.h"
+#include "../Settings.h"
 #include "../Java/Java.h"
 #include "../UI/UISettings.h"
 #include "../UI/ImGuiRenderer.h"
+#include <encoding.h>
+#include <SA.h>
+#include <Memory.h>
+#include <spdlog/spdlog.h>
+#include <sstream>
 
 void InitScripting();
 
@@ -53,6 +68,25 @@ Game::Game()
 Game::~Game()
 {
 	//spdlog::info("Game::Game");
+}
+
+CCamera* Game::GetCamera()
+{
+	if (m_gameCamera == nullptr) {
+		m_gameCamera = new CCamera();
+	}
+	return m_gameCamera;
+}
+
+CPlayerPed* Game::FindPlayerPed()
+{
+	if (m_gamePlayer == nullptr) {
+		if (!GamePool_FindPlayerPed()) {
+			return nullptr;
+		}
+		m_gamePlayer = new CPlayerPed();
+	}
+	return m_gamePlayer;
 }
 
 void Game::Initialize()

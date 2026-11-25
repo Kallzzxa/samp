@@ -1,7 +1,11 @@
+#include "ActorPool.h"
 #include "../Client.h"
 #include "../Game/Game.h"
+#include "../Game/Util.h"
 #include "NetGame.h"
 #include "../UI/UI.h"
+#include "../UI/SAMPWidgets/Chat.h"
+#include <spdlog/spdlog.h>
 
 
 CActorPool::CActorPool()

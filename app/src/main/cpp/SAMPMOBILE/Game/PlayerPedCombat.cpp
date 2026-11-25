@@ -1,11 +1,23 @@
+#include "PlayerPed.h"
 #include "Patches.h"
 #include "Game.h"
-#include "PlayerPed.h"
+#include "Common.h"
+#include "Pad.h"
+#include "Scripting.h"
+#include "Util.h"
 #include "BulletSync.h"
 #include "PlayerContextScope.h"
+#include "Engine/Symbols.h"
 #include "../Net/NetGame.h"
+#include "../Net/LocalPlayer.h"
+#include "../Net/RemotePlayer.h"
+#include "../Net/VehiclePool.h"
 #include "../Net/Proto/Sync.h"
 #include "../Client.h"
+#include <RakNet/RakClientInterface.h>
+#include <RakNet/PacketEnumerations.h>
+#include <SA.h>
+#include <spdlog/spdlog.h>
 
 sa::CWeapon* CPlayerPed::GetCurrentWeaponSlot()
 {

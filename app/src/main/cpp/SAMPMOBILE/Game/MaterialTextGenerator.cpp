@@ -1,9 +1,15 @@
+#include "MaterialTextGenerator.h"
 #include "Game.h"
+#include "Object.h"
+#include "Util.h"
 #include "../UI/UI.h"
 #include "../Client.h"
 
+#include <imgui.h>
 #include <encoding.h>
+#include <spdlog/spdlog.h>
 #include <algorithm>
+#include <sstream>
 
 
 MaterialTextGenerator::MaterialTextGenerator()

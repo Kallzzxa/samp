@@ -4,8 +4,15 @@
 #include "../Patches.h"
 #include "../ModLoader.h"
 #include "../CleoEngine.h"
+#include "../Util.h"
+#include "../Engine/PatchRegistry.h"
+#include "../Engine/Symbols.h"
+#include "../../Addr.h"
 #include "../../Client.h"
 #include "../../Settings.h"
+#include <Memory.h>
+#include <SA.h>
+#include <spdlog/spdlog.h>
 #include <dirent.h>
 #include <strings.h>
 #include <stdio.h>

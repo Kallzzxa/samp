@@ -5,7 +5,6 @@
 #ifndef SA_MP_MOBILE_JAVA_H
 #define SA_MP_MOBILE_JAVA_H
 
-#include <atomic>
 #include <jni.h>
 
 class Java {
@@ -13,13 +12,9 @@ public:
 	Java(JNIEnv* env, jobject sampObj, jobject uiObj);
 	JNIEnv* getEnv();
 
-	// Drain JNI input callbacks (chat send, dialog response, hardware keys)
+	// Drain JNI input callbacks (chat send, dialog response, hardware keys, Back dismiss)
 	// safely on the GameMain thread inside Client::process().
 	static void processPendingInputs();
-	static bool isJavaDialogVisible();
-	static bool isJavaKeyboardVisible();
-	static bool isRadarSuppressedByKeyboard();
-	static void setNativeModalActive(bool active);
 
 	void setPauseState(bool pause);
 

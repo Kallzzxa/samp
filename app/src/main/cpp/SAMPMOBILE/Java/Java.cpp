@@ -2,13 +2,14 @@
 // Created by ALYN on 2024/8/25.
 //
 #include "Java.h"
-#include "EditObject.h"
-#include "../../Client.h"
-#include "../../UI/UI.h"
-#include "../../Game/Game.h"
-#include "../../Net/NetGame.h"
+#include "../Client.h"
+#include "../InputArbiter.h"
+#include "../UI/UI.h"
+#include "../UI/SAMPWidgets/ButtonPanel.h"
+#include "../UI/SAMPWidgets/Chat.h"
+#include "../Net/NetGame.h"
 
-#include <chrono>
+#include <spdlog/spdlog.h>
 #include <deque>
 #include <mutex>
 #include <string>
@@ -31,17 +32,6 @@ std::mutex g_jniInputMutex;
 std::deque<std::string> g_pendingKeyboardSends;
 std::deque<PendingDialogResp> g_pendingDialogResponses;
 std::deque<PendingHardwareKey> g_pendingHardwareKeys;
-std::atomic<bool> g_javaDialogVisible{false};
-std::atomic<bool> g_javaKeyboardVisible{false};
-std::atomic<int64_t> g_javaKeyboardClosedMs{0};
-std::atomic<bool> g_nativeModalActive{false};
-std::atomic<bool> g_pendingBackCancel{false};
-
-int64_t nowSteadyMs()
-{
-	return std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::steady_clock::now().time_since_epoch()).count();
-}
 
 inline void clearJniException(JNIEnv* env, const char* where)
 {
@@ -53,41 +43,9 @@ inline void clearJniException(JNIEnv* env, const char* where)
 }
 }
 
-bool Java::isJavaDialogVisible()
-{
-	return g_javaDialogVisible.load(std::memory_order_acquire);
-}
-
-bool Java::isJavaKeyboardVisible()
-{
-	return g_javaKeyboardVisible.load(std::memory_order_acquire);
-}
-
-bool Java::isRadarSuppressedByKeyboard()
-{
-	if (g_javaKeyboardVisible.load(std::memory_order_acquire)) {
-		return true;
-	}
-	int64_t closedAt = g_javaKeyboardClosedMs.load(std::memory_order_acquire);
-	if (closedAt > 0) {
-		int64_t delta = nowSteadyMs() - closedAt;
-		if (delta >= 0 && delta < 250) {
-			return true;
-		}
-	}
-	return false;
-}
-
-void Java::setNativeModalActive(bool active)
-{
-	g_nativeModalActive.store(active, std::memory_order_release);
-}
-
 void Java::processPendingInputs()
 {
-	if (g_pendingBackCancel.exchange(false, std::memory_order_acq_rel)) {
-		ButtonPanel::dismissTopModal();
-	}
+	InputArbiter::processPendingBackDismiss();
 
 	std::deque<std::string> kbQueue;
 	std::deque<PendingDialogResp> dlgQueue;
@@ -365,16 +323,16 @@ extern "C" JNIEXPORT void JNICALL Java_com_sampmobile_game_SAMP_initializeSAMP(J
 
 extern "C" JNIEXPORT void JNICALL Java_com_sampmobile_game_ui_UI_setJavaDialogVisible(JNIEnv* env, jobject obj, jboolean visible)
 {
-	g_javaDialogVisible.store(visible == JNI_TRUE, std::memory_order_release);
+	(void) env;
+	(void) obj;
+	InputArbiter::setJavaDialogVisible(visible == JNI_TRUE);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_sampmobile_game_ui_UI_setJavaKeyboardVisible(JNIEnv* env, jobject obj, jboolean visible)
 {
-	bool isVis = (visible == JNI_TRUE);
-	bool wasVis = g_javaKeyboardVisible.exchange(isVis, std::memory_order_acq_rel);
-	if (wasVis && !isVis) {
-		g_javaKeyboardClosedMs.store(nowSteadyMs(), std::memory_order_release);
-	}
+	(void) env;
+	(void) obj;
+	InputArbiter::setJavaKeyboardVisible(visible == JNI_TRUE);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_sampmobile_game_ui_UI_keyboardSend(JNIEnv* env, jobject obj, jbyteArray str)
@@ -426,11 +384,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_sampmobile_game_SAMP_onHardwareKeyEve
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_sampmobile_game_ui_UI_handleNativeBackPressed(JNIEnv* env, jobject obj)
 {
-	// Read only the GameMain-published atomic modal flag (no cross-thread pool derefs)
-	// and signal a dedicated atomic cancel flag (not gated by Settings::kmEnabled()).
-	if (!g_nativeModalActive.load(std::memory_order_acquire)) {
-		return JNI_FALSE;
-	}
-	g_pendingBackCancel.store(true, std::memory_order_release);
-	return JNI_TRUE;
+	(void) env;
+	(void) obj;
+	return InputArbiter::requestNativeBackDismiss() ? JNI_TRUE : JNI_FALSE;
 }

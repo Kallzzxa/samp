@@ -1,7 +1,16 @@
 #pragma once
 
 #include <cstdint>
-#include "Game.h"
+
+namespace sa {
+class CWeapon;
+class CPed;
+class CVector;
+class CEntity;
+}
+class CPlayerPed;
+struct _BULLET_DATA;
+using BULLET_DATA = _BULLET_DATA;
 
 extern CPlayerPed* g_pCurrentFiredPed;
 extern BULLET_DATA* g_pCurrentBulletData;

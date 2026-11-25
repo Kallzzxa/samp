@@ -1,7 +1,18 @@
 #include "BulletSync.h"
 #include "Game.h"
+#include "Common.h"
+#include "PlayerPed.h"
+#include "Util.h"
+#include "Engine/PatchRegistry.h"
+#include "Engine/Symbols.h"
+#include "../Addr.h"
 #include "../Net/NetGame.h"
+#include "../Net/LocalPlayer.h"
+#include "../Net/RemotePlayer.h"
 #include "../Client.h"
+#include <Memory.h>
+#include <SA.h>
+#include <spdlog/spdlog.h>
 
 static bool g_bEnableLineOfSightHook = false;
 

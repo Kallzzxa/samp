@@ -1,6 +1,5 @@
 package com.sampmobile.game.ui;
 
-import android.content.Context;
 import android.util.Log;
 import android.view.MotionEvent;
 
@@ -18,12 +17,14 @@ import com.sampmobile.game.ui.widgets.HeightProvider;
 import com.sampmobile.game.ui.widgets.Keyboard;
 import com.sampmobile.game.ui.widgets.LoadingScreen;
 import com.sampmobile.game.ui.widgets.WantedLevel;
+import com.sampmobile.launcher.utils.ClientSettings;
 
 @Obfuscate
 public class UI implements Dialog.Listener, Keyboard.Listener, HeightProvider.Listener {
     private static final String TAG = "UI";
 
     private final SAMP samp;
+    private final String charset;
 
     private LoadingScreen loadingScreen;
     private Dialog dialog;
@@ -42,22 +43,21 @@ public class UI implements Dialog.Listener, Keyboard.Listener, HeightProvider.Li
 
     private native boolean handleNativeBackPressed();
 
-    public UI(SAMP samp) {
+    public UI(SAMP samp, ClientSettings settings) {
         this.samp = samp;
+        this.charset = settings != null ? settings.getCharset() : "GBK";
     }
 
     public void initializeUI() {
         heightProvider = new HeightProvider(samp).init(samp.GetMainView()).setHeightListener(this);
         loadingScreen = new LoadingScreen(samp);
         editObject = new EditObject(samp);
-        dialog = new Dialog(samp, this);
+        dialog = new Dialog(samp, this, charset);
         keyboard = new Keyboard(samp, this);
         wantedLevel = new WantedLevel(samp);
 
-        if (samp.getSharedPreferences("samp_settings", Context.MODE_PRIVATE).getInt("game_version", 0) == 0) {
-            showLoadingScreen(true);
-            showWantedLevel(true);
-        }
+        showLoadingScreen(true);
+        showWantedLevel(true);
     }
 
     public boolean onBackPressed() {
@@ -123,10 +123,7 @@ public class UI implements Dialog.Listener, Keyboard.Listener, HeightProvider.Li
         if (keyboard != null && keyboard.isVisible()) {
             return true;
         }
-        if (dialog != null && dialog.isShow) {
-            return true;
-        }
-        return false;
+        return isDialogVisible();
     }
 
     public boolean onTouchEvent(MotionEvent event) {
@@ -229,7 +226,6 @@ public class UI implements Dialog.Listener, Keyboard.Listener, HeightProvider.Li
         byte[] ret;
 
         try {
-            String charset = samp.getSharedPreferences("samp_settings", Context.MODE_PRIVATE).getString("charset", "GBK");
             ret = str.getBytes(charset);
         } catch (UnsupportedEncodingException e) {
             ret = str.getBytes(java.nio.charset.StandardCharsets.UTF_8);

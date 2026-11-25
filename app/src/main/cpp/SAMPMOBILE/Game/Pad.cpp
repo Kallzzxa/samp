@@ -1,16 +1,33 @@
+#include "Pad.h"
 #include "Patches.h"
 #include "Game.h"
+#include "Common.h"
+#include "Hooks.h"
 #include "PadInternal.h"
+#include "PlayerPed.h"
+#include "Scripting.h"
 #include "TouchCombat.h"
+#include "Util.h"
+#include "Vehicle.h"
 #include "VehicleControl.h"
 #include "BulletSync.h"
 #include "Damage.h"
 #include "Hooks/HookDomains.h"
 #include "PlayerContextScope.h"
+#include "Engine/PatchRegistry.h"
+#include "Engine/Symbols.h"
+#include "../Addr.h"
 #include "../UI/UI.h"
+#include "../UI/SAMPWidgets/ButtonPanel.h"
 #include "../Net/NetGame.h"
+#include "../Net/LocalPlayer.h"
+#include "../Net/RemotePlayer.h"
+#include "../Net/VehiclePool.h"
 #include "../Client.h"
 #include "Enums/WidgetIDs.h"
+#include <Memory.h>
+#include <SA.h>
+#include <spdlog/spdlog.h>
 #include <atomic>
 
 

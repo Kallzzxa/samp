@@ -265,6 +265,10 @@ def check_structure(r: Runner) -> None:
         "app/src/main/java/com/sampmobile/launcher/utils/SignatureChecker.java",
         "app/src/main/cpp/SAMPMOBILE/UI/Widgets/EditBox.h",
         "app/src/main/cpp/SAMPMOBILE/UI/Widgets/EditBox.cpp",
+        "app/src/main/cpp/SAMPMOBILE/Voice/include/util/Samp.h",
+        "app/src/main/cpp/SAMPMOBILE/Voice/include/util/Samp.cpp",
+        "app/src/main/cpp/SAMPMOBILE/Voice/include/util/Render.h",
+        "app/src/main/cpp/SAMPMOBILE/Voice/include/util/Render.cpp",
     ]
     revived = [rel for rel in deleted_legacy_files if (REPO_ROOT / rel).exists()]
     if not revived:
@@ -317,6 +321,80 @@ def check_structure(r: Runner) -> None:
         r.ok("Net/Voice decoupling guard", "Net/*.cpp routes Voice lifecycle via Net/SessionHooks.h")
     else:
         r.fail("Net/Voice decoupling guard", "direct Voice include in: " + ", ".join(net_voice_hits))
+
+    # Subsystem lifecycle boundary: Client/UI/Settings must route Voice via ClientSubsystems.h
+    subsystem_voice_hits: List[str] = []
+    for rel in (
+        "app/src/main/cpp/SAMPMOBILE/Client.cpp",
+        "app/src/main/cpp/SAMPMOBILE/UI/UI.cpp",
+        "app/src/main/cpp/SAMPMOBILE/Settings.cpp",
+    ):
+        text = strip_c_comments(read_text(rel))
+        if re.search(r'#\s*include\s*"[^"]*Voice/', text):
+            subsystem_voice_hits.append(rel)
+    if not subsystem_voice_hits:
+        r.ok("Subsystem lifecycle boundary guard", "Client/UI/Settings schedule Voice via ClientSubsystems.h")
+    else:
+        r.fail("Subsystem lifecycle boundary guard", "direct Voice include in: " + ", ".join(subsystem_voice_hits))
+
+    # Umbrella header anti-regression guard: max include count & forbidden transitive leaks
+    include_re = re.compile(r'^\s*#\s*include\s+[<"]([^>"]+)[>"]', re.MULTILINE)
+    header_contracts = [
+        ("app/src/main/cpp/SAMPMOBILE/Client.h", 4, ("SA.h", "imgui.h", "spdlog/", "RenderWare/", "Memory.h", "RakNet/")),
+        ("app/src/main/cpp/SAMPMOBILE/Settings.h", 2, ("imgui.h", "RakNet/", "arpa/inet.h")),
+        ("app/src/main/cpp/SAMPMOBILE/Game/Game.h", 6, ("SA.h", "EditObject.h", "Util.h", "PlayerPed.h", "Vehicle.h", "Object.h")),
+        ("app/src/main/cpp/SAMPMOBILE/UI/UI.h", 8, ("SAMPWidgets/", "Widgets/", "Settings.h")),
+        ("app/src/main/cpp/SAMPMOBILE/Net/NetGame.h", 6, ("RakNet/", "Game/", "UI/", "imgui.h")),
+        ("app/src/main/cpp/SAMPMOBILE/Game/AudioStream.h", 2, ("bass.h",)),
+        ("app/src/main/cpp/SAMPMOBILE/Game/CleoEngine.h", 4, ("imgui.h",)),
+        ("app/src/main/cpp/SAMPMOBILE/Voice/Plugin.h", 2, ("Client.h", "Render.h", "Samp.h", "Stream.h")),
+        ("app/src/main/cpp/SAMPMOBILE/Voice/Header.h", 6, ("Client.h",)),
+        ("app/src/main/cpp/SAMPMOBILE/Voice/SpeakerList.h", 6, ("NetGame.h",)),
+        ("app/src/main/cpp/SAMPMOBILE/Voice/StreamAtVehicle.h", 4, ("NetGame.h",)),
+        ("app/src/main/cpp/SAMPMOBILE/InputArbiter.h", 2, ("UI.h", "Game.h", "NetGame.h", "Client.h")),
+        ("app/src/main/cpp/SAMPMOBILE/ClientSubsystems.h", 2, ("Voice/", "CleoEngine.h", "ModLoader.h", "AudioStream.h")),
+    ]
+    header_violations: List[str] = []
+    for rel, max_incs, forbidden_tokens in header_contracts:
+        incs = include_re.findall(strip_c_comments(read_text(rel)))
+        if len(incs) > max_incs:
+            header_violations.append(f"{rel} has {len(incs)} includes (max {max_incs})")
+        for inc in incs:
+            for tok in forbidden_tokens:
+                if tok in inc:
+                    header_violations.append(f"{rel} includes forbidden '{inc}'")
+    if not header_violations:
+        r.ok("Umbrella header boundary guard", f"{len(header_contracts)} core headers verified minimal")
+    else:
+        r.fail("Umbrella header boundary guard", "; ".join(header_violations))
+
+    # :game process must read settings strictly from SAMP/settings.json (zero SharedPreferences)
+    game_java_root = REPO_ROOT / "app/src/main/java/com/sampmobile/game"
+    game_sp_hits: List[str] = []
+    for p in sorted(game_java_root.rglob("*.java")):
+        if "cef" in p.parts:
+            continue
+        text = strip_c_comments(p.read_text(encoding="utf-8", errors="ignore"))
+        if "getSharedPreferences" in text or "SharedPreferences" in text:
+            game_sp_hits.append(p.relative_to(REPO_ROOT).as_posix())
+    if not game_sp_hits:
+        r.ok(":game single settings truth guard", "zero SharedPreferences usage in com.sampmobile.game")
+    else:
+        r.fail(":game single settings truth guard", "SharedPreferences found in: " + ", ".join(game_sp_hits))
+
+    # Unified input arbitration boundary guard
+    arbiter_cpp = strip_c_comments(read_text("app/src/main/cpp/SAMPMOBILE/InputArbiter.cpp"))
+    input_hooks_cpp = strip_c_comments(read_text("app/src/main/cpp/SAMPMOBILE/Game/Hooks/InputHooks.cpp"))
+    samp_java = strip_c_comments(read_text("app/src/main/java/com/sampmobile/game/SAMP.java"))
+    if (
+        "SAMPMOBILE_RegisterTouchFilter" in arbiter_cpp
+        and "SAMPMOBILE_RegisterTouchFilter" not in input_hooks_cpp
+        and "InputArbiter::routeGtaTouch" in input_hooks_cpp
+        and "GameInputArbiter" in samp_java
+    ):
+        r.ok("Input arbitration boundary guard", "C++ InputArbiter & Java GameInputArbiter own touch/Back routing")
+    else:
+        r.fail("Input arbitration boundary guard", "touch/Back arbitration leaked outside InputArbiter / GameInputArbiter")
 
     cmake_txt = read_text("app/src/main/cpp/SAMPMOBILE/CMakeLists.txt")
     if "CONFIGURE_DEPENDS" in cmake_txt:

@@ -4,6 +4,9 @@
 #include <deque>
 #include <mutex>
 
+#include "NetTypes.h"
+#include "../Game/TextDraw.h"
+
 class ImGuiRenderer;
 
 #define MAX_TEXT_DRAW_LINE 800

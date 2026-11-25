@@ -1,7 +1,10 @@
 #pragma once
 
 #include <cstdint>
-#include <SA.h>
+
+namespace sa {
+class CColModel;
+}
 
 // Maintains repeat-sector injection & CColStore pinning for out-of-bounds
 // (|x/y| > 3000) dynamic objects and vehicles so collision remains solid.

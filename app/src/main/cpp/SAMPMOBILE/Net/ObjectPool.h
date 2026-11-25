@@ -5,8 +5,13 @@
 #include <mutex>
 #include <unordered_map>
 
-#define INVALID_OBJECT_ID    0xFFFF
+#include <Core/Vector.h>
+#include "NetTypes.h"
 
+namespace sa {
+class CEntity;
+}
+class CObject;
 class ImGuiRenderer;
 
 class CObjectPool {

@@ -1,4 +1,6 @@
 #include <atomic>
+#include <iomanip>
+#include <sstream>
 #include <thread>
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -7,25 +9,43 @@
 #include <link.h>
 #include <cstring>
 
+#include <Memory.h>
+#include <SA.h>
+#include <encoding.h>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/android_sink.h>
+#include <spdlog/sinks/rotating_file_sink.h>
+
 #include "Client.h"
+#include "ClientSubsystems.h"
 #include "BackTrace.h"
 #include "Settings.h"
 #include "ClientCmds.h"
+#include "Game/Camera.h"
+#include "Game/PlayerPed.h"
 #include "Game/Patches.h"
 #include "Game/Hooks.h"
-#include "Game/ModLoader.h"
-#include "Game/CleoEngine.h"
 #include "Game/Util.h"
+#include "Game/SnapShotHelper.h"
+#include "Game/MaterialTextGenerator.h"
+#include "Game/Engine/PatchRegistry.h"
 #include "Enums/WidgetIDs.h"
 #include "Java/Java.h"
 #include "Java/MultiTouch.h"
 #include "UI/UI.h"
+#include "UI/SAMPWidgets/PlayerTags.h"
+#include "UI/SAMPWidgets/SplashScreen.h"
+#include "UI/SAMPWidgets/Chat.h"
+#include "UI/SAMPWidgets/DeathWindow.h"
+#include "UI/SAMPWidgets/ButtonPanel.h"
+#include "UI/SAMPWidgets/Scoreboard.h"
+#include "UI/SAMPWidgets/VoiceButton.h"
 #include "Game/Game.h"
-#include "Game/AudioStream.h"
 #include "Net/NetGame.h"
+#include "Net/MenuPool.h"
+#include "Net/TextDrawPool.h"
 #include "Cef/CefBrowser.h"
 #include "Cef/CefSession.h"
-#include "Voice/Plugin.h"
 #include "Crashlytics.h"
 
 JavaVM* Client::java_vm = nullptr;
@@ -221,21 +241,10 @@ void Client::initialize(const std::string& gameDir, bool offlineMode)
 	// Install after Crashlytics so we chain to debuggerd / Crashlytics cleanly without clobbering
 	installFatalSignalHandlers();
 
-	// index order must match the launcher's version list (SettingsPageFragment / join dialog)
-	static const struct { const char* name; int netgame; } kSampVersions[] = {
-		{"0.3.7",     0xFD9},
-		{"0.3.7-R4",  0xFD9},
-		{"0.3.7-R5",  0xFD9},
-		{"0.3.DL-R1", 0xFDE},
-	};
-	int versionIdx = Settings::sampversion();
-	if (versionIdx < 0 || versionIdx >= (int) (sizeof(kSampVersions) / sizeof(kSampVersions[0]))) {
-		versionIdx = 0;
-	}
-	samp_version = kSampVersions[versionIdx].name;
-	samp_netgame = kSampVersions[versionIdx].netgame;
+	samp_version = Settings::sampVersionName();
+	samp_netgame = Settings::sampNetgameVersion();
 
-	spdlog::info("SA-MP version: {}", samp_version);
+	spdlog::info("SA-MP version: {} (0x{:X})", samp_version, samp_netgame);
 
 	spdlog::info("Loading libGTASA.so...");
 	g_saSym->Open("libGTASA.so");
@@ -258,10 +267,7 @@ void Client::initialize(const std::string& gameDir, bool offlineMode)
 	firebase::crashlytics::SetCustomKey("libGTASA.so", str);
 
 	sa::Initialize();
-	LoadBassLibrary();
-
-	ModLoader::initialize(game_dir);
-	CleoEngine::initialize(game_dir);
+	ClientSubsystems::onPreHooksInit(game_dir);
 
 	Hooks::install();
 	Patches::apply();
@@ -271,10 +277,7 @@ void Client::initialize(const std::string& gameDir, bool offlineMode)
 
 	pGame = new Game();
 
-	if (Settings::voice()) {
-		Plugin::OnPluginLoad();
-		Plugin::OnSampLoad();
-	}
+	ClientSubsystems::onPostBootInit();
 
 	// Boot watchdog: every 5s log boot progress; if no frame was rendered
 	// after ~15s (boot stall), dump all native game threads via SIGUSR2.
@@ -327,18 +330,17 @@ void Client::process(bool canRender2d)
 	g_worldReady.store(true, std::memory_order_release);
 
 	if (!gameInited) {
-		spdlog::info("Initializing game: subsystems...");
+		spdlog::info("Initializing game: core services...");
 		pPlayerTags = new PlayerTags();
-		pAudioStream = new AudioStream();
 		pSnapShotHelper = new SnapShotHelper();
 		pMaterialTextGenerator = new MaterialTextGenerator();
 
 		spdlog::info("Initializing game: patches...");
 		Patches::preApply();
 
-		spdlog::info("Initializing game: game/audio...");
+		spdlog::info("Initializing game: game/subsystems...");
 		pGame->Initialize();
-		pAudioStream->Initialize();
+		ClientSubsystems::onWorldReady();
 		Settings::applyToGtaEngine(true);
 
 		spdlog::info("Initializing game: ui...");
@@ -360,17 +362,6 @@ void Client::process(bool canRender2d)
 		}
 
 		ClientCmds::initialize();
-
-		if (Settings::voice()) {
-			LogVoice("[dbg:samp:load] : module loading...");
-			for (const auto& loadCallback : Samp::loadCallbacks) {
-				if (loadCallback != nullptr) {
-					loadCallback();
-				}
-			}
-			Samp::loadStatus = true;
-			LogVoice("[dbg:samp:load] : module loaded");
-		}
 
 		if (offline_mode) {
 			if (pUI) {
@@ -458,27 +449,17 @@ void Client::process(bool canRender2d)
 			}
 		}
 
-		if (pAudioStream) {
-			pAudioStream->Process();
-		}
-
 		if (g_java && !Game::IsGamePaused()) {
 			g_java->showWantedLevel(true);
 		}
 	}
 
-	CleoEngine::process();
+	ClientSubsystems::onGameFrame(pNetGame != nullptr);
 }
 
 void Client::initializeUI()
 {
-	if (Settings::voice()) {
-		for (const auto& deviceInitCallback : Render::deviceInitCallbacks) {
-			if (deviceInitCallback != nullptr) {
-				deviceInitCallback();
-			}
-		}
-	}
+	ClientSubsystems::onUiDeviceReady();
 
 	std::string fonts_path = std::string(Client::gameDir()) + "SAMP/fonts/";
 	UI* ui = new UI(ImVec2(sa::RsGlobal->screenWidth, sa::RsGlobal->screenHeight), fonts_path);

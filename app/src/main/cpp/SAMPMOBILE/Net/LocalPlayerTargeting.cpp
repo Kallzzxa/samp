@@ -1,9 +1,23 @@
-#include "../Client.h"
-#include "../Game/Game.h"
-#include "../Game/Util.h"
+#include "LocalPlayer.h"
 #include "NetGame.h"
+#include "ActorPool.h"
+#include "RemotePlayer.h"
+#include "VehiclePool.h"
 #include "Proto/RpcOutbound.h"
 #include "Proto/Sync.h"
+#include "../Client.h"
+#include "../Game/Game.h"
+#include "../Game/Aimstuff.h"
+#include "../Game/Camera.h"
+#include "../Game/Common.h"
+#include "../Game/Object.h"
+#include "../Game/Pad.h"
+#include "../Game/PlayerPed.h"
+#include "../Game/Scripting.h"
+#include "../Game/Vehicle.h"
+#include "../Game/Util.h"
+#include <RakNet/RakClientInterface.h>
+#include <RakNet/SAMP/SAMPRPC.h>
 
 extern uint32_t dwEnterVehTimeElasped;
 

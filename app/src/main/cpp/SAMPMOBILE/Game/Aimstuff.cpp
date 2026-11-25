@@ -1,7 +1,15 @@
-#include "Patches.h"
+#include "Aimstuff.h"
 #include "Game.h"
+#include "Pad.h"
+#include "Patches.h"
+#include "PlayerPed.h"
+#include "Engine/Symbols.h"
+#include "../Client.h"
+#include <SA.h>
+#include <spdlog/spdlog.h>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 CAMERA_AIM* pcaInternalAim = nullptr;
 uint8_t* pbyteCameraMode = nullptr;

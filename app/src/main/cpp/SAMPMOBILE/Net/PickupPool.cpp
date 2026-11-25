@@ -1,7 +1,13 @@
-#include "../Client.h"
-#include "../Game/Game.h"
+#include "PickupPool.h"
 #include "NetGame.h"
 #include "Proto/RpcOutbound.h"
+#include "../Client.h"
+#include "../Game/Game.h"
+#include "../Game/Scripting.h"
+#include "../Game/Util.h"
+#include <RakNet/RakClientInterface.h>
+#include <RakNet/SAMP/SAMPRPC.h>
+#include <spdlog/spdlog.h>
 
 
 CPickupPool::CPickupPool()

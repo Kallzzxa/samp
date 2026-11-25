@@ -3,174 +3,19 @@
 #include "../Game.h"
 #include "../TouchCombat.h"
 #include "../TouchWidgets.h"
-#include "../CleoEngine.h"
-#include "../../UI/UI.h"
+#include "../Engine/PatchRegistry.h"
+#include "../Engine/Symbols.h"
+#include "../../InputArbiter.h"
 #include "../../Net/NetGame.h"
-#include "../../Java/Java.h"
 #include "../../Client.h"
-#include "../../Settings.h"
 #include "../../GameSA/include/Enums/WidgetIDs.h"
+#include <Memory.h>
+#include <spdlog/spdlog.h>
 #include <atomic>
-
-using MonetTouchFilterFn = bool (*)(int type, int num, int posX, int posY);
-static std::atomic<MonetTouchFilterFn> g_monetTouchFilter{nullptr};
-
-extern "C" __attribute__((visibility("default")))
-void SAMPMOBILE_RegisterTouchFilter(MonetTouchFilterFn fn)
-{
-	g_monetTouchFilter.store(fn, std::memory_order_release);
-}
 
 DECL_HOOK(void, AND_TouchEvent, int type, int num, int posX, int posY)
 {
-	// Track which pointer slots (0..3) are currently pressed inside libGTASA.so.
-	// Previously every intercepted touch called AND_TouchEvent(1, 0, 0, 0),
-	// which left fingers 1..3 permanently stuck down whenever they hit an overlay
-	// (buttonpanel / TextDraw / Monet / CLEO) or a modal dialog opened — and also
-	// spuriously killed finger 0's joystick when finger 1 tapped an overlay.
-	static bool s_gtaPointerDown[4] = {false, false, false, false};
-
-	auto forwardToGta = [&](int t, int n, int x, int y) {
-		if (n >= 0 && n < 4) {
-			if (t == 2) s_gtaPointerDown[n] = true;
-			else if (t == 1) s_gtaPointerDown[n] = false;
-		}
-		AND_TouchEvent(t, n, x, y);
-	};
-
-	auto releaseGtaPointer = [&](int n) {
-		if (n >= 0 && n < 4 && s_gtaPointerDown[n]) {
-			s_gtaPointerDown[n] = false;
-			AND_TouchEvent(1, n, 0, 0);
-		}
-	};
-
-	auto releaseAllGtaPointers = [&]() {
-		for (int i = 0; i < 4; ++i) {
-			if (s_gtaPointerDown[i]) {
-				s_gtaPointerDown[i] = false;
-				AND_TouchEvent(1, i, 0, 0);
-			}
-		}
-	};
-
-	if (Game::IsGamePaused())
-	{
-		forwardToGta(type, num, posX, posY);
-		return;
-	}
-
-	const bool javaDialogOpen = Java::isJavaDialogVisible();
-	const bool modalUiOpen = javaDialogOpen || (pUI != nullptr && pUI->isModalOpenSnapshot());
-	if (javaDialogOpen)
-	{
-		if (pUI != nullptr) {
-			pUI->enqueueTouchEvent(ImVec2(0.0f, 0.0f), TouchType::pop, true);
-		}
-		releaseAllGtaPointers();
-		return;
-	}
-
-	if (!modalUiOpen)
-	{
-		ImVec2 disp = pUI ? pUI->displaySizeSnapshot() : ImVec2(1920.0f, 1080.0f);
-		if (CleoEngine::handleTouch(type, num, posX, posY, disp.x, disp.y))
-		{
-			releaseGtaPointer(num);
-			return;
-		}
-		if (auto touchFilter = g_monetTouchFilter.load(std::memory_order_acquire))
-		{
-			if (touchFilter(type, num, posX, posY))
-			{
-				releaseGtaPointer(num);
-				return;
-			}
-		}
-	}
-
-	if (pUI != nullptr)
-	{
-		const bool tdSelecting = !pUI->isModalOpenSnapshot()
-			&& pNetGame && pNetGame->GetTextDrawPool() && pNetGame->GetTextDrawPool()->GetState();
-		const bool hitBtnPanel = pUI->isButtonPanelHitSnapshot(ImVec2(posX, posY));
-
-		// Give selectable TextDraws priority over background ImGui widgets (chat/etc.)
-		// while still letting the player tap ButtonPanel (e.g. ESC) to cancel selection.
-		if (tdSelecting && !hitBtnPanel)
-		{
-			if (!pNetGame->GetTextDrawPool()->enqueueTouchEvent(type, posX, posY))
-			{
-				releaseGtaPointer(num);
-				return;
-			}
-		}
-
-		switch (type)
-		{
-		case 2: // push
-			pUI->enqueueTouchEvent(ImVec2(posX, posY), TouchType::push, false, num);
-			break;
-
-		case 3: // move
-			pUI->enqueueTouchEvent(ImVec2(posX, posY), TouchType::move, false, num);
-			break;
-
-		case 1: // pop
-			pUI->enqueueTouchEvent(ImVec2(posX, posY), TouchType::pop, false, num);
-			break;
-		}
-
-		if (pUI->isModalOpenSnapshot())
-		{
-			releaseAllGtaPointers();
-			return;
-		}
-		else
-		{
-			if (pNetGame && pNetGame->GetMenuPool())
-			{
-				if (!pNetGame->GetMenuPool()->enqueueTouchEvent(type, posX, posY))
-				{
-					releaseGtaPointer(num);
-					return;
-				}
-			}
-
-			if (hitBtnPanel)
-			{
-				releaseGtaPointer(num);
-				return;
-			}
-
-			if (pNetGame && pNetGame->GetTextDrawPool())
-			{
-				if (!pNetGame->GetTextDrawPool()->enqueueTouchEvent(type, posX, posY))
-				{
-					releaseGtaPointer(num);
-					return;
-				}
-			}
-
-			if (pNetGame && pNetGame->GetObjectPool())
-			{
-				if (!pNetGame->GetObjectPool()->enqueueTouchEvent(type, posX, posY))
-				{
-					releaseGtaPointer(num);
-					return;
-				}
-			}
-		}
-	}
-
-	if (pGame && pGame->IsGameInputEnabled())
-	{
-		forwardToGta(type, num, posX, posY);
-	}
-	else
-	{
-		releaseAllGtaPointers();
-	}
+	InputArbiter::routeGtaTouch(type, num, posX, posY, AND_TouchEvent);
 }
 
 DECL_HOOK(int, GetInputType)

@@ -1,8 +1,6 @@
 package com.sampmobile.launcher.ui;
 
 import android.app.Activity;
-import android.content.Context;
-import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,6 +12,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 
 import com.sampmobile.launcher.R;
+import com.sampmobile.launcher.utils.ClientSettings;
 import com.sampmobile.launcher.utils.LauncherThemeManager;
 import com.sampmobile.launcher.utils.ServerModel;
 import com.sampmobile.launcher.utils.Utils;
@@ -28,7 +27,7 @@ import java.util.regex.Pattern;
 public final class LauncherServerDialogs {
     public interface Host {
         boolean ensureGameDataOrPrompt();
-        void launchGameProcess(SharedPreferences prefs);
+        void launchGameProcess();
         void onFavoriteServerAdded();
     }
 
@@ -40,24 +39,27 @@ public final class LauncherServerDialogs {
         AlertDialog dialog = new AlertDialog.Builder(activity).setView(v).create();
         Objects.requireNonNull(dialog.getWindow()).setBackgroundDrawableResource(android.R.color.transparent);
 
-        SharedPreferences prefs = activity.getSharedPreferences("samp_settings", Context.MODE_PRIVATE);
+        ClientSettings settings = ClientSettings.loadLauncher(activity);
 
         TextView serverName = v.findViewById(R.id.join_server_name);
         serverName.setText(server.server_name);
 
         EditText nickname = v.findViewById(R.id.join_nickname);
-        nickname.setText(prefs.getString("nick_name", ""));
+        nickname.setText(settings.getString("nick_name"));
         nickname.setSelection(Objects.requireNonNull(nickname.getText()).length());
 
         TextView[] versionButtons = {
                 v.findViewById(R.id.join_version_0),
                 v.findViewById(R.id.join_version_1),
                 v.findViewById(R.id.join_version_2)};
-        final int[] versionValues = {0, 2, 3};
+        final String[] versionIds = {
+                ClientSettings.SAMP_VER_037,
+                ClientSettings.SAMP_VER_037_R5,
+                ClientSettings.SAMP_VER_03DL_R1};
         final int[] version = {0};
-        int savedVersion = prefs.getInt("samp_version", 0);
-        for (int i = 0; i < versionValues.length; i++) {
-            if (versionValues[i] == savedVersion) version[0] = i;
+        String savedVersion = settings.getString("samp_version");
+        for (int i = 0; i < versionIds.length; i++) {
+            if (versionIds[i].equalsIgnoreCase(savedVersion)) version[0] = i;
         }
         int accentColor = LauncherThemeManager.getAccentColor(activity);
         LauncherThemeManager.applyThemeToTree(v, accentColor);
@@ -103,26 +105,20 @@ public final class LauncherServerDialogs {
                 return;
             }
 
-            prefs.edit()
-                    .putBoolean("offline_mode", false)
-                    .putString("nick_name", nick)
-                    .putInt("samp_version", versionValues[version[0]])
-                    .commit();
-
-            SharedPreferences.Editor edit = activity.getSharedPreferences("samp_server", Context.MODE_PRIVATE).edit();
-            edit.putString("host", server.server_host);
-            edit.putString("port", server.server_port);
-            edit.putString("password", hasPassword ? Objects.requireNonNull(password.getText()).toString() : "");
-            edit.commit();
-
-            Utils.saveSettings(activity);
+            int port = 7777;
+            try {
+                port = Integer.parseInt(server.server_port);
+            } catch (NumberFormatException ignored) {
+            }
+            String pass = hasPassword ? Objects.requireNonNull(password.getText()).toString() : "";
+            ClientSettings.prepareOnlineLaunch(activity, server.server_host, port, pass, nick, versionIds[version[0]]);
             Utils.addServerToRecent(activity, server.address());
 
             dialog.dismiss();
             if (!host.ensureGameDataOrPrompt()) {
                 return;
             }
-            host.launchGameProcess(prefs);
+            host.launchGameProcess();
         });
 
         if (!activity.isFinishing() && !activity.isDestroyed()) {
@@ -187,13 +183,11 @@ public final class LauncherServerDialogs {
                 .setTitle(R.string.offline_mode)
                 .setMessage(R.string.offline_mode_confirm)
                 .setPositiveButton(R.string.yes, (dialog, which) -> {
-                    SharedPreferences prefs = activity.getSharedPreferences("samp_settings", Context.MODE_PRIVATE);
-                    prefs.edit().putBoolean("offline_mode", true).commit();
-                    Utils.saveSettings(activity);
+                    ClientSettings.prepareOfflineLaunch(activity);
                     if (!host.ensureGameDataOrPrompt()) {
                         return;
                     }
-                    host.launchGameProcess(prefs);
+                    host.launchGameProcess();
                 })
                 .setNegativeButton(R.string.no, null)
                 .show();

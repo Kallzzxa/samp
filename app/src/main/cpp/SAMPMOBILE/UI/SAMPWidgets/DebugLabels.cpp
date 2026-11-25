@@ -1,7 +1,16 @@
+#include "DebugLabels.h"
 #include "../UI.h"
+#include "../UISettings.h"
 #include "../../Client.h"
 #include "../../Game/Game.h"
+#include "../../Game/PlayerPed.h"
+#include "../../Game/Vehicle.h"
+#include "../../Game/Util.h"
 #include "../../Net/NetGame.h"
+#include "../../Net/LocalPlayer.h"
+#include "../../Net/VehiclePool.h"
+#include <SA.h>
+#include <sstream>
 
 
 /* DebugLables */

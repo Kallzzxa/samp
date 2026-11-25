@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <map>
+#include <Core/Vector.h>
+#include <Core/Rect.h>
 
 class ImGuiRenderer;
 

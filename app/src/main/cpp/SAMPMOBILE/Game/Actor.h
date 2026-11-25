@@ -2,6 +2,10 @@
 
 #include "Entity.h"
 
+namespace sa {
+class CPed;
+}
+
 class CActor : public CEntity {
 public:
 	CActor(int iSkin, float fX, float fY, float fZ, float fAngle);

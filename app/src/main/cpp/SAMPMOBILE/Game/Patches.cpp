@@ -1,8 +1,15 @@
+#include "Patches.h"
 #include "Game.h"
+#include "PlayerPed.h"
+#include "Engine/PatchRegistry.h"
+#include "Engine/Symbols.h"
+#include "../Addr.h"
 #include "../Client.h"
 #include "../Settings.h"
 #include "VehicleColoursTable.h"
-
+#include <Memory.h>
+#include <SA.h>
+#include <spdlog/spdlog.h>
 #include <sys/stat.h>
 
 sa::CPlayerInfo* WORLD_PLAYERS = nullptr;

@@ -19,6 +19,7 @@ import com.sampmobile.launcher.R;
 import com.sampmobile.launcher.download.GamedataInstallerTask;
 import com.sampmobile.launcher.download.GamedataState;
 import com.sampmobile.launcher.ui.widget.GtaOptionView;
+import com.sampmobile.launcher.utils.ClientSettings;
 import com.sampmobile.launcher.utils.GameDataImporter;
 import com.sampmobile.launcher.utils.GameDataVerifier;
 import com.sampmobile.launcher.utils.LauncherThemeManager;
@@ -412,7 +413,7 @@ final class SettingsGameDataController {
                 activeDownloadTask = null;
                 if (installedNow) {
                     try {
-                        Utils.saveSettings(appCtx);
+                        ClientSettings.ensureExists(appCtx);
                     } catch (Exception ignored) {
                     }
                 }

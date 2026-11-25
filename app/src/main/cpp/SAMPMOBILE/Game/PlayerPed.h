@@ -1,6 +1,22 @@
 #pragma once
 
+#include <cstdint>
+#include <Core/Vector.h>
+#include "Entity.h"
+#include "Aimstuff.h"
+
+namespace sa {
+class CPed;
+class CVehicle;
+struct CEntity;
+struct CWeapon;
+struct CPedFlags;
+}
+class CObject;
+
+#ifndef PLAYER_PED_SLOTS
 #define PLAYER_PED_SLOTS    210
+#endif
 
 #define FALL_SKYDIVE        1
 #define FALL_SKYDIVE_ACCEL    2

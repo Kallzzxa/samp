@@ -36,12 +36,39 @@ void CleoEngine::toggleMenu()
 	}
 }
 
-void CleoEngine::renderMenu(ImGuiRenderer* renderer, const ImVec2& displaySize)
+bool CleoEngine::isMenuOpen()
+{
+	if (!g_enabled || !g_symbolsReady) return false;
+	std::lock_guard<std::mutex> lock(g_touchMutex);
+	return isAnyMenuVisible();
+}
+
+bool CleoEngine::dismissMenu()
+{
+	if (!g_enabled || !g_symbolsReady) return false;
+	std::lock_guard<std::mutex> lock(g_touchMutex);
+	if (g_scriptMenu.active) {
+		g_scriptMenu.lastTouchedIndex = -2;
+		g_scriptMenu.lastTouchedTime = nowMs();
+		g_scriptMenu.active = false;
+		g_menuRowRects.clear();
+		return true;
+	}
+	if (g_builtinMenu.open) {
+		g_builtinMenu.open = false;
+		g_menuRowRects.clear();
+		return true;
+	}
+	return false;
+}
+
+void CleoEngine::renderMenu(ImGuiRenderer* renderer, float displayW, float displayH)
 {
 	if (!renderer || !g_enabled || !g_symbolsReady) return;
 	std::lock_guard<std::mutex> lock(g_touchMutex);
 	if (!isAnyMenuVisible()) return;
 
+	const ImVec2 displaySize(displayW, displayH);
 	g_screenW = displaySize.x;
 	g_screenH = displaySize.y;
 

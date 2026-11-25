@@ -1,8 +1,21 @@
+#include "RemotePlayer.h"
+#include "NetGame.h"
+#include "VehiclePool.h"
 #include "../Client.h"
 #include "../Game/Game.h"
+#include "../Game/Aimstuff.h"
 #include "../Game/Animation.h"
-#include "NetGame.h"
+#include "../Game/Common.h"
+#include "../Game/Object.h"
+#include "../Game/Pad.h"
+#include "../Game/PlayerPed.h"
+#include "../Game/RadarColors.h"
+#include "../Game/Vehicle.h"
+#include "../Game/Util.h"
 #include "../UI/UI.h"
+#include "../UI/SAMPWidgets/Chat.h"
+#include <encoding.h>
+#include <spdlog/spdlog.h>
 
 
 CRemotePlayer::CRemotePlayer()

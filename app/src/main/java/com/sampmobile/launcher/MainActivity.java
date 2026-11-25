@@ -4,7 +4,6 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.os.Build;
 import android.os.Bundle;
@@ -56,6 +55,7 @@ import com.sampmobile.launcher.ui.adapter.ServerAdapter;
 import com.sampmobile.launcher.ui.fragment.ModsManagerFragment;
 import com.sampmobile.launcher.ui.fragment.SettingsPageFragment;
 import com.sampmobile.launcher.ui.widget.GtaTabStrip;
+import com.sampmobile.launcher.utils.ClientSettings;
 import com.sampmobile.launcher.utils.GameDataImporter;
 import com.sampmobile.launcher.utils.LauncherFonts;
 import com.sampmobile.launcher.utils.LauncherThemeManager;
@@ -198,7 +198,7 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
             return windowInsets;
         });
 
-        getSharedPreferences("samp_settings", Context.MODE_PRIVATE).edit().putBoolean("offline_mode", false).apply();
+        ClientSettings.setAsync(this, "offline_mode", false);
         com.sampmobile.launcher.utils.ModManager.ensureDirectories(this);
 
         initViews();
@@ -584,7 +584,7 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
 
         // fetch player list & rules in background
         String address = server.address();
-        String charset = getSharedPreferences("samp_settings", Context.MODE_PRIVATE).getString("charset", "GBK");
+        String charset = ClientSettings.getCharsetForLauncher(this);
         detailExecutor.execute(() -> {
             List<String[]> players = new ArrayList<>();
             List<String[]> rules = new ArrayList<>();
@@ -728,8 +728,8 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
         }
 
         @Override
-        public void launchGameProcess(SharedPreferences prefs) {
-            MainActivity.this.launchGameProcess(prefs);
+        public void launchGameProcess() {
+            MainActivity.this.launchGameProcess();
         }
 
         @Override
@@ -752,7 +752,7 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
         LauncherServerDialogs.showOfflineDialog(this, serverDialogHost);
     }
 
-    private void launchGameProcess(SharedPreferences prefs) {
+    private void launchGameProcess() {
         try {
             android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
             if (am != null) {
@@ -794,9 +794,20 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
             Intent intent = new Intent(this, com.sampmobile.game.SAMP.class);
             intent.putExtra("extra_check", "sampmobile1337");
             startActivity(intent);
-            prefs.edit().putBoolean("open_hud_edit_on_start", false).apply();
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        ClientSettings.reloadLauncher(this);
+        if (currentPage == PAGE_SETTINGS) {
+            Fragment f = getSupportFragmentManager().findFragmentByTag(TAG_SETTINGS);
+            if (f instanceof SettingsPageFragment) {
+                ((SettingsPageFragment) f).onPageShown();
+            }
         }
     }
 

@@ -25,6 +25,7 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 import pub.devrel.easypermissions.EasyPermissions;
+import com.sampmobile.launcher.utils.ClientSettings;
 import com.sampmobile.launcher.utils.Logcat;
 import com.sampmobile.launcher.utils.Utils;
 
@@ -138,11 +139,7 @@ public class SplashActivity extends AppCompatActivity implements GLSurfaceView.R
                                 .setTitle(R.string.offline_mode)
                                 .setMessage("确定要以单机模式启动游戏吗？")
                                 .setPositiveButton("是", (dialog2, which2) -> {
-                                    getSharedPreferences("samp_settings", Context.MODE_PRIVATE)
-                                            .edit()
-                                            .putBoolean("offline_mode", true)
-                                            .commit();
-                                    Utils.saveSettings(this);
+                                    ClientSettings.prepareOfflineLaunch(this);
                                     try {
                                         Intent intent = new Intent(this, com.sampmobile.game.SAMP.class);
                                         intent.putExtra("extra_check", "sampmobile1337");
@@ -163,7 +160,7 @@ public class SplashActivity extends AppCompatActivity implements GLSurfaceView.R
         }
 
         mAppStarted = true;
-        getSharedPreferences("samp_settings", Context.MODE_PRIVATE).edit().putString("files_type", "full").apply();
+        ClientSettings.ensureExists(this);
         mStartHandler.postDelayed(() -> {
             if (isFinishing() || isDestroyed()) return;
             startMain();

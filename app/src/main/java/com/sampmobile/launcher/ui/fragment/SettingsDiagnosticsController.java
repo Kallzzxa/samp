@@ -11,6 +11,7 @@ import androidx.fragment.app.FragmentActivity;
 
 import com.sampmobile.launcher.BuildConfig;
 import com.sampmobile.launcher.R;
+import com.sampmobile.launcher.utils.ClientSettings;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -254,15 +255,16 @@ final class SettingsDiagnosticsController {
             StatFs stat = new StatFs(extDir.getAbsolutePath());
             freeMB = (stat.getAvailableBlocksLong() * stat.getBlockSizeLong()) / (1024 * 1024);
         }
+        ClientSettings settings = ClientSettings.loadLauncher(appCtx);
         return String.format(Locale.US,
                 "版本: v%s (%s) | 设备: %s %s | 系统: Android %s | 剩余空间: %d MB\n"
                 + "模组开关: Modloader=%b, AML=%b, JPatch=%b, MonetLoader=%b, CLEO=%b",
                 BuildConfig.VERSION_NAME, abi,
                 Build.MANUFACTURER, Build.MODEL, Build.VERSION.RELEASE, freeMB,
-                host.settings_prefs.getBoolean("modloader", false),
-                host.settings_prefs.getBoolean("aml_scripts", false),
-                host.settings_prefs.getBoolean("jpatch_enabled", false),
-                host.settings_prefs.getBoolean("monet_scripts", false),
-                host.settings_prefs.getBoolean("cleo_scripts", false));
+                settings.getBoolean("modloader"),
+                settings.getBoolean("aml_scripts"),
+                settings.getBoolean("jpatch_enabled"),
+                settings.getBoolean("monet_scripts"),
+                settings.getBoolean("cleo_scripts"));
     }
 }

@@ -1,9 +1,18 @@
-#include "Game.h"
 #include "PlayerPed.h"
+#include "Game.h"
+#include "Common.h"
+#include "Pad.h"
+#include "Scripting.h"
+#include "Util.h"
 #include "PlayerContextScope.h"
+#include "Engine/Symbols.h"
 #include "RenderWare/rphanim.h"
+#include "../Addr.h"
 #include "../Net/NetGame.h"
+#include "../Net/LocalPlayer.h"
 #include "../Client.h"
+#include <SA.h>
+#include <spdlog/spdlog.h>
 
 void CPlayerPed::SetSpecialAction(uint8_t byteSpecialAction)
 {

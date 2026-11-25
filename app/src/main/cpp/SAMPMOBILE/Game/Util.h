@@ -1,6 +1,10 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
+#include <sys/types.h>
+#include <SA.h>
+#include <RenderWare/rw.h>
 
 uint32_t GetTickCount();
 

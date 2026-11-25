@@ -4,6 +4,7 @@
 #include "Hooks/HookDomains.h"
 #include "Pickups.h"
 #include "RemoveBuilding.h"
+#include <spdlog/spdlog.h>
 
 void Hooks::install()
 {

@@ -1,6 +1,7 @@
 #include "../Deps/Bass/Bass.h"
 #include <opus.h>
 
+#include "../Game/Camera.h"
 #include "../Game/Common.h"
 #include "../Game/Game.h"
 

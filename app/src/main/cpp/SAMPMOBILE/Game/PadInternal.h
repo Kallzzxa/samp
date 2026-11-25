@@ -1,8 +1,12 @@
 #pragma once
 
 #include <cstdint>
-#include "Game.h"
 #include "Aimstuff.h"
+
+namespace sa {
+class CPed;
+}
+class CPlayerPed;
 
 // Shared internal state across Pad.cpp, TouchCombat.cpp, and VehicleControl.cpp.
 extern sa::CPed* dwCurPlayerActor;

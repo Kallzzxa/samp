@@ -1,12 +1,29 @@
-#include "../Client.h"
-#include "../Game/Game.h"
-#include "../Game/Util.h"
-#include "Enums/WidgetIDs.h"
-#include "../Net/NetGame.h"
+#include "LocalPlayer.h"
+#include "NetGame.h"
+#include "RemotePlayer.h"
+#include "VehiclePool.h"
+#include "ActorPool.h"
 #include "Proto/RpcOutbound.h"
 #include "Proto/Sync.h"
+#include "../Client.h"
+#include "../Settings.h"
+#include "../Game/Game.h"
+#include "../Game/Animation.h"
+#include "../Game/Camera.h"
+#include "../Game/Common.h"
+#include "../Game/Pad.h"
+#include "../Game/PlayerPed.h"
+#include "../Game/RadarColors.h"
+#include "../Game/Vehicle.h"
+#include "../Game/Util.h"
+#include "Enums/WidgetIDs.h"
 #include "../UI/UI.h"
+#include "../UI/SAMPWidgets/Spawn.h"
 #include "../Java/EditObject.h"
+#include <RakNet/RakClientInterface.h>
+#include <RakNet/PacketEnumerations.h>
+#include <RakNet/SAMP/SAMPRPC.h>
+#include <spdlog/spdlog.h>
 
 
 uint32_t dwEnterVehTimeElasped = -1;

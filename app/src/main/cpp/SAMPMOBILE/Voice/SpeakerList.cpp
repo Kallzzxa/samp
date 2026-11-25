@@ -5,6 +5,8 @@
 #include "../Game/Game.h"
 #include "../Game/PlayerPed.h"
 #include "../Net/NetGame.h"
+#include "../Net/RemotePlayer.h"
+#include <encoding.h>
 
 #include "SpeakerList.h"
 

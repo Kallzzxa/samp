@@ -1,10 +1,18 @@
-#include "../Client.h"
-#include "../Game/Game.h"
-#include "../Java/EditObject.h"
-#include "../UI/UI.h"
+#include "ObjectPool.h"
 #include "NetGame.h"
 #include "Proto/RpcOutbound.h"
-
+#include "../Client.h"
+#include "../Game/Game.h"
+#include "../Game/Aimstuff.h"
+#include "../Game/Camera.h"
+#include "../Game/Object.h"
+#include "../Game/Util.h"
+#include "../Java/EditObject.h"
+#include "../UI/UI.h"
+#include "../UI/UISettings.h"
+#include <RakNet/RakClientInterface.h>
+#include <RakNet/SAMP/SAMPRPC.h>
+#include <spdlog/spdlog.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>

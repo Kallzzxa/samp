@@ -1,7 +1,22 @@
 #include "Damage.h"
 #include "Game.h"
+#include "Common.h"
+#include "Object.h"
+#include "PlayerPed.h"
+#include "Vehicle.h"
+#include "Util.h"
+#include "Engine/PatchRegistry.h"
+#include "Engine/Symbols.h"
+#include "../Addr.h"
 #include "../Net/NetGame.h"
+#include "../Net/LocalPlayer.h"
+#include "../Net/RemotePlayer.h"
+#include "../Net/VehiclePool.h"
+#include "../Net/ActorPool.h"
 #include "../Client.h"
+#include <Memory.h>
+#include <SA.h>
+#include <spdlog/spdlog.h>
 
 #pragma pack(push, 1)
 struct CPedDamageResponseCalculator {

@@ -1,8 +1,11 @@
-#include "../../Client.h"
+#include "Keyboard.h"
 #include "../UI.h"
+#include "../UISettings.h"
+#include "../../Client.h"
 #include "../../Game/Game.h"
 #include "../../Java/Java.h"
 #include "../../Settings.h"
+#include <spdlog/spdlog.h>
 
 
 /* Keyboard */

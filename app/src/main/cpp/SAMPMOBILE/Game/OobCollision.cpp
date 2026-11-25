@@ -1,9 +1,15 @@
 #include "OobCollision.h"
 #include "Game.h"
 #include "Object.h"
+#include "Util.h"
+#include "Vehicle.h"
+#include "Engine/Symbols.h"
 #include "../Net/NetGame.h"
+#include "../Net/VehiclePool.h"
 #include "../Client.h"
 #include "Core/PtrNode.h"
+#include <SA.h>
+#include <spdlog/spdlog.h>
 #include <cmath>
 #include <unordered_map>
 #include <unordered_set>

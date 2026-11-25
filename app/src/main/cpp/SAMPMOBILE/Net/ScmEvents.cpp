@@ -1,7 +1,14 @@
 #include "ScmEvents.h"
+#include "NetGame.h"
+#include "LocalPlayer.h"
+#include "RemotePlayer.h"
+#include "VehiclePool.h"
 #include "../Client.h"
 #include "../Game/Game.h"
-#include "NetGame.h"
+#include "../Game/PlayerPed.h"
+#include "../Game/Vehicle.h"
+#include "../Game/Util.h"
+#include <spdlog/spdlog.h>
 
 #define EVENT_TYPE_PAINTJOB            1
 #define EVENT_TYPE_CARCOMPONENT        2

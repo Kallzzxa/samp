@@ -1,6 +1,9 @@
 #include "../Client.h"
 #include "../Game/Game.h"
+#include "../Game/Vehicle.h"
 #include "../Net/NetGame.h"
+#include "../Net/VehiclePool.h"
+#include <SA.h>
 
 #include "StreamAtVehicle.h"
 

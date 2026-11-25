@@ -1,9 +1,22 @@
+#include "PlayerPed.h"
+#include "Camera.h"
 #include "Patches.h"
 #include "Game.h"
+#include "Common.h"
+#include "Object.h"
+#include "Pad.h"
+#include "Scripting.h"
+#include "Util.h"
+#include "Vehicle.h"
 #include "PlayerContextScope.h"
+#include "Engine/PatchRegistry.h"
+#include "Engine/Symbols.h"
 #include "../Net/NetGame.h"
+#include "../Net/RemotePlayer.h"
+#include "../Net/VehiclePool.h"
 #include "../Client.h"
-#include "PlayerPed.h"
+#include <SA.h>
+#include <spdlog/spdlog.h>
 
 
 CPlayerPed::CPlayerPed()

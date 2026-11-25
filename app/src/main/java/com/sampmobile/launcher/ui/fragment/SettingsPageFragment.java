@@ -7,7 +7,6 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
@@ -76,10 +75,10 @@ import com.sampmobile.launcher.ui.GameDataImportDialog;
 import com.sampmobile.launcher.ui.widget.GtaOptionView;
 import com.sampmobile.launcher.ui.widget.GtaSaSliderView;
 import com.sampmobile.launcher.ui.widget.GtaTabStrip;
+import com.sampmobile.launcher.utils.ClientSettings;
 import com.sampmobile.launcher.utils.GameDataImporter;
 import com.sampmobile.launcher.utils.GameDataVerifier;
 import com.sampmobile.launcher.utils.LauncherThemeManager;
-import com.sampmobile.launcher.utils.Utils;
 
 @Obfuscate
 public class SettingsPageFragment extends Fragment implements LauncherThemeManager.ThemeListener {
@@ -185,32 +184,9 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private TextView tv_help_mods_body, tv_help_faq_body, tv_help_commands;
     private TextView tv_about_version_line, tv_about_summary;
 
-    SharedPreferences settings_prefs;
+    ClientSettings settings;
+    private boolean updatingWidgets = false;
     private RelativeLayout game_version_layout;
-
-    private static final String[] SAMP_VERSION_ITEMS = {"0.3.7", "0.3.7-R4", "0.3.7-R5", "0.3.DL-R1"};
-    private static final String[] CHARSET_ITEMS = {"GBK", "UTF-8", "BIG5", "CP1251"};
-    private static final String[] FPS_ITEMS = {"无限制", "30", "45", "60", "75", "90", "120", "144"};
-    private static final int[] FPS_VALUES = {0, 30, 45, 60, 75, 90, 120, 144};
-    private static final String[] ASPECT_RATIO_ITEMS = {"自动适配屏幕", "16:9 标准宽屏", "20:9 全面屏", "21:9 超宽屏", "16:10 平板比例", "4:3 经典比例"};
-    private static final String[] VISUAL_FX_ITEMS = {"低", "中", "高", "极高"};
-    private static final String[] SHADOWS_ITEMS = {"关闭", "经典", "高级实时"};
-    private static final String[] CAR_REFL_ITEMS = {"关闭", "低", "中", "高"};
-    private static final String[] TRAFFIC_ITEMS = {"稀少", "适中", "密集"};
-    private static final String[] PED_ZOOM_ITEMS = {"近距", "标准", "远距"};
-    private static final String[] VEH_CAM_ITEMS = {"低视角", "高视角"};
-    private static final String[] TARGETING_ITEMS = {"锁定辅助", "自由准星"};
-    private static final String[] STEERING_ITEMS = {"虚拟摇杆", "左右按键", "滑动转向"};
-    private static final String[] LAYOUT_ITEMS = {"经典布局", "双侧自适应"};
-    private static final String[] ACCEL_ITEMS = {"关闭", "轻度", "重度"};
-    private static final String[] RADIO_STATION_ITEMS = {
-            "关闭电台", "Playback FM", "K-Rose", "K-DST", "Bounce FM",
-            "SF-UR", "Radio Los Santos", "Radio X", "CSR 103.9",
-            "K-Jah West", "Master Sounds", "WCTR", "自定义音乐"
-    };
-    private static final String[] VOICE_MIC_MODE_ITEMS = {"按住说话", "点击切换"};
-    private static final String[] CROSSHAIR_STYLE_ITEMS = {"原版经典准星", "精简十字准星", "中心高亮圆点", "十字加圆点", "隐藏准星"};
-    private static final String[] FONT_FAMILY_ITEMS = {"默认中文黑体", "经典西文粗体", "自定义字体"};
 
     private static final int[] PANEL_LAYOUTS = {
             R.layout.settings_panel_multiplayer,
@@ -271,7 +247,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         View view = prebuiltView != null ? prebuiltView : new ViewBuilder(inflater, container).finish();
         prebuiltView = null;
         this.rootView = view;
-        settings_prefs = requireActivity().getSharedPreferences("samp_settings", Context.MODE_PRIVATE);
+        settings = ClientSettings.loadLauncher(requireContext());
 
         initViews(view);
         setupCategoryNavigation(view);
@@ -286,7 +262,8 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     }
 
     public void onPageShown() {
-        if (!isAdded() || settings_prefs == null) return;
+        if (!isAdded()) return;
+        settings = ClientSettings.reloadLauncher(requireContext());
         setWidgetsForSettings();
         if (currentCategory == CAT_GAMEDATA) {
             gameDataController.refreshVerification();
@@ -540,7 +517,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     }
 
     private void setupListeners(View view) {
-        et_settings_nickname.setText(settings_prefs.getString("nick_name", "samp_player"));
+        et_settings_nickname.setText(settings.getString("nick_name"));
         et_settings_nickname.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -550,6 +527,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
 
             @Override
             public void afterTextChanged(Editable s) {
+                if (updatingWidgets) return;
                 String nick = s.toString().trim();
                 if (!nick.isEmpty()) {
                     savePreference("nick_name", nick);
@@ -590,55 +568,29 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
             });
         }
 
-        bindIndexedDropdown(samp_version, SAMP_VERSION_ITEMS, "samp_version", 0);
+        bindStringOptionDropdown(samp_version, ClientSettings.SAMP_VERSIONS, "samp_version");
+        bindStringOptionDropdown(charset, ClientSettings.CHARSETS, "charset");
+        bindIntOptionDropdown(fps_limit, ClientSettings.FPS_LIMITS, "fps_limit", false);
 
-        ArrayAdapter<String> charsetAdapter = createDropdownAdapter(CHARSET_ITEMS);
-        charset.setAdapter(charsetAdapter);
-        charset.setThreshold(0);
-        charset.setText(settings_prefs.getString("charset", "GBK"), false);
-        charset.setOnClickListener(v -> charset.showDropDown());
-        charset.setOnItemClickListener((adapterView, v, i, l) -> savePreference("charset", CHARSET_ITEMS[i]));
-
-        // 帧率上限（默认 0 = 无限制）
-        ArrayAdapter<String> fpsAdapter = createDropdownAdapter(FPS_ITEMS);
-        fps_limit.setAdapter(fpsAdapter);
-        fps_limit.setThreshold(0);
-        fps_limit.setText(fpsValueToLabel(settings_prefs.getInt("fps_limit", 0)), false);
-        fps_limit.setOnClickListener(v -> fps_limit.showDropDown());
-        fps_limit.setOnItemClickListener((adapterView, v, i, l) -> {
-            if (i >= 0 && i < FPS_VALUES.length) {
-                savePreference("fps_limit", FPS_VALUES[i]);
-            }
-        });
-
-        savePreference("game_version", 0);
         if (game_version_layout != null) {
             game_version_layout.setVisibility(View.GONE);
         }
 
-        bindIndexedDropdown(dropdown_aspect_ratio, ASPECT_RATIO_ITEMS, "aspect_ratio", 0);
-        bindIndexedDropdownWithPresetSync(dropdown_visual_fx, VISUAL_FX_ITEMS, "gta_visual_fx", 2);
-        bindIndexedDropdownWithPresetSync(dropdown_shadows, SHADOWS_ITEMS, "gta_shadows", 1);
-        bindIndexedDropdownWithPresetSync(dropdown_car_reflections, CAR_REFL_ITEMS, "gta_car_reflections", 2);
-        bindIndexedDropdown(dropdown_traffic_mode, TRAFFIC_ITEMS, "gta_traffic_mode", 2);
-        bindIndexedDropdown(dropdown_veh_cam_height, VEH_CAM_ITEMS, "veh_cam_height", 1);
-        bindIndexedDropdown(dropdown_targeting_mode, TARGETING_ITEMS, "targeting_mode", 0);
-        bindIndexedDropdown(dropdown_touch_steering, STEERING_ITEMS, "touch_steering", 0);
-        bindIndexedDropdown(dropdown_touch_layout, LAYOUT_ITEMS, "touch_layout", 0);
-        bindIndexedDropdown(dropdown_accelerometer, ACCEL_ITEMS, "accelerometer", 0);
-        bindIndexedDropdown(dropdown_radio_station, RADIO_STATION_ITEMS, "radio_station", 0);
-        bindIndexedDropdown(dropdown_voice_mic_mode, VOICE_MIC_MODE_ITEMS, "voice_mic_mode", 0);
-        bindIndexedDropdown(dropdown_crosshair_style, CROSSHAIR_STYLE_ITEMS, "crosshair_style", 0);
-        bindIndexedDropdown(dropdown_font_family, FONT_FAMILY_ITEMS, "font_family", 0);
-
-        // 步战视角距离 1..3
-        ArrayAdapter<String> pedZoomAdapter = createDropdownAdapter(PED_ZOOM_ITEMS);
-        dropdown_ped_cam_zoom.setAdapter(pedZoomAdapter);
-        dropdown_ped_cam_zoom.setThreshold(0);
-        int zoomIdx = Math.min(Math.max(settings_prefs.getInt("ped_cam_zoom", 2) - 1, 0), PED_ZOOM_ITEMS.length - 1);
-        dropdown_ped_cam_zoom.setText(PED_ZOOM_ITEMS[zoomIdx], false);
-        dropdown_ped_cam_zoom.setOnClickListener(v -> dropdown_ped_cam_zoom.showDropDown());
-        dropdown_ped_cam_zoom.setOnItemClickListener((av, v, i, l) -> savePreference("ped_cam_zoom", i + 1));
+        bindStringOptionDropdown(dropdown_aspect_ratio, ClientSettings.ASPECT_RATIOS, "aspect_ratio");
+        bindIntOptionDropdown(dropdown_visual_fx, ClientSettings.VISUAL_FX_OPTIONS, "gta_visual_fx", true);
+        bindIntOptionDropdown(dropdown_shadows, ClientSettings.SHADOWS_OPTIONS, "gta_shadows", true);
+        bindIntOptionDropdown(dropdown_car_reflections, ClientSettings.CAR_REFL_OPTIONS, "gta_car_reflections", true);
+        bindIntOptionDropdown(dropdown_traffic_mode, ClientSettings.TRAFFIC_OPTIONS, "gta_traffic_mode", false);
+        bindIntOptionDropdown(dropdown_veh_cam_height, ClientSettings.VEH_CAM_OPTIONS, "veh_cam_height", false);
+        bindIntOptionDropdown(dropdown_ped_cam_zoom, ClientSettings.PED_ZOOM_OPTIONS, "ped_cam_zoom", false);
+        bindIntOptionDropdown(dropdown_targeting_mode, ClientSettings.TARGETING_OPTIONS, "targeting_mode", false);
+        bindIntOptionDropdown(dropdown_touch_steering, ClientSettings.STEERING_OPTIONS, "touch_steering", false);
+        bindIntOptionDropdown(dropdown_touch_layout, ClientSettings.LAYOUT_OPTIONS, "touch_layout", false);
+        bindIntOptionDropdown(dropdown_accelerometer, ClientSettings.ACCEL_OPTIONS, "accelerometer", false);
+        bindIntOptionDropdown(dropdown_radio_station, ClientSettings.RADIO_STATION_OPTIONS, "radio_station", false);
+        bindStringOptionDropdown(dropdown_voice_mic_mode, ClientSettings.VOICE_MIC_MODES, "voice_mic_mode");
+        bindStringOptionDropdown(dropdown_crosshair_style, ClientSettings.CROSSHAIR_STYLES, "crosshair_style");
+        bindStringOptionDropdown(dropdown_font_family, ClientSettings.FONT_FAMILIES, "font_family");
 
         // 四档画质预设
         btn_gfx_preset_low.setOnClickListener(v -> applyGraphicsPreset(0, 0, 0, 60, 40, "省电流畅"));
@@ -649,7 +601,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         // 自定义游戏按键位置 (Change Button Position)
         if (btn_open_hud_editor != null) {
             btn_open_hud_editor.setOnClickListener(v -> {
-                boolean next = !settings_prefs.getBoolean("open_hud_edit_on_start", false);
+                boolean next = !settings.getBoolean("open_hud_edit_on_start");
                 savePreference("open_hud_edit_on_start", next);
                 updateHudEditorButtonUI();
                 if (next) {
@@ -676,24 +628,27 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
 
         // 重置聊天框布局
         view.findViewById(R.id.btn_reset_chat_layout).setOnClickListener(v -> {
-            savePreference("font_size", 25.0f);
-            savePreference("chat_strings", 8);
-            savePreference("chat_posx", 100);
-            savePreference("chat_posy", 20);
-            savePreference("chat_sizex", 360);
-            savePreference("chat_sizey", 110);
+            Map<String, Object> batch = new HashMap<>();
+            batch.put("font_size", 25.0f);
+            batch.put("chat_strings", 8);
+            batch.put("chat_posx", 100);
+            batch.put("chat_posy", 20);
+            batch.put("chat_sizex", 360);
+            batch.put("chat_sizey", 110);
+            ClientSettings.updateBatchSync(requireContext(), batch);
+            settings = ClientSettings.loadLauncher(requireContext());
             setWidgetsForSettings();
             Toast.makeText(requireContext(), "聊天窗口布局与字号已恢复默认", Toast.LENGTH_SHORT).show();
         });
 
         // 截图模式切换
         btn_ss_mode_hud.setOnClickListener(v -> {
-            savePreference("screenshot_mode", 0);
+            savePreference("screenshot_mode", ClientSettings.SCREENSHOT_MODE_HUD);
             updateScreenshotModeUI();
             Toast.makeText(requireContext(), "已设为：含界面与聊天", Toast.LENGTH_SHORT).show();
         });
         btn_ss_mode_game.setOnClickListener(v -> {
-            savePreference("screenshot_mode", 1);
+            savePreference("screenshot_mode", ClientSettings.SCREENSHOT_MODE_GAME);
             updateScreenshotModeUI();
             Toast.makeText(requireContext(), "已设为：仅游戏画面", Toast.LENGTH_SHORT).show();
         });
@@ -716,11 +671,6 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         updateGraphicsPresetUI();
         updateScreenshotModeUI();
         updateHudEditorButtonUI();
-    }
-
-    private String fpsValueToLabel(int fps) {
-        if (fps <= 0) return "无限制";
-        return String.valueOf(fps);
     }
 
     ArrayAdapter<String> createDropdownAdapter(final String[] items) {
@@ -750,48 +700,57 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         };
     }
 
-    private void bindIndexedDropdown(GtaOptionView view, String[] items, String key, int defIdx) {
+    private void bindStringOptionDropdown(GtaOptionView view, ClientSettings.StringOption[] options, String key) {
         if (view == null) return;
-        ArrayAdapter<String> adapter = createDropdownAdapter(items);
+        ArrayAdapter<String> adapter = createDropdownAdapter(ClientSettings.labelsOf(options));
         view.setAdapter(adapter);
         view.setThreshold(0);
-        int idx = Math.min(Math.max(settings_prefs.getInt(key, defIdx), 0), items.length - 1);
-        view.setText(items[idx], false);
-        view.setOnClickListener(v -> view.showDropDown());
-        view.setOnItemClickListener((av, v, i, l) -> savePreference(key, i));
-    }
-
-    private void bindIndexedDropdownWithPresetSync(GtaOptionView view, String[] items, String key, int defIdx) {
-        if (view == null) return;
-        ArrayAdapter<String> adapter = createDropdownAdapter(items);
-        view.setAdapter(adapter);
-        view.setThreshold(0);
-        int idx = Math.min(Math.max(settings_prefs.getInt(key, defIdx), 0), items.length - 1);
-        view.setText(items[idx], false);
+        view.setText(ClientSettings.labelForStringOption(options, settings.getString(key)), false);
         view.setOnClickListener(v -> view.showDropDown());
         view.setOnItemClickListener((av, v, i, l) -> {
-            savePreference(key, i);
-            updateGraphicsPresetUI();
+            if (i >= 0 && i < options.length) {
+                savePreference(key, options[i].id);
+            }
+        });
+    }
+
+    private void bindIntOptionDropdown(GtaOptionView view, ClientSettings.IntOption[] options, String key, boolean syncPreset) {
+        if (view == null) return;
+        ArrayAdapter<String> adapter = createDropdownAdapter(ClientSettings.labelsOf(options));
+        view.setAdapter(adapter);
+        view.setThreshold(0);
+        view.setText(ClientSettings.labelForIntOption(options, settings.getInt(key)), false);
+        view.setOnClickListener(v -> view.showDropDown());
+        view.setOnItemClickListener((av, v, i, l) -> {
+            if (i >= 0 && i < options.length) {
+                savePreference(key, options[i].value);
+                if (syncPreset) {
+                    updateGraphicsPresetUI();
+                }
+            }
         });
     }
 
     private void applyGraphicsPreset(int vfx, int shadows, int carRefl, int res, int dd, String label) {
-        savePreference("gta_visual_fx", vfx);
-        savePreference("gta_shadows", shadows);
-        savePreference("gta_car_reflections", carRefl);
-        savePreference("gta_resolution", res);
-        savePreference("gta_draw_distance", dd);
+        Map<String, Object> batch = new HashMap<>();
+        batch.put("gta_visual_fx", vfx);
+        batch.put("gta_shadows", shadows);
+        batch.put("gta_car_reflections", carRefl);
+        batch.put("gta_resolution", res);
+        batch.put("gta_draw_distance", dd);
+        ClientSettings.updateBatchSync(requireContext(), batch);
+        settings = ClientSettings.loadLauncher(requireContext());
         setWidgetsForSettings();
         Toast.makeText(requireContext(), "已应用画质预设：" + label, Toast.LENGTH_SHORT).show();
     }
 
     private void updateGraphicsPresetUI() {
         if (btn_gfx_preset_low == null || !isAdded()) return;
-        int vfx = settings_prefs.getInt("gta_visual_fx", 2);
-        int shd = settings_prefs.getInt("gta_shadows", 1);
-        int refl = settings_prefs.getInt("gta_car_reflections", 2);
-        int res = settings_prefs.getInt("gta_resolution", 100);
-        int dd = settings_prefs.getInt("gta_draw_distance", 70);
+        int vfx = settings.getInt("gta_visual_fx");
+        int shd = settings.getInt("gta_shadows");
+        int refl = settings.getInt("gta_car_reflections");
+        int res = settings.getInt("gta_resolution");
+        int dd = settings.getInt("gta_draw_distance");
 
         int activePreset = -1;
         if (vfx == 0 && shd == 0 && refl == 0 && res == 60 && dd == 40) activePreset = 0;
@@ -814,7 +773,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
 
     private void updateHudEditorButtonUI() {
         if (btn_open_hud_editor == null || !isAdded()) return;
-        boolean scheduled = settings_prefs.getBoolean("open_hud_edit_on_start", false);
+        boolean scheduled = settings.getBoolean("open_hud_edit_on_start");
         int accentColor = LauncherThemeManager.getAccentColor(requireContext());
         btn_open_hud_editor.setBackgroundTintList(ColorStateList.valueOf(accentColor));
         btn_open_hud_editor.setText(scheduled
@@ -823,44 +782,44 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     }
 
     private void setupSliders() {
-        bindSlider(font_size_slider, font_size_value, "font_size", 25, true, "", false);
-        bindSlider(chatposx_slider, chatposx_value, "chat_posx", 100, false, "", false);
-        bindSlider(chatposy_slider, chatposy_value, "chat_posy", 20, false, "", false);
-        bindSlider(chatsizex_slider, chatsizex_value, "chat_sizex", 360, false, "", false);
-        bindSlider(chatsizey_slider, chatsizey_value, "chat_sizey", 110, false, "", false);
+        bindSlider(font_size_slider, font_size_value, "font_size", true, "", false);
+        bindSlider(chatposx_slider, chatposx_value, "chat_posx", false, "", false);
+        bindSlider(chatposy_slider, chatposy_value, "chat_posy", false, "", false);
+        bindSlider(chatsizex_slider, chatsizex_value, "chat_sizex", false, "", false);
+        bindSlider(chatsizey_slider, chatsizey_value, "chat_sizey", false, "", false);
 
-        bindSlider(slider_resolution, tv_resolution_val, "gta_resolution", 100, false, "%", true);
-        bindSlider(slider_draw_distance, tv_draw_distance_val, "gta_draw_distance", 70, false, "%", true);
-        bindSlider(slider_brightness, tv_brightness_val, "gta_brightness", 60, false, "%", false);
+        bindSlider(slider_resolution, tv_resolution_val, "gta_resolution", false, "%", true);
+        bindSlider(slider_draw_distance, tv_draw_distance_val, "gta_draw_distance", false, "%", true);
+        bindSlider(slider_brightness, tv_brightness_val, "gta_brightness", false, "%", false);
 
-        bindSlider(slider_cam_sens_x, tv_cam_sens_x_val, "cam_sens_x", 50, false, "%", false);
-        bindSlider(slider_cam_sens_y, tv_cam_sens_y_val, "cam_sens_y", 50, false, "%", false);
-        bindSlider(slider_cam_sens_foot, tv_cam_sens_foot_val, "cam_sens_foot", 100, false, "%", false);
-        bindSlider(slider_cam_sens_veh, tv_cam_sens_veh_val, "cam_sens_veh", 100, false, "%", false);
-        bindSlider(slider_cam_sens_aim, tv_cam_sens_aim_val, "cam_sens_aim", 70, false, "%", false);
+        bindSlider(slider_cam_sens_x, tv_cam_sens_x_val, "cam_sens_x", false, "%", false);
+        bindSlider(slider_cam_sens_y, tv_cam_sens_y_val, "cam_sens_y", false, "%", false);
+        bindSlider(slider_cam_sens_foot, tv_cam_sens_foot_val, "cam_sens_foot", false, "%", false);
+        bindSlider(slider_cam_sens_veh, tv_cam_sens_veh_val, "cam_sens_veh", false, "%", false);
+        bindSlider(slider_cam_sens_aim, tv_cam_sens_aim_val, "cam_sens_aim", false, "%", false);
 
-        bindSlider(slider_joystick_size, tv_joystick_size_val, "joystick_size", 100, false, "%", false);
-        bindSlider(slider_shoot_threshold, tv_shoot_threshold_val, "shoot_threshold", 50, false, "%", false);
-        bindSlider(slider_analog_sens, tv_analog_sens_val, "analog_sensitivity", 50, false, "%", false);
-        bindSlider(slider_flick_sens, tv_flick_sens_val, "flick_sensitivity", 50, false, "%", false);
+        bindSlider(slider_joystick_size, tv_joystick_size_val, "joystick_size", false, "%", false);
+        bindSlider(slider_shoot_threshold, tv_shoot_threshold_val, "shoot_threshold", false, "%", false);
+        bindSlider(slider_analog_sens, tv_analog_sens_val, "analog_sensitivity", false, "%", false);
+        bindSlider(slider_flick_sens, tv_flick_sens_val, "flick_sensitivity", false, "%", false);
 
-        bindSlider(slider_sfx_volume, tv_sfx_volume_val, "sfx_volume", 80, false, "%", false);
-        bindSlider(slider_music_volume, tv_music_volume_val, "music_volume", 80, false, "%", false);
-        bindSlider(slider_voice_volume, tv_voice_volume_val, "voice_volume", 100, false, "%", false);
-        bindSlider(slider_voice_mic_volume, tv_voice_mic_volume_val, "voice_mic_volume", 75, false, "%", false);
-        bindSlider(slider_voice_btn_size, tv_voice_btn_size_val, "voice_btn_size", 100, false, "%", false);
+        bindSlider(slider_sfx_volume, tv_sfx_volume_val, "sfx_volume", false, "%", false);
+        bindSlider(slider_music_volume, tv_music_volume_val, "music_volume", false, "%", false);
+        bindSlider(slider_voice_volume, tv_voice_volume_val, "voice_volume", false, "%", false);
+        bindSlider(slider_voice_mic_volume, tv_voice_mic_volume_val, "voice_mic_volume", false, "%", false);
+        bindSlider(slider_voice_btn_size, tv_voice_btn_size_val, "voice_btn_size", false, "%", false);
 
-        bindSlider(slider_nametag_size, tv_nametag_size_val, "nametag_size", 100, false, "%", false);
-        bindSlider(slider_textlabel_size, tv_textlabel_size_val, "textlabel_size", 100, false, "%", false);
+        bindSlider(slider_nametag_size, tv_nametag_size_val, "nametag_size", false, "%", false);
+        bindSlider(slider_textlabel_size, tv_textlabel_size_val, "textlabel_size", false, "%", false);
     }
 
-    private void bindSlider(GtaSaSliderView slider, TextView valueView, String key, int def,
+    private void bindSlider(GtaSaSliderView slider, TextView valueView, String key,
                             boolean asFloat, String suffix, boolean syncPreset) {
         if (slider == null || valueView == null) return;
         slider.clearOnChangeListeners();
         slider.addOnChangeListener((s, value, fromUser) -> {
             valueView.setText(Math.round(value) + suffix);
-            if (fromUser) {
+            if (fromUser && !updatingWidgets) {
                 if (asFloat) savePreference(key, value);
                 else savePreference(key, Math.round(value));
                 if (syncPreset) {
@@ -868,12 +827,12 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
                 }
             }
         });
-        syncSlider(slider, valueView, key, def, asFloat, suffix);
+        syncSlider(slider, valueView, key, asFloat, suffix);
     }
 
-    private void syncSlider(GtaSaSliderView slider, TextView valueView, String key, int def, boolean asFloat, String suffix) {
+    private void syncSlider(GtaSaSliderView slider, TextView valueView, String key, boolean asFloat, String suffix) {
         if (slider == null || valueView == null) return;
-        float current = asFloat ? settings_prefs.getFloat(key, def) : settings_prefs.getInt(key, def);
+        float current = asFloat ? settings.getFloat(key) : settings.getInt(key);
         float clamped = Math.min(Math.max(current, slider.getValueFrom()), slider.getValueTo());
         float step = slider.getStepSize();
         if (step > 0) {
@@ -882,34 +841,6 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         }
         slider.setValue(clamped);
         valueView.setText(Math.round(clamped) + suffix);
-    }
-
-    private boolean getDefaultBool(String key) {
-        switch (key) {
-            case "system_keyboard":
-            case "head_move":
-            case "auto_climb":
-            case "dl_custom_models":
-            case "first_person_look":
-            case "vibration":
-            case "km_enabled":
-            case "radio_autotune":
-            case "voice_mic_enable":
-            case "voice_filter":
-            case "voice_speaker_list":
-            case "show_gta_hud":
-            case "show_radar":
-            case "radar_tap_map":
-            case "show_death_window":
-            case "show_nametags":
-            case "show_button_panel":
-            case "show_screenshot_btn":
-            case "gta_subtitles":
-            case "chat_shadow":
-                return true;
-            default:
-                return false;
-        }
     }
 
     private Map<CompoundButton, String> buildSwitchMap() {
@@ -960,16 +891,21 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private void setupSwitch(CompoundButton switchButton, String key) {
         if (switchButton == null) return;
         switchButton.setOnCheckedChangeListener(null);
-        switchButton.setChecked(settings_prefs.getBoolean(key, getDefaultBool(key)));
-        switchButton.setOnCheckedChangeListener((buttonView, isChecked) -> savePreference(key, isChecked));
+        switchButton.setChecked(settings.getBoolean(key));
+        switchButton.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (!updatingWidgets) {
+                savePreference(key, isChecked);
+            }
+        });
     }
 
     private void setupSwitchWithWarning(CompoundButton switchButton) {
         if (switchButton == null) return;
         switchButton.setOnCheckedChangeListener(null);
-        switchButton.setChecked(settings_prefs.getBoolean("modify_files", false));
+        switchButton.setChecked(settings.getBoolean("modify_files"));
 
         switchButton.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (updatingWidgets) return;
             if (isChecked && buttonView.isPressed()) {
                 showAlertDialog("开启此选项后，启动器将跳过原始文件完整性检查。若因手工替换数据包导致游戏异常，请关闭此选项。",
                         (dialog, which) -> dialog.dismiss(), (dialog, which) -> {
@@ -983,7 +919,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
 
     private void setupRestoreButton() {
         restore_button.setOnClickListener(v -> showAlertDialog("确定要将所有联机、画面、镜头、操作、音频与界面设置恢复为默认值吗？", (dialog, which) -> {
-            Utils.restoreSettings(requireContext());
+            settings = ClientSettings.resetDefaults(requireContext());
             LauncherThemeManager.setHue(requireContext(), LauncherThemeManager.DEFAULT_HUE);
             setWidgetsForSettings();
             Toast.makeText(requireContext(), "已恢复全部默认设置", Toast.LENGTH_SHORT).show();
@@ -992,16 +928,12 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     }
 
     private void setupChatButtons() {
-        chat_minus.setOnClickListener(v -> {
-            adjustChatStrings(-1);
-        });
-        chat_plus.setOnClickListener(v -> {
-            adjustChatStrings(1);
-        });
+        chat_minus.setOnClickListener(v -> adjustChatStrings(-1));
+        chat_plus.setOnClickListener(v -> adjustChatStrings(1));
     }
 
     private void adjustChatStrings(int delta) {
-        int currentValue = settings_prefs.getInt("chat_strings", 8);
+        int currentValue = settings.getInt("chat_strings");
         int newValue = currentValue + delta;
         if (newValue < 5 || newValue > 20) return;
 
@@ -1010,89 +942,98 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     }
 
     private void setWidgetsForSettings() {
-        et_settings_nickname.setText(settings_prefs.getString("nick_name", "samp_player"));
+        updatingWidgets = true;
+        try {
+            et_settings_nickname.setText(settings.getString("nick_name"));
 
-        for (Map.Entry<CompoundButton, String> entry : buildSwitchMap().entrySet()) {
-            if (entry.getKey() != null) {
-                entry.getKey().setChecked(settings_prefs.getBoolean(entry.getValue(), getDefaultBool(entry.getValue())));
+            for (Map.Entry<CompoundButton, String> entry : buildSwitchMap().entrySet()) {
+                if (entry.getKey() != null) {
+                    entry.getKey().setChecked(settings.getBoolean(entry.getValue()));
+                }
             }
+            modify_files.setChecked(settings.getBoolean("modify_files"));
+            chat_strings.setText(String.valueOf(settings.getInt("chat_strings")));
+
+            int hue = LauncherThemeManager.getHue(requireContext());
+            if (slider_theme_hue != null) slider_theme_hue.setValue(hue);
+            if (tv_theme_hue_val != null) tv_theme_hue_val.setText(hue + "°");
+
+            samp_version.setText(ClientSettings.labelForStringOption(ClientSettings.SAMP_VERSIONS, settings.getString("samp_version")), false);
+            charset.setText(ClientSettings.labelForStringOption(ClientSettings.CHARSETS, settings.getString("charset")), false);
+            fps_limit.setText(ClientSettings.labelForIntOption(ClientSettings.FPS_LIMITS, settings.getInt("fps_limit")), false);
+
+            setStringDropdownText(dropdown_aspect_ratio, ClientSettings.ASPECT_RATIOS, "aspect_ratio");
+            setIntDropdownText(dropdown_visual_fx, ClientSettings.VISUAL_FX_OPTIONS, "gta_visual_fx");
+            setIntDropdownText(dropdown_shadows, ClientSettings.SHADOWS_OPTIONS, "gta_shadows");
+            setIntDropdownText(dropdown_car_reflections, ClientSettings.CAR_REFL_OPTIONS, "gta_car_reflections");
+            setIntDropdownText(dropdown_traffic_mode, ClientSettings.TRAFFIC_OPTIONS, "gta_traffic_mode");
+            setIntDropdownText(dropdown_ped_cam_zoom, ClientSettings.PED_ZOOM_OPTIONS, "ped_cam_zoom");
+            setIntDropdownText(dropdown_veh_cam_height, ClientSettings.VEH_CAM_OPTIONS, "veh_cam_height");
+            setIntDropdownText(dropdown_targeting_mode, ClientSettings.TARGETING_OPTIONS, "targeting_mode");
+            setIntDropdownText(dropdown_touch_steering, ClientSettings.STEERING_OPTIONS, "touch_steering");
+            setIntDropdownText(dropdown_touch_layout, ClientSettings.LAYOUT_OPTIONS, "touch_layout");
+            setIntDropdownText(dropdown_accelerometer, ClientSettings.ACCEL_OPTIONS, "accelerometer");
+            setIntDropdownText(dropdown_radio_station, ClientSettings.RADIO_STATION_OPTIONS, "radio_station");
+            setStringDropdownText(dropdown_voice_mic_mode, ClientSettings.VOICE_MIC_MODES, "voice_mic_mode");
+            setStringDropdownText(dropdown_crosshair_style, ClientSettings.CROSSHAIR_STYLES, "crosshair_style");
+            setStringDropdownText(dropdown_font_family, ClientSettings.FONT_FAMILIES, "font_family");
+
+            syncSlider(font_size_slider, font_size_value, "font_size", true, "");
+            syncSlider(chatposx_slider, chatposx_value, "chat_posx", false, "");
+            syncSlider(chatposy_slider, chatposy_value, "chat_posy", false, "");
+            syncSlider(chatsizex_slider, chatsizex_value, "chat_sizex", false, "");
+            syncSlider(chatsizey_slider, chatsizey_value, "chat_sizey", false, "");
+
+            syncSlider(slider_resolution, tv_resolution_val, "gta_resolution", false, "%");
+            syncSlider(slider_draw_distance, tv_draw_distance_val, "gta_draw_distance", false, "%");
+            syncSlider(slider_brightness, tv_brightness_val, "gta_brightness", false, "%");
+
+            syncSlider(slider_cam_sens_x, tv_cam_sens_x_val, "cam_sens_x", false, "%");
+            syncSlider(slider_cam_sens_y, tv_cam_sens_y_val, "cam_sens_y", false, "%");
+            syncSlider(slider_cam_sens_foot, tv_cam_sens_foot_val, "cam_sens_foot", false, "%");
+            syncSlider(slider_cam_sens_veh, tv_cam_sens_veh_val, "cam_sens_veh", false, "%");
+            syncSlider(slider_cam_sens_aim, tv_cam_sens_aim_val, "cam_sens_aim", false, "%");
+
+            syncSlider(slider_joystick_size, tv_joystick_size_val, "joystick_size", false, "%");
+            syncSlider(slider_shoot_threshold, tv_shoot_threshold_val, "shoot_threshold", false, "%");
+            syncSlider(slider_analog_sens, tv_analog_sens_val, "analog_sensitivity", false, "%");
+            syncSlider(slider_flick_sens, tv_flick_sens_val, "flick_sensitivity", false, "%");
+
+            syncSlider(slider_sfx_volume, tv_sfx_volume_val, "sfx_volume", false, "%");
+            syncSlider(slider_music_volume, tv_music_volume_val, "music_volume", false, "%");
+            syncSlider(slider_voice_volume, tv_voice_volume_val, "voice_volume", false, "%");
+            syncSlider(slider_voice_mic_volume, tv_voice_mic_volume_val, "voice_mic_volume", false, "%");
+            syncSlider(slider_voice_btn_size, tv_voice_btn_size_val, "voice_btn_size", false, "%");
+
+            syncSlider(slider_nametag_size, tv_nametag_size_val, "nametag_size", false, "%");
+            syncSlider(slider_textlabel_size, tv_textlabel_size_val, "textlabel_size", false, "%");
+
+            updateGraphicsPresetUI();
+            updateScreenshotModeUI();
+            updateHudEditorButtonUI();
+        } finally {
+            updatingWidgets = false;
         }
-        modify_files.setChecked(settings_prefs.getBoolean("modify_files", false));
-        chat_strings.setText(String.valueOf(settings_prefs.getInt("chat_strings", 8)));
-
-        int hue = LauncherThemeManager.getHue(requireContext());
-        if (slider_theme_hue != null) slider_theme_hue.setValue(hue);
-        if (tv_theme_hue_val != null) tv_theme_hue_val.setText(hue + "°");
-
-        samp_version.setText(SAMP_VERSION_ITEMS[Math.min(Math.max(settings_prefs.getInt("samp_version", 0), 0), SAMP_VERSION_ITEMS.length - 1)], false);
-        charset.setText(settings_prefs.getString("charset", "GBK"), false);
-        fps_limit.setText(fpsValueToLabel(settings_prefs.getInt("fps_limit", 0)), false);
-
-        setDropdownIdxText(dropdown_aspect_ratio, ASPECT_RATIO_ITEMS, "aspect_ratio", 0);
-        setDropdownIdxText(dropdown_visual_fx, VISUAL_FX_ITEMS, "gta_visual_fx", 2);
-        setDropdownIdxText(dropdown_shadows, SHADOWS_ITEMS, "gta_shadows", 1);
-        setDropdownIdxText(dropdown_car_reflections, CAR_REFL_ITEMS, "gta_car_reflections", 2);
-        setDropdownIdxText(dropdown_traffic_mode, TRAFFIC_ITEMS, "gta_traffic_mode", 2);
-        dropdown_ped_cam_zoom.setText(PED_ZOOM_ITEMS[Math.min(Math.max(settings_prefs.getInt("ped_cam_zoom", 2) - 1, 0), PED_ZOOM_ITEMS.length - 1)], false);
-        setDropdownIdxText(dropdown_veh_cam_height, VEH_CAM_ITEMS, "veh_cam_height", 1);
-        setDropdownIdxText(dropdown_targeting_mode, TARGETING_ITEMS, "targeting_mode", 0);
-        setDropdownIdxText(dropdown_touch_steering, STEERING_ITEMS, "touch_steering", 0);
-        setDropdownIdxText(dropdown_touch_layout, LAYOUT_ITEMS, "touch_layout", 0);
-        setDropdownIdxText(dropdown_accelerometer, ACCEL_ITEMS, "accelerometer", 0);
-        setDropdownIdxText(dropdown_radio_station, RADIO_STATION_ITEMS, "radio_station", 0);
-        setDropdownIdxText(dropdown_voice_mic_mode, VOICE_MIC_MODE_ITEMS, "voice_mic_mode", 0);
-        setDropdownIdxText(dropdown_crosshair_style, CROSSHAIR_STYLE_ITEMS, "crosshair_style", 0);
-        setDropdownIdxText(dropdown_font_family, FONT_FAMILY_ITEMS, "font_family", 0);
-
-        syncSlider(font_size_slider, font_size_value, "font_size", 25, true, "");
-        syncSlider(chatposx_slider, chatposx_value, "chat_posx", 100, false, "");
-        syncSlider(chatposy_slider, chatposy_value, "chat_posy", 20, false, "");
-        syncSlider(chatsizex_slider, chatsizex_value, "chat_sizex", 360, false, "");
-        syncSlider(chatsizey_slider, chatsizey_value, "chat_sizey", 110, false, "");
-
-        syncSlider(slider_resolution, tv_resolution_val, "gta_resolution", 100, false, "%");
-        syncSlider(slider_draw_distance, tv_draw_distance_val, "gta_draw_distance", 70, false, "%");
-        syncSlider(slider_brightness, tv_brightness_val, "gta_brightness", 60, false, "%");
-
-        syncSlider(slider_cam_sens_x, tv_cam_sens_x_val, "cam_sens_x", 50, false, "%");
-        syncSlider(slider_cam_sens_y, tv_cam_sens_y_val, "cam_sens_y", 50, false, "%");
-        syncSlider(slider_cam_sens_foot, tv_cam_sens_foot_val, "cam_sens_foot", 100, false, "%");
-        syncSlider(slider_cam_sens_veh, tv_cam_sens_veh_val, "cam_sens_veh", 100, false, "%");
-        syncSlider(slider_cam_sens_aim, tv_cam_sens_aim_val, "cam_sens_aim", 70, false, "%");
-
-        syncSlider(slider_joystick_size, tv_joystick_size_val, "joystick_size", 100, false, "%");
-        syncSlider(slider_shoot_threshold, tv_shoot_threshold_val, "shoot_threshold", 50, false, "%");
-        syncSlider(slider_analog_sens, tv_analog_sens_val, "analog_sensitivity", 50, false, "%");
-        syncSlider(slider_flick_sens, tv_flick_sens_val, "flick_sensitivity", 50, false, "%");
-
-        syncSlider(slider_sfx_volume, tv_sfx_volume_val, "sfx_volume", 80, false, "%");
-        syncSlider(slider_music_volume, tv_music_volume_val, "music_volume", 80, false, "%");
-        syncSlider(slider_voice_volume, tv_voice_volume_val, "voice_volume", 100, false, "%");
-        syncSlider(slider_voice_mic_volume, tv_voice_mic_volume_val, "voice_mic_volume", 75, false, "%");
-        syncSlider(slider_voice_btn_size, tv_voice_btn_size_val, "voice_btn_size", 100, false, "%");
-
-        syncSlider(slider_nametag_size, tv_nametag_size_val, "nametag_size", 100, false, "%");
-        syncSlider(slider_textlabel_size, tv_textlabel_size_val, "textlabel_size", 100, false, "%");
-
-        updateGraphicsPresetUI();
-        updateScreenshotModeUI();
-        updateHudEditorButtonUI();
     }
 
-    private void setDropdownIdxText(GtaOptionView view, String[] items, String key, int defIdx) {
+    private void setStringDropdownText(GtaOptionView view, ClientSettings.StringOption[] options, String key) {
         if (view == null) return;
-        int idx = Math.min(Math.max(settings_prefs.getInt(key, defIdx), 0), items.length - 1);
-        view.setText(items[idx], false);
+        view.setText(ClientSettings.labelForStringOption(options, settings.getString(key)), false);
+    }
+
+    private void setIntDropdownText(GtaOptionView view, ClientSettings.IntOption[] options, String key) {
+        if (view == null) return;
+        view.setText(ClientSettings.labelForIntOption(options, settings.getInt(key)), false);
     }
 
     private void updateScreenshotModeUI() {
         if (btn_ss_mode_hud == null || btn_ss_mode_game == null || !isAdded()) return;
-        int mode = settings_prefs.getInt("screenshot_mode", 0);
+        String mode = settings.getString("screenshot_mode");
         int accentColor = LauncherThemeManager.getAccentColor(requireContext());
         int colorOnAccent = requireContext().getResources().getColor(R.color.launcher_on_accent);
         int colorText = requireContext().getResources().getColor(R.color.launcher_text);
 
-        boolean isHud = (mode == 0);
+        boolean isHud = !ClientSettings.SCREENSHOT_MODE_GAME.equalsIgnoreCase(mode);
         btn_ss_mode_hud.setBackgroundResource(isHud ? R.drawable.launcher_btn_primary : R.drawable.launcher_btn_outline);
         btn_ss_mode_hud.setBackgroundTintList(isHud ? ColorStateList.valueOf(accentColor) : null);
         btn_ss_mode_hud.setTextColor(isHud ? colorOnAccent : colorText);
@@ -1186,16 +1127,8 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     }
 
     private void savePreference(String key, Object value) {
-        SharedPreferences.Editor editor = settings_prefs.edit();
-
-        if (value instanceof Integer) editor.putInt(key, (Integer) value);
-        else if (value instanceof Boolean) editor.putBoolean(key, (Boolean) value);
-        else if (value instanceof Float) editor.putFloat(key, (Float) value);
-        else if (value instanceof String) editor.putString(key, (String) value);
-
-        editor.apply();
-        final Context appCtx = requireContext().getApplicationContext();
-        ioExecutor.execute(() -> Utils.saveSettings(appCtx));
+        settings.put(key, value);
+        ClientSettings.setAsync(requireContext(), key, value);
     }
 
     void showAlertDialog(String message, DialogInterface.OnClickListener positiveListener, DialogInterface.OnClickListener negativeListener) {

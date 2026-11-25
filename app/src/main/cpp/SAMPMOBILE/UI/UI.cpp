@@ -1,14 +1,32 @@
-#include "../Client.h"
-#include "../Game/Game.h"
-#include "../Game/CleoEngine.h"
-#include "../Net/NetGame.h"
 #include "UI.h"
-#include "../Java/Java.h"
-#include "../Java/EditObject.h"
+#include "UISettings.h"
+#include "SAMPWidgets/PlayerTags.h"
+#include "SAMPWidgets/Keyboard.h"
+#include "SAMPWidgets/SplashScreen.h"
+#include "SAMPWidgets/Chat.h"
+#include "SAMPWidgets/Spawn.h"
+#include "SAMPWidgets/ButtonPanel.h"
+#include "SAMPWidgets/VoiceButton.h"
+#include "SAMPWidgets/Scoreboard.h"
+#include "SAMPWidgets/DebugLabels.h"
+#include "SAMPWidgets/DeathWindow.h"
+#include "SAMPWidgets/NetStats.h"
+#include "../Client.h"
+#include "../ClientSubsystems.h"
+#include "../InputArbiter.h"
+#include "../Settings.h"
+#include "../Game/Game.h"
+#include "../Game/PlayerPed.h"
+#include "../Net/NetGame.h"
+#include "../Net/MenuPool.h"
 #include "../Net/PlayerBubblePool.h"
-#include "../UI/SAMPWidgets/VoiceButton.h"
-#include "../Voice/SpeakerList.h"
-#include "../Voice/include/util/Render.h"
+#include "../Net/TextDrawPool.h"
+#include "../Net/TextLabelPool.h"
+
+float UI::GetFontSize()
+{
+	return UISettings::fontSize();
+}
 
 
 UI::UI(const ImVec2& display_size, const std::string& fonts_path)
@@ -197,28 +215,7 @@ void UI::processPendingTouchEvents()
 
 void UI::updateTouchSnapshot()
 {
-	const bool scoreboardOpen = (m_scoreboard && m_scoreboard->visible());
-	if (pGame) {
-		pGame->SetHudHidden(Game::HUD_HIDE_SCOREBOARD, scoreboardOpen);
-	}
-
-	const bool keyboardOpen = (m_keyboard && m_keyboard->visible());
-	const bool modalOpen = keyboardOpen || scoreboardOpen || Java::isJavaKeyboardVisible();
-	m_snapModalOpen.store(modalOpen, std::memory_order_release);
-
-	bool hasNativeModal = keyboardOpen || scoreboardOpen || EditObject::m_visible.load(std::memory_order_acquire);
-	if (!hasNativeModal && pNetGame) {
-		if (CMenuPool* pMenuPool = pNetGame->GetMenuPool(); pMenuPool && pMenuPool->IsVisible()) {
-			hasNativeModal = true;
-		}
-		else if (CObjectPool* pObjPool = pNetGame->GetObjectPool(); pObjPool && pObjPool->IsSelectState()) {
-			hasNativeModal = true;
-		}
-		else if (CTextDrawPool* pTdPool = pNetGame->GetTextDrawPool(); pTdPool && pTdPool->GetState()) {
-			hasNativeModal = true;
-		}
-	}
-	Java::setNativeModalActive(hasNativeModal);
+	InputArbiter::publishGameMainState();
 
 	std::lock_guard<std::mutex> lock(m_touchMutex);
 	m_snapDisplaySize = size();
@@ -300,28 +297,12 @@ void UI::drawList()
 		}
 	}
 
-	if (Settings::voice()) {
-		if (pNetGame) {
-			if (!Settings::voiceSpeakerList() || scoreboard()->visible() || keyboard()->visible()) {
-				SpeakerList::Hide();
-			}
-			else {
-				SpeakerList::Show();
-			}
-
-			for (const auto& renderCallback : Render::renderCallbacks) {
-				if (renderCallback != nullptr) {
-					renderCallback();
-				}
-			}
-		}
-	}
+	const bool hideVoiceSpeakers = (scoreboard() && scoreboard()->visible()) || (keyboard() && keyboard()->visible());
+	ClientSubsystems::onUiRender(renderer(), displaySize().x, displaySize().y, pNetGame != nullptr, hideVoiceSpeakers);
 
 	if (m_buttonPanel && !m_buttonPanel->visible()) {
 		m_buttonPanel->applyHeldKeys();
 	}
-
-	CleoEngine::renderMenu(renderer(), displaySize());
 
 	draw(renderer());
 }
