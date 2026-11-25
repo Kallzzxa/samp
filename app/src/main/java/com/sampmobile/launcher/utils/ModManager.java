@@ -640,6 +640,10 @@ public class ModManager {
         JPatchConfigManager.applyJPatchSampSafePreset(ctx);
     }
 
+    public static void enforceJPatchTouchSafety(Context ctx) {
+        JPatchConfigManager.enforceTouchSafety(ctx);
+    }
+
     // ══════════ MonetLoader (.lua) & CLEO (.csa/.csi/.cs/.fxt) Scripts ══════════
 
     public static boolean ensureMonetLibsInstalled(Context ctx, boolean force) {

@@ -68,8 +68,33 @@ bool IsLocalActivePedMovementLocked()
 
 // CTaskSimplePlayerOnFoot::m_nTimer offset (2000ms idle fighter timeout)
 static constexpr uintptr_t kTaskPlayerOnFootTimerOffset = VER_x32 ? 40 : 56;
+// Disassembly-verified CTaskSimpleUseGun / CTaskSimpleDuck offsets (arm32 / arm64)
+static constexpr uintptr_t kTaskUseGunMoveCmdOff        = VER_x32 ? 0x14 : 0x1C;
+static constexpr uintptr_t kTaskUseGunWeaponInfoOff     = VER_x32 ? 0x30 : 0x48;
+static constexpr uintptr_t kTaskDuckMoveAnimOff         = VER_x32 ? 0x14 : 0x20;
+static constexpr uintptr_t kAnimAssocAnimIdOff          = VER_x32 ? 0x2C : 0x44;
 
 static std::atomic<bool> g_suppressPedUpdatePosition{false};
+static std::atomic<bool> g_bHardwareCrouchEdge{false};
+static std::atomic<bool> g_bHardwareCrouchHeld{false};
+static bool g_suppressLocalDuckStandUp = false;
+
+void NotifyLocalHardwareCrouchKey(bool isDown)
+{
+	const bool wasDown = g_bHardwareCrouchHeld.exchange(isDown, std::memory_order_acq_rel);
+	if (isDown && !wasDown) {
+		g_bHardwareCrouchEdge.store(true, std::memory_order_release);
+	}
+}
+
+static bool IsDuckTaskRolling(uintptr_t taskDuck)
+{
+	if (!taskDuck) return false;
+	const uintptr_t moveAnim = *reinterpret_cast<const uintptr_t*>(taskDuck + kTaskDuckMoveAnimOff);
+	if (!moveAnim) return false;
+	const int16_t animId = *reinterpret_cast<const int16_t*>(moveAnim + kAnimAssocAnimIdOff);
+	return (animId | 2) == 0x3B; // CROUCH_ROLL_L (0x39) or CROUCH_ROLL_R (0x3B)
+}
 
 struct ScopedAtomicBool {
 	std::atomic<bool>& flag;
@@ -213,6 +238,33 @@ DECL_HOOK(int16_t, CPad_GetPedWalkUpDown, uintptr_t _this)
 	}
 }
 
+// Fix GTA:SA high-FPS (>45 FPS) aim-walk deadlock:
+// CTaskSimpleUseGun::ControlGunMove slews m_vecMoveCommand by at most
+// (0.07f * CTimer::ms_fTimeStep) per frame (~0.058 at 60 FPS, ~0.029 at 120 FPS).
+// On the same frame, CTaskSimpleUseGun::SetMoveAnim checks (|x| + |y|) < 0.10f
+// and resets m_vecMoveCommand back to (0, 0), trapping aiming peds at zero speed
+// forever when starting from rest or reversing strafe direction (both touch & WASD).
+// When the caller commands active movement (|req.x| + |req.y| >= 0.10f) and the
+// slewed result lands below the 0.10f threshold, nudge it cleanly past 0.105f
+// along the commanded vector so SetMoveAnim enters GUNMOVE on frame 1.
+DECL_HOOK(int, CTaskSimpleUseGun_ControlGunMove, uintptr_t _this, sa::CVector2D* pMove)
+{
+	const int ret = CTaskSimpleUseGun_ControlGunMove(_this, pMove);
+	if (_this && pMove) {
+		const float reqL1 = std::fabs(pMove->x) + std::fabs(pMove->y);
+		if (reqL1 >= 0.10f) {
+			auto* cmd = reinterpret_cast<sa::CVector2D*>(_this + kTaskUseGunMoveCmdOff);
+			const float curL1 = std::fabs(cmd->x) + std::fabs(cmd->y);
+			if (curL1 < 0.105f) {
+				const float scale = std::min(1.0f, 0.105f / reqL1);
+				cmd->x = pMove->x * scale;
+				cmd->y = pMove->y * scale;
+			}
+		}
+	}
+	return ret;
+}
+
 // Fix GTA:SA CTaskSimpleUseGun::StartAnim bug when aiming starts while already
 // moving: for non-MOVEFIRE weapons (Rifle 33, Sniper 34, RPG 35/36, Flamethrower 37,
 // Minigun 38, Camera 43, or non-Hitman skill) and crouch-moving, StartAnim returns
@@ -237,12 +289,30 @@ DECL_HOOK(void, CTaskSimpleUseGun_StartAnim, uintptr_t _this, sa::CPed* pPed)
 }
 
 // Enable movement while scoped in 1st-person weapon modes (Sniper=34, RPG=35, HS-RPG=36, Camera=43):
-// Stock GTA:SA Mobile zeroes vecMove2D in PlayerControlZeldaWeapon when (weaponInfo->m_nFlags & 0x04)
-// and !IsPlayerUse2PlayerControls, locking local movement and causing remote scoped players to slide.
+// Stock GTA:SA Mobile calls ControlGunMove({0, 0}) in PlayerControlZeldaWeapon when
+// (weaponInfo->m_nFlags & 0x04) and !IsPlayerUse2PlayerControls. Because ControlGunMove
+// slew-rate interpolates m_vecMoveCommand by +-dt*rate, calling it again afterward without
+// undoing vanilla's {0, 0} slew cancels both steps and traps |x|+|y| around ~0.08 (< 0.10
+// SetMoveAnim threshold), freezing remote Sniper legs on frame 0. Save and restore
+// m_vecMoveCommand across the vanilla call so ControlGunMove runs once toward our target.
 DECL_HOOK(void, CTaskSimplePlayerOnFoot_PlayerControlZeldaWeapon, void* _this, sa::CPed* pPed)
 {
 	const bool bIsRemote = pPed && pPed != GamePool_FindPlayerPed() && FindPlayerNumFromPedPtr(pPed) != 0;
 	const float savedAimRot = bIsRemote ? pPed->m_fAimingRotation : 0.0f;
+
+	uintptr_t preTaskUseGun = 0;
+	sa::CVector2D savedMoveCmd{0.0f, 0.0f};
+	bool hasSavedScopedMoveCmd = false;
+	if (pPed && pPed->m_pIntelligence && !pPed->m_pAttachedTo) {
+		preTaskUseGun = eng::fn::CPedIntelligence_GetTaskUseGun(pPed->m_pIntelligence);
+		if (preTaskUseGun) {
+			const uintptr_t weaponInfo = *reinterpret_cast<const uintptr_t*>(preTaskUseGun + kTaskUseGunWeaponInfoOff);
+			if (weaponInfo && ((*reinterpret_cast<const uint8_t*>(weaponInfo + 0x18) & 0x04u) != 0)) {
+				savedMoveCmd = *reinterpret_cast<const sa::CVector2D*>(preTaskUseGun + kTaskUseGunMoveCmdOff);
+				hasSavedScopedMoveCmd = true;
+			}
+		}
+	}
 
 	CTaskSimplePlayerOnFoot_PlayerControlZeldaWeapon(_this, pPed);
 
@@ -259,7 +329,6 @@ DECL_HOOK(void, CTaskSimplePlayerOnFoot_PlayerControlZeldaWeapon, void* _this, s
 		return;
 	}
 
-	constexpr uintptr_t kTaskUseGunWeaponInfoOff = VER_x32 ? 0x30 : 0x48;
 	const uintptr_t weaponInfo = *reinterpret_cast<const uintptr_t*>(taskUseGun + kTaskUseGunWeaponInfoOff);
 	if (!weaponInfo) {
 		return;
@@ -270,6 +339,10 @@ DECL_HOOK(void, CTaskSimplePlayerOnFoot_PlayerControlZeldaWeapon, void* _this, s
 		return;
 	}
 
+	if (hasSavedScopedMoveCmd && taskUseGun == preTaskUseGun) {
+		*reinterpret_cast<sa::CVector2D*>(taskUseGun + kTaskUseGunMoveCmdOff) = savedMoveCmd;
+	}
+
 	int16_t lr = 0;
 	int16_t ud = 0;
 	if (CurrentPlayerSlot() != 0) {
@@ -277,9 +350,16 @@ DECL_HOOK(void, CTaskSimplePlayerOnFoot_PlayerControlZeldaWeapon, void* _this, s
 		lr = AdjustRemoteWalkAxis(static_cast<int16_t>(rk.wKeyLR), static_cast<int16_t>(rk.wKeyUD), rk);
 		ud = AdjustRemoteWalkAxis(static_cast<int16_t>(rk.wKeyUD), static_cast<int16_t>(rk.wKeyLR), rk);
 	}
+	else if (g_lastLocalPadPtr != 0) {
+		// Reuse unified local walk axis hook (lock check + touch stick + hardware WASD + ButtonPanel + LocalPlayerKeys).
+		lr = CPad_GetPedWalkLeftRight_hook(g_lastLocalPadPtr);
+		ud = CPad_GetPedWalkUpDown_hook(g_lastLocalPadPtr);
+	}
 	else if (!IsLocalActivePedMovementLocked()) {
-		lr = static_cast<int16_t>(LocalPlayerKeys.wKeyLR);
-		ud = static_cast<int16_t>(LocalPlayerKeys.wKeyUD);
+		lr = g_touchCombat.onFootStickSampled ? g_touchCombat.stickLR : 0;
+		ud = g_touchCombat.onFootStickSampled ? g_touchCombat.stickUD : 0;
+		LocalPlayerKeys.wKeyLR = static_cast<uint16_t>(lr);
+		LocalPlayerKeys.wKeyUD = static_cast<uint16_t>(ud);
 	}
 
 	sa::CVector2D move{static_cast<float>(lr) * (1.0f / 128.0f), static_cast<float>(ud) * (1.0f / 128.0f)};
@@ -290,6 +370,62 @@ DECL_HOOK(void, CTaskSimplePlayerOnFoot_PlayerControlZeldaWeapon, void* _this, s
 		move.y *= invMag;
 	}
 	eng::fn::CTaskSimpleUseGun_ControlGunMove(taskUseGun, &move);
+}
+
+// 1) Recover orphaned bIsDucking without an active CTaskSimpleDuck (otherwise
+//    PlayerControlDucked exits early every frame, freezing movement while syncing
+//    SPECIAL_ACTION_DUCK=1).
+// 2) Preserve remote ped m_fAimingRotation from local camera orientation during
+//    crouch movement (matching PC SA-MP's patch at 0x688200).
+// 3) Suppress local stand-up triggers during CROUCH_ROLL_L/R (0x39/0x3b): vanilla
+//    PlayerControlDucked calls ClearTaskDuckSecondary() (which fails mid-roll) and
+//    unconditionally falls through to blend GUNMOVE_FWD, evicting WEAPON_CROUCH and
+//    causing CTaskSimpleDuck to self-delete without clearing bIsDucking.
+DECL_HOOK(void, CTaskSimplePlayerOnFoot_PlayerControlDucked, void* _this, sa::CPed* pPed)
+{
+	if (!pPed) {
+		CTaskSimplePlayerOnFoot_PlayerControlDucked(_this, pPed);
+		return;
+	}
+
+	const uintptr_t taskDuck = pPed->m_pIntelligence
+		? eng::fn::CPedIntelligence_GetTaskDuck(pPed->m_pIntelligence, true)
+		: 0;
+	if (pPed->bIsDucking && !taskDuck) {
+		pPed->m_nPedFlags.bIsDucking = false;
+		return;
+	}
+
+	const bool bIsRemote = pPed != GamePool_FindPlayerPed() && FindPlayerNumFromPedPtr(pPed) != 0;
+	if (bIsRemote) {
+		const float savedAimRot = pPed->m_fAimingRotation;
+		CTaskSimplePlayerOnFoot_PlayerControlDucked(_this, pPed);
+		pPed->m_fAimingRotation = savedAimRot;
+		return;
+	}
+
+	const bool prevSuppress = g_suppressLocalDuckStandUp;
+	if (IsDuckTaskRolling(taskDuck)) {
+		g_suppressLocalDuckStandUp = true;
+	}
+	CTaskSimplePlayerOnFoot_PlayerControlDucked(_this, pPed);
+	g_suppressLocalDuckStandUp = prevSuppress;
+}
+
+// War Drum Mobile adds a touch-only guard in CTaskSimpleDuck::CanPedDuck that
+// returns false when scoped in Sniper (34, camMode 7) or Camera (43, camMode 46).
+// Allow ducking for those weapons to preserve PC parity for local crouch-sniping
+// and prevent remote PC crouch-snipers from aborting duck every frame.
+DECL_HOOK(bool, CTaskSimpleDuck_CanPedDuck, sa::CPed* pPed)
+{
+	if (pPed && pPed->m_nActiveWeaponSlot < 13) {
+		const uint32_t wep = pPed->m_aWeapons[pPed->m_nActiveWeaponSlot].dwType;
+		if (wep == sa::eWeaponType::WEAPONTYPE_SNIPERRIFLE
+			|| wep == sa::eWeaponType::WEAPONTYPE_CAMERA) {
+			return true;
+		}
+	}
+	return CTaskSimpleDuck_CanPedDuck(pPed);
 }
 
 DECL_HOOK(uint16_t, CPad_JumpJustDown, uintptr_t _this)
@@ -303,6 +439,9 @@ DECL_HOOK(uint16_t, CPad_JumpJustDown, uintptr_t _this)
 		return 0;
 	}
 	else {
+		if (g_suppressLocalDuckStandUp) {
+			return 0;
+		}
 		if (CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr) {
 			if (!pLocal->IsInVehicle() && pLocal->IsCarry()) {
 				LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = false;
@@ -310,7 +449,7 @@ DECL_HOOK(uint16_t, CPad_JumpJustDown, uintptr_t _this)
 			}
 		}
 		const uint16_t jumpDown = CPad_JumpJustDown(_this);
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = (jumpDown != 0) || IsLocalMeleeBlockActive();
+		LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = (jumpDown != 0);
 		return jumpDown;
 	}
 }
@@ -330,15 +469,18 @@ DECL_HOOK(uint16_t, CPad_GetJump, uintptr_t _this)
 			}
 		}
 		const uint16_t jumpHeld = CPad_GetJump(_this);
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = (jumpHeld != 0) || IsLocalMeleeBlockActive();
+		LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = (jumpHeld != 0);
 		return jumpHeld;
 	}
 }
 
 DECL_HOOK(uint16_t, CPad_GetDuck, uintptr_t _this)
 {
+	// Match PC SA-MP: remote on-foot crouch is exclusively driven by
+	// SPECIAL_ACTION_DUCK (ApplyCrouch/ResetCrouch), never by KEY_CROUCH
+	// (in-vehicle horn/hydraulics use CPad_GetHorn / CPad_GetHydraulicJump).
 	if (CurrentPlayerSlot()) {
-		return RemotePlayerKeys[byteCurPlayer].bKeys[ePadKeys::KEY_CROUCH];
+		return 0;
 	}
 	else {
 		if (CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr) {
@@ -347,8 +489,9 @@ DECL_HOOK(uint16_t, CPad_GetDuck, uintptr_t _this)
 				return 0;
 			}
 		}
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = CPad_GetDuck(_this);
-		return LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH];
+		const uint16_t duckHeld = (CPad_GetDuck(_this) != 0 || g_bHardwareCrouchHeld.load(std::memory_order_acquire)) ? 1u : 0u;
+		LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = (duckHeld != 0);
+		return duckHeld;
 	}
 }
 
@@ -363,51 +506,53 @@ DECL_HOOK(uint16_t, CPad_MeleeAttackJustDown, uintptr_t _this)
 	}
 	else {
 		uint32_t dwResult = CPad_MeleeAttackJustDown(_this);
+		// Trigger a one-shot FightStyle combo when pressing F (KEY_SECONDARY_ATTACK)
+		// while holding Block; never read back our own meleeComboUntilMs sync output,
+		// which previously caused an infinite self-retriggering punch loop.
 		if (dwResult == 0 && GetBlockableLocalPed() != nullptr
-				&& LocalPlayerKeys.bKeys[ePadKeys::KEY_HANDBRAKE]
+				&& g_touchCombat.blockDown
 				&& LocalPlayerKeys.bKeys[ePadKeys::KEY_SECONDARY_ATTACK]) {
+			LocalPlayerKeys.bKeys[ePadKeys::KEY_SECONDARY_ATTACK] = false;
 			dwResult = 2;
 		}
 		if (dwResult == 2) {
 			g_touchCombat.meleeComboUntilMs = GetTickCount() + 130;
-			LocalPlayerKeys.bKeys[ePadKeys::KEY_HANDBRAKE] = true;
-			LocalPlayerKeys.bKeys[ePadKeys::KEY_SECONDARY_ATTACK] = true;
 			return 2;
 		}
 		if (dwResult == 1) {
 			g_touchCombat.meleeFireUntilMs = GetTickCount() + 100;
-			LocalPlayerKeys.bKeys[ePadKeys::KEY_FIRE] = true;
 			return 1;
 		}
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_FIRE] = IsLocalMeleeFireActive();
 		return dwResult;
 	}
 }
 
 DECL_HOOK(uint16_t, CPad_DuckJustDown, uintptr_t _this, sa::CPed* pPed)
 {
-	if (const uint8_t slot = CurrentPlayerSlot(); slot > 0 && slot < PLAYER_PED_SLOTS) {
-		// Remote stand-up is controlled by SPECIAL_ACTION_DUCK clearing via ResetCrouch();
-		// suppress DuckJustDown while pPed is already ducking so GTA doesn't toggle crouch back off.
-		if (pPed && pPed->bIsDucking) {
-			RemotePlayerKeys[slot].bIgnoreDuck = true;
-			return 0;
-		}
-		if (!RemotePlayerKeys[slot].bIgnoreDuck && RemotePlayerKeys[slot].bKeys[ePadKeys::KEY_CROUCH]) {
-			RemotePlayerKeys[slot].bIgnoreDuck = true;
-			return 1;
-		}
+	// Match PC SA-MP: remote on-foot crouch is exclusively driven by
+	// SPECIAL_ACTION_DUCK (ApplyCrouch/ResetCrouch). Feeding KEY_CROUCH here
+	// causes PlayerControlZelda to re-enter crouch right after ResetCrouch()
+	// and clash WEAPON_CROUCH against IDLE_STANCE.
+	if (CurrentPlayerSlot()) {
 		return 0;
 	}
 	else {
+		if (g_suppressLocalDuckStandUp) {
+			g_bHardwareCrouchEdge.store(false, std::memory_order_release);
+			LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = false;
+			return 0;
+		}
 		if (CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr) {
 			if (!pLocal->IsInVehicle() && pLocal->IsCarry()) {
+				g_bHardwareCrouchEdge.store(false, std::memory_order_release);
 				LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = false;
 				return 0;
 			}
 		}
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = CPad_DuckJustDown(_this, pPed);
-		return LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH];
+		const bool hwEdge = g_bHardwareCrouchEdge.exchange(false, std::memory_order_acq_rel);
+		const uint16_t duckEdge = (CPad_DuckJustDown(_this, pPed) != 0 || hwEdge) ? 1u : 0u;
+		LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = (duckEdge != 0);
+		return duckEdge;
 	}
 }
 
@@ -449,7 +594,7 @@ DECL_HOOK(uint32_t, CPad_GetAutoClimb, uintptr_t _this)
 	}
 	else {
 		const uint32_t climb = CPad_GetAutoClimb(_this);
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = (climb != 0) || IsLocalMeleeBlockActive();
+		LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = (climb != 0);
 		return climb;
 	}
 }
@@ -461,8 +606,9 @@ DECL_HOOK(uint32_t, CPad_GetAbortClimb, uintptr_t _this)
 	}
 	else {
 		const uint32_t abortClimb = CPad_GetAbortClimb(_this);
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_SECONDARY_ATTACK] =
-			(abortClimb != 0) || IsLocalMeleeComboActive() || LocalPlayerKeys.bKeys[ePadKeys::KEY_SECONDARY_ATTACK];
+		if (abortClimb != 0) {
+			LocalPlayerKeys.bKeys[ePadKeys::KEY_SECONDARY_ATTACK] = true;
+		}
 		return abortClimb;
 	}
 }
@@ -627,6 +773,11 @@ DECL_HOOK(uint32_t, CPad_GetHorn, uintptr_t _this, bool bCheckVehicle)
 
 DECL_HOOK(uint32_t, CPad_ExitVehicleJustDown, uintptr_t _this, int a2, uintptr_t vehicle, int a4, uintptr_t vec)
 {
+	// Never leak local touch enter-car presses into remote peds (e.g., PlayerControlDucked).
+	if (CurrentPlayerSlot() || g_suppressLocalDuckStandUp) {
+		return 0;
+	}
+
 	static uint32_t dwPassengerEnterExit = 0;
 	if (dwPassengerEnterExit != 0 && GetTickCount() - dwPassengerEnterExit < 500) {
 		return 0;
@@ -752,7 +903,7 @@ DECL_HOOK(uint32_t, CPad_GetWeapon, uintptr_t _this, sa::CPed* pPed, bool bShoul
 	if (CanLocalPedUseOnFootFire(_this, pPed)) {
 		dwResult = EvaluateLocalTouchFireLevel(pLocal->GetCurrentWeapon()) ? 0xFF : 0x00;
 	}
-	LocalPlayerKeys.bKeys[ePadKeys::KEY_FIRE] = (dwResult != 0) || IsLocalMeleeFireActive();
+	LocalPlayerKeys.bKeys[ePadKeys::KEY_FIRE] = (dwResult != 0);
 	return dwResult;
 }
 
@@ -908,8 +1059,7 @@ DECL_HOOK(uint32_t, CCamera_IsTargetingActive, uintptr_t _this, sa::CPed* pPed)
 {
 	if (pPed == GamePool_FindPlayerPed()) {
 		const uint32_t bIsTargeting = CCamera_IsTargetingActive(_this, pPed);
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_HANDBRAKE] =
-			(bIsTargeting != 0) || IsLocalMeleeBlockActive() || IsLocalMeleeComboActive();
+		LocalPlayerKeys.bKeys[ePadKeys::KEY_HANDBRAKE] = (bIsTargeting != 0);
 		return bIsTargeting;
 	}
 
@@ -942,6 +1092,10 @@ void Hooks::installPadHooks()
 		"Preserve remote ped m_fAimingRotation from camera");
 	REG_HOOK(Boot, CTaskSimplePlayerOnFoot_PlayerControlZeldaWeapon, CTaskSimplePlayerOnFoot_PlayerControlZeldaWeapon,
 		"Enable 1st-person scoped weapon movement and preserve remote aim rotation");
+	REG_HOOK(Boot, CTaskSimplePlayerOnFoot_PlayerControlDucked, CTaskSimplePlayerOnFoot_PlayerControlDucked,
+		"Preserve remote crouch rotation, recover orphan duck flag, and guard mid-roll stand-up");
+	REG_HOOK(Boot, CTaskSimpleDuck_CanPedDuck, CTaskSimpleDuck_CanPedDuck,
+		"Allow Sniper/Camera crouch parity under touch input");
 
 	InstallVehicleControlHooks();
 
@@ -980,6 +1134,7 @@ void Hooks::installPadHooks()
 	REG_HOOK(Boot, CPad_GetNitroFired, CPad_GetNitroFired, "Pad nitro sync");
 
 	REG_HOOK(Boot, CTaskSimpleUseGun_StartAnim, CTaskSimpleUseGun_StartAnim, "Fix UseGun aim-while-moving m_nLastCommand transition");
+	REG_HOOK(Boot, CTaskSimpleUseGun_ControlGunMove, CTaskSimpleUseGun_ControlGunMove, "Fix high-FPS aiming walk deadlock");
 	REG_HOOK(Boot, CTaskSimpleUseGun_SetPedPosition, CTaskSimpleUseGun_SetPedPosition, "Remote player aim/gun context switch");
 	REG_HOOK(Boot, CPlayerInfo_Process, CPlayerInfo_Process, "Car-proximity hipfire abort guard");
 	REG_HOOK(Boot, CTaskSimplePlayerOnFoot_MakeAbortable, CTaskSimplePlayerOnFoot_MakeAbortable, "Protect UseGun from proximity probe");

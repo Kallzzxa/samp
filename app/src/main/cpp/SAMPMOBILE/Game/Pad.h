@@ -35,13 +35,13 @@ typedef struct {
 	uint16_t wKeyUD;
 	bool bKeys[ePadKeys::SIZE];
 	bool bIgnoreJump;
-	bool bIgnoreDuck;
 } PAD_KEYS;
 
 extern PAD_KEYS LocalPlayerKeys;
 extern PAD_KEYS RemotePlayerKeys[PLAYER_PED_SLOTS];
 
 void RequestLocalPlaneGearToggle();
+void NotifyLocalHardwareCrouchKey(bool isDown);
 bool ConsumeStuffUseRequest();
 bool ConsumePassengerDriveByToggle();
 void ApplyLocalCombatSyncKeys(uint16_t& wKeys, uint16_t& lrAnalog, uint16_t& udAnalog);

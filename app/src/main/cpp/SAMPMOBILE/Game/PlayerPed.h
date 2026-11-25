@@ -188,6 +188,7 @@ public:
 	void SetDrunkLevel(int32_t iLevel);
 	int32_t GetDrunkLevel() const { return m_iDrunkLevel; }
 
+	bool IsParachuting() const { return m_iParachuteState != 0; }
 	void ProcessParachutes();
 	void ProcessParachuteSkydiving();
 	void ProcessParachuting();

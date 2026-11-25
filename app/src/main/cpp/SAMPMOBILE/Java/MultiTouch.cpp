@@ -186,7 +186,9 @@ DECL_HOOK(int32_t, NVEventGetNextEvent, NVEvent* ev, int waitMSecs)
 	int32_t ret = NVEventGetNextEvent(ev, waitMSecs);
 
 	if (ret && ev) {
-		if (ev->m_type == NV_EVENT_MULTITOUCH) {
+		// Suppress both legacy single-touch and 2-finger multitouch NVEvents;
+		// all touch input is routed exclusively through multiTouchEvent4Ex().
+		if (ev->m_type == NV_EVENT_MULTITOUCH || ev->m_type == NV_EVENT_TOUCH) {
 			ev->m_type = (NVEventType) 228;
 		}
 		else {

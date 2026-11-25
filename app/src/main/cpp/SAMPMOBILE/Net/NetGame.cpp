@@ -78,8 +78,6 @@ extern "C" __attribute__((visibility("default"))) void SAMPMOBILE_RegisterNetGam
 	}
 }
 
-void InstallVehicleEngineLightPatches();
-
 unsigned char GetPacketID(Packet* p)
 {
 	if (p == 0 || p->data == 0 || p->length == 0) return 255;
@@ -670,10 +668,6 @@ void NetGame::ResetMenuPool()
 
 void NetGame::InitGameLogic()
 {
-	if (m_netSet->manualVehicleEngineAndLight) {
-		InstallVehicleEngineLightPatches();
-	}
-
 	m_netSet->worldBounds[0] = 20000.0f;
 	m_netSet->worldBounds[1] = -20000.0f;
 	m_netSet->worldBounds[2] = 20000.0f;

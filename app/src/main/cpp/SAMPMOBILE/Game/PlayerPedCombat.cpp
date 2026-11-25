@@ -69,9 +69,6 @@ void CPlayerPed::SetKeys(uint16_t lrAnalog, uint16_t udAnalog, uint16_t wKeys)
 	wKeys >>= 1;
 	// KEY_CROUCH
 	pad->bKeys[ePadKeys::KEY_CROUCH] = (wKeys & 1);
-	if (!pad->bKeys[ePadKeys::KEY_CROUCH]) {
-		pad->bIgnoreDuck = false;
-	}
 	wKeys >>= 1;
 	// KEY_FIRE
 	pad->bKeys[ePadKeys::KEY_FIRE] = (wKeys & 1);

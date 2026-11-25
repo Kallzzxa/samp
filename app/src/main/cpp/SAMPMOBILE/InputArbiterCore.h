@@ -121,6 +121,8 @@ public:
 	void forward(int type, int num, int posX, int posY, EmitFn&& emit)
 	{
 		if (num >= 0 && num < kMaxPointers) {
+			m_lastX[num] = posX;
+			m_lastY[num] = posY;
 			if (type == kTouchDown) {
 				m_down[num] = true;
 			}
@@ -136,7 +138,10 @@ public:
 	{
 		if (num >= 0 && num < kMaxPointers && m_down[num]) {
 			m_down[num] = false;
-			emit(kTouchUp, num, 0, 0);
+			// Emit the finger's last known coordinates rather than (0, 0) so
+			// CTouchInterface::m_vecCachedPos[num] never snaps into the top-left
+			// joystick region (WIDGET_PED_MOVE) on synthetic release.
+			emit(kTouchUp, num, m_lastX[num], m_lastY[num]);
 		}
 	}
 
@@ -146,14 +151,18 @@ public:
 		for (int i = 0; i < kMaxPointers; ++i) {
 			if (m_down[i]) {
 				m_down[i] = false;
-				emit(kTouchUp, i, 0, 0);
+				emit(kTouchUp, i, m_lastX[i], m_lastY[i]);
 			}
 		}
 	}
 
 	void reset()
 	{
-		for (bool& d : m_down) d = false;
+		for (int i = 0; i < kMaxPointers; ++i) {
+			m_down[i] = false;
+			m_lastX[i] = 0;
+			m_lastY[i] = 0;
+		}
 	}
 
 	[[nodiscard]] bool isDown(int num) const
@@ -172,6 +181,8 @@ public:
 
 private:
 	bool m_down[kMaxPointers] = {false, false, false, false};
+	int m_lastX[kMaxPointers] = {0, 0, 0, 0};
+	int m_lastY[kMaxPointers] = {0, 0, 0, 0};
 };
 
 } // namespace input_arbiter

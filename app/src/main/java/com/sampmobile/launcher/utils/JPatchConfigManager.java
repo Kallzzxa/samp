@@ -211,4 +211,20 @@ final class JPatchConfigManager {
             e.printStackTrace();
         }
     }
+
+    /**
+     * JPatch's MultiTouch4 conflicts with SAMPMOBILE's built-in 4-finger touch
+     * pipeline (g_points/g_pointers relocation & NVEventGetNextEvent hook),
+     * injecting phantom ptr=0 DOWN/UP events that cut off the virtual joystick.
+     * Ensure MultiTouch4=0 before AML loads libJPatch.so without disturbing any
+     * other user-configured JPatch options.
+     */
+    public static void enforceTouchSafety(Context ctx) {
+        File cfgFile = getJPatchConfigFile(ctx);
+        if (!cfgFile.exists()) return;
+        IniDocument doc = IniDocument.load(cfgFile);
+        String cur = findIniValueAnySection(doc, "Gameplay", "MultiTouch4");
+        if ("0".equals(cur)) return;
+        saveJPatchOption(ctx, "Gameplay", "MultiTouch4", "0");
+    }
 }

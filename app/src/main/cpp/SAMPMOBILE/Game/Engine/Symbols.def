@@ -67,7 +67,10 @@ SYM_DATA(CVisibilityPlugins_m_alphaUnderwaterEntityList, "_ZN18CVisibilityPlugin
 SYM_DATA(CWeather_ForcedWeatherType, "_ZN8CWeather17ForcedWeatherTypeE", void, Required) // CWeather::ForcedWeatherType
 SYM_DATA(CWeather_NewWeatherType, "_ZN8CWeather14NewWeatherTypeE", void, Required) // CWeather::NewWeatherType
 SYM_DATA(CWeather_OldWeatherType, "_ZN8CWeather14OldWeatherTypeE", void, Required) // CWeather::OldWeatherType
+SYM_DATA(CTouchInterface_m_bTouchDown, "_ZN15CTouchInterface12m_bTouchDownE", void, Required) // CTouchInterface::m_bTouchDown
+SYM_DATA(CTouchInterface_m_vecCachedPos, "_ZN15CTouchInterface14m_vecCachedPosE", void, Required) // CTouchInterface::m_vecCachedPos
 SYM_DATA(CWidget_m_pInitialTouchWidget, "_ZN7CWidget21m_pInitialTouchWidgetE", void, Required) // CWidget::m_pInitialTouchWidget
+SYM_DATA(CWidget_m_vecTouchAnchor, "_ZN7CWidget16m_vecTouchAnchorE", void, Required) // CWidget::m_vecTouchAnchor
 SYM_DATA(CWorld_ms_aRepeatSectors, "_ZN6CWorld17ms_aRepeatSectorsE", void, Required) // CWorld::ms_aRepeatSectors
 SYM_DATA(CWorld_PlayerInFocus, "_ZN6CWorld13PlayerInFocusE", void, Required) // CWorld::PlayerInFocus
 SYM_DATA(CWorld_Players, "_ZN6CWorld7PlayersE", void, Required) // CWorld::Players
@@ -540,11 +543,17 @@ SYM_FN(CWeapon_GenerateDamageEvent, "_ZN7CWeapon19GenerateDamageEventEP4CPedP7CE
 SYM_FN(CTaskManager_SetTask, "_ZN12CTaskManager7SetTaskEP5CTaskib", void, Required)
 SYM_FN(CTaskManager_SetTaskSecondary, "_ZN12CTaskManager16SetTaskSecondaryEP5CTaski", void, Required)
 
-// Scoped weapon movement & native pause-menu / process shutdown lifecycle hooks
+// Scoped weapon movement, crouch/duck control, touch joystick & lifecycle hooks
+SYM_FN(CPedIntelligence_GetTaskDuck, "_ZNK16CPedIntelligence11GetTaskDuckEb", uintptr_t, Required)
+SYM_FN(CTaskSimpleDuck_CanPedDuck, "_ZN15CTaskSimpleDuck10CanPedDuckEP4CPed", bool, Required)
+SYM_FN(CTaskSimpleDuck_MakeAbortable, "_ZN15CTaskSimpleDuck13MakeAbortableEP4CPediPK6CEvent", bool, Required)
+SYM_FN(CTaskSimplePlayerOnFoot_PlayerControlDucked, "_ZN23CTaskSimplePlayerOnFoot19PlayerControlDuckedEP10CPlayerPed", void, Required)
 SYM_FN(CTaskSimplePlayerOnFoot_PlayerControlZeldaWeapon, "_ZN23CTaskSimplePlayerOnFoot24PlayerControlZeldaWeaponEP10CPlayerPed", void, Required)
 SYM_FN(CTaskSimpleUseGun_ControlGunMove, "_ZN17CTaskSimpleUseGun14ControlGunMoveEP9CVector2D", int, Required)
 SYM_FN(CTaskSimpleUseGun_StartAnim, "_ZN17CTaskSimpleUseGun9StartAnimEP4CPed", void, Required)
 SYM_FN(CWidget_SetInitialTouchWidget, "_ZN7CWidget21SetInitialTouchWidgetEiPS_", void, Required)
+SYM_FN(CWidget_SetPinchZoomWidget, "_ZN7CWidget18SetPinchZoomWidgetEPS_", void, Required)
+SYM_FN(CWidgetRegionMove_OnInitialTouch, "_ZN17CWidgetRegionMove14OnInitialTouchEv", void, Required)
 SYM_FN(MainMenuScreen_OnExit, "_ZN14MainMenuScreen6OnExitEv", void, Required)
 SYM_FN(MainMenuScreen_OnStartGame, "_ZN14MainMenuScreen11OnStartGameEv", void, Required)
 SYM_FN(QuitApp, "_Z7QuitAppv", void, Required)

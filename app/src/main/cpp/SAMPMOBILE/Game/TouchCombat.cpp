@@ -12,6 +12,7 @@
 #include "../UI/UI.h"
 #include "../UI/SAMPWidgets/ButtonPanel.h"
 #include "../Net/NetGame.h"
+#include "../Net/LocalPlayer.h"
 #include "../Client.h"
 #include "../Settings.h"
 #include "Enums/WidgetIDs.h"
@@ -67,12 +68,39 @@ static inline bool LocalPedHasCancellableSpecialAction(CPlayerPed* pPed)
 // weapons. Press edge fires immediately; sustained hold repeats after 180ms.
 static constexpr uint32_t kFireHoldRepeatDelayMs = 180;
 
-// CWidget field offsets verified on arm32 and arm64 libGTASA.so
-static constexpr uintptr_t kWidgetSpriteOffset      = VER_x32 ? 8   : 16;
-static constexpr uintptr_t kWidgetPosOffset         = VER_x32 ? 12  : 24;
-static constexpr uintptr_t kWidgetAlphaOffset       = VER_x32 ? 76  : 88;
-static constexpr uintptr_t kWidgetEnabledOffset     = VER_x32 ? 77  : 89;
-static constexpr uintptr_t kWidgetCachedTouchOffset = VER_x32 ? 120 : 132;
+// CWidget / CWidgetRegionMove / RsGlobal offsets verified on arm32 and arm64 libGTASA.so
+static constexpr uintptr_t kWidgetSpriteOffset       = VER_x32 ? 8   : 16;
+static constexpr uintptr_t kWidgetPosOffset          = VER_x32 ? 12  : 24;
+static constexpr uintptr_t kWidgetScreenRectOffset   = VER_x32 ? 32  : 44;
+static constexpr uintptr_t kWidgetTouchRectOffset    = VER_x32 ? 52  : 64;
+static constexpr uintptr_t kWidgetAlphaOffset        = VER_x32 ? 76  : 88;
+static constexpr uintptr_t kWidgetEnabledOffset      = VER_x32 ? 77  : 89;
+static constexpr uintptr_t kWidgetCachedTouchOffset  = VER_x32 ? 120 : 132;
+static constexpr uintptr_t kWidgetMoveScaleOffset    = VER_x32 ? 148 : 168;
+static constexpr uintptr_t kWidgetMoveThumbPosOffset = VER_x32 ? 156 : 184;
+static constexpr uintptr_t kWidgetMoveAnchorOffset   = VER_x32 ? 164 : 192;
+static constexpr uintptr_t kRsGlobalWidthOffset      = VER_x32 ? 4   : 8;
+static constexpr uintptr_t kRsGlobalHeightOffset     = VER_x32 ? 8   : 12;
+
+static int32_t FindActiveWidgetTouchSlot(uintptr_t widget)
+{
+	if (!widget) return -1;
+	auto* initialWidgets = eng::as<uintptr_t*>(eng::Sym::CWidget_m_pInitialTouchWidget);
+	if (!initialWidgets) return -1;
+
+	const int32_t cached = *reinterpret_cast<const int32_t*>(widget + kWidgetCachedTouchOffset);
+	if (cached >= 0 && cached < 4
+			&& initialWidgets[cached] == widget
+			&& eng::fn::CTouchInterface_IsTouchDown(cached) != 0) {
+		return cached;
+	}
+	for (int32_t i = 0; i < 4; ++i) {
+		if (initialWidgets[i] == widget && eng::fn::CTouchInterface_IsTouchDown(i) != 0) {
+			return i;
+		}
+	}
+	return -1;
+}
 
 static uintptr_t g_activeScaledJoystickWidget = 0;
 static float g_activeJoystickOrigSx = 0.0f;
@@ -108,6 +136,35 @@ struct ScopedJoystickScale {
 	}
 };
 
+static void ExpandPedMoveTouchZone(uintptr_t widget)
+{
+	if (!widget) return;
+	uintptr_t* widgets = GetTouchWidgets();
+	if (!widgets || widget != widgets[sa::WidgetIDs::WIDGET_PED_MOVE]) return;
+
+	const auto* rsGlobal = eng::as<const uint8_t*>(eng::Sym::RsGlobal);
+	if (!rsGlobal) return;
+	const float screenW = static_cast<float>(*reinterpret_cast<const int32_t*>(rsGlobal + kRsGlobalWidthOffset));
+	const float screenH = static_cast<float>(*reinterpret_cast<const int32_t*>(rsGlobal + kRsGlobalHeightOffset));
+	if (screenW <= 1.0f || screenH <= 1.0f) return;
+
+	// Stock TouchDefaultPhoneWidescreen.cfg restricts WIDGET_PED_MOVE to
+	// [0..37.5% W] x [55.4%..100% H] (top=598px on 1080p), causing natural
+	// left-thumb touches slightly above midline or right of 37.5% to fall
+	// through to WIDGET_LOOK. Expand m_ScreenRect/m_TouchRect to [0..45% W] x
+	// [28%..100% H] (below radar/chat) without changing WidgetPosition.sx
+	// (keeping the visual joystick ring and drag radius untouched).
+	const float targetRight = screenW * 0.45f;
+	const float targetTop = screenH * 0.28f;
+	for (uintptr_t off : {kWidgetScreenRectOffset, kWidgetTouchRectOffset}) {
+		float* rect = reinterpret_cast<float*>(widget + off); // {left, bottom, right, top}
+		rect[0] = 0.0f;
+		rect[1] = std::max(rect[1], screenH);
+		rect[2] = std::max(rect[2], targetRight);
+		rect[3] = std::min(rect[3], targetTop);
+	}
+}
+
 void RunWithUnscaledJoystickSx(uintptr_t widget, void (*fn)(uintptr_t))
 {
 	if (widget && widget == g_activeScaledJoystickWidget) {
@@ -116,31 +173,57 @@ void RunWithUnscaledJoystickSx(uintptr_t widget, void (*fn)(uintptr_t))
 		sx = g_activeJoystickOrigSx;
 		fn(widget);
 		sx = scaledSx;
+		ExpandPedMoveTouchZone(widget);
 		return;
 	}
 	fn(widget);
+	ExpandPedMoveTouchZone(widget);
 }
 
 // Protect an actively held left thumbstick (WIDGET_PED_MOVE) from having its
 // bound touch slot & clamped anchor overwritten when a second finger touches
-// empty space on the left half of the screen during multi-touch combat.
+// the left half of the screen during multi-touch combat. Redirect the extra
+// finger to WIDGET_LOOK (if enabled) instead of leaving it orphaned at 0.
 DECL_HOOK(void, CWidget_SetInitialTouchWidget, int touchNum, uintptr_t widget)
 {
 	if (widget && touchNum >= 0 && touchNum < 4) {
 		uintptr_t* widgets = GetTouchWidgets();
 		if (widgets && widget == widgets[sa::WidgetIDs::WIDGET_PED_MOVE]) {
-			auto* initialWidgets = eng::as<uintptr_t*>(eng::Sym::CWidget_m_pInitialTouchWidget);
-			const int32_t existingTouch = *reinterpret_cast<const int32_t*>(widget + kWidgetCachedTouchOffset);
-			if (initialWidgets && existingTouch >= 0 && existingTouch < 4
-					&& existingTouch != touchNum
-					&& initialWidgets[existingTouch] == widget
-					&& eng::fn::CTouchInterface_IsTouchDown(existingTouch) != 0) {
-				initialWidgets[touchNum] = 0;
+			const int32_t moveTouch = FindActiveWidgetTouchSlot(widget);
+			if (moveTouch >= 0 && moveTouch != touchNum) {
+				uintptr_t lookWidget = widgets[sa::WidgetIDs::WIDGET_LOOK];
+				if (lookWidget && *reinterpret_cast<const uint8_t*>(lookWidget + kWidgetEnabledOffset) != 0) {
+					CWidget_SetInitialTouchWidget(touchNum, lookWidget);
+				}
+				else if (auto* initialWidgets = eng::as<uintptr_t*>(eng::Sym::CWidget_m_pInitialTouchWidget)) {
+					initialWidgets[touchNum] = 0;
+				}
 				return;
 			}
 		}
 	}
 	CWidget_SetInitialTouchWidget(touchNum, widget);
+}
+
+// Prevent CTouchInterface::Clear from locking WIDGET_LOOK into pinch-zoom mode
+// while the player is simultaneously holding the movement thumbstick.
+DECL_HOOK(void, CWidget_SetPinchZoomWidget, uintptr_t widget)
+{
+	if (widget) {
+		uintptr_t* widgets = GetTouchWidgets();
+		if (widgets && widget == widgets[sa::WidgetIDs::WIDGET_LOOK]
+				&& FindActiveWidgetTouchSlot(widgets[sa::WidgetIDs::WIDGET_PED_MOVE]) >= 0) {
+			CWidget_SetPinchZoomWidget(0);
+			return;
+		}
+	}
+	CWidget_SetPinchZoomWidget(widget);
+}
+
+DECL_HOOK(void, CWidgetRegionMove_OnInitialTouch, uintptr_t _this)
+{
+	ScopedJoystickScale guard(_this);
+	CWidgetRegionMove_OnInitialTouch(_this);
 }
 
 DECL_HOOK(void, CWidgetRegionMove_Update, uintptr_t _this)
@@ -164,7 +247,72 @@ DECL_HOOK(void, CWidgetRegionMove_Draw, uintptr_t _this)
 DECL_HOOK(uint32_t, CWidgetRegionMove_IsTouched, uintptr_t _this, uintptr_t pVec2D)
 {
 	ScopedJoystickScale guard(_this);
-	return CWidgetRegionMove_IsTouched(_this, pVec2D);
+
+	uintptr_t* widgets = GetTouchWidgets();
+	const bool isPedMove = _this && widgets && _this == widgets[sa::WidgetIDs::WIDGET_PED_MOVE];
+	if (!isPedMove) {
+		return CWidgetRegionMove_IsTouched(_this, pVec2D);
+	}
+
+	// Touch path for WIDGET_PED_MOVE: compute live zero-latency displacement
+	// directly from CTouchInterface::m_vecCachedPos[touch] and CWidget::m_vecTouchAnchor[touch]
+	// instead of relying on last frame's stale m_vecThumbPos from CWidgetRegionMove::Update.
+	auto* thumbPos = reinterpret_cast<sa::CVector2D*>(_this + kWidgetMoveThumbPosOffset);
+	auto* clampedAnchor = reinterpret_cast<sa::CVector2D*>(_this + kWidgetMoveAnchorOffset);
+	auto* outVec = reinterpret_cast<sa::CVector2D*>(pVec2D);
+
+	const bool widgetEnabled = *reinterpret_cast<const uint8_t*>(_this + kWidgetEnabledOffset) != 0;
+	const int32_t activeTouch = widgetEnabled ? FindActiveWidgetTouchSlot(_this) : -1;
+
+	if (activeTouch < 0) {
+		*thumbPos = *clampedAnchor;
+		if (outVec) {
+			outVec->x = 0.0f;
+			outVec->y = 0.0f;
+		}
+		return 0;
+	}
+
+	*reinterpret_cast<int32_t*>(_this + kWidgetCachedTouchOffset) = activeTouch;
+
+	const auto* cachedPos = eng::as<const sa::CVector2D*>(eng::Sym::CTouchInterface_m_vecCachedPos);
+	const auto* touchAnchors = eng::as<const sa::CVector2D*>(eng::Sym::CWidget_m_vecTouchAnchor);
+	const auto* rsGlobal = eng::as<const uint8_t*>(eng::Sym::RsGlobal);
+	if (!cachedPos || !touchAnchors || !rsGlobal) {
+		return CWidgetRegionMove_IsTouched(_this, pVec2D);
+	}
+
+	const float screenW = static_cast<float>(*reinterpret_cast<const int32_t*>(rsGlobal + kRsGlobalWidthOffset));
+	const float screenH = static_cast<float>(*reinterpret_cast<const int32_t*>(rsGlobal + kRsGlobalHeightOffset));
+	const float scaledSx = *reinterpret_cast<const float*>(_this + kWidgetPosOffset + 8);
+	float moveScale = *reinterpret_cast<const float*>(_this + kWidgetMoveScaleOffset);
+	if (moveScale <= 0.01f) moveScale = 0.45f;
+	const float radius = moveScale * scaledSx * (screenW / 640.0f);
+	if (radius <= 1.0f) {
+		return CWidgetRegionMove_IsTouched(_this, pVec2D);
+	}
+
+	sa::CVector2D anchor = touchAnchors[activeTouch];
+	if (anchor.x < radius) anchor.x = radius;
+	if (anchor.y > screenH - radius) anchor.y = screenH - radius;
+	*clampedAnchor = anchor;
+
+	float dx = cachedPos[activeTouch].x - anchor.x;
+	float dy = cachedPos[activeTouch].y - anchor.y;
+	const float distSq = dx * dx + dy * dy;
+	if (distSq > radius * radius) {
+		const float invDist = radius / std::sqrt(distSq);
+		dx *= invDist;
+		dy *= invDist;
+	}
+	thumbPos->x = anchor.x + dx;
+	thumbPos->y = anchor.y + dy;
+
+	if (outVec) {
+		outVec->x = (dx / radius) * 128.0f;
+		outVec->y = (dy / radius) * 128.0f;
+	}
+	return 1;
 }
 
 // Replicates CPad::GetWeapon's top-level safety gates: pad controls disabled
@@ -520,17 +668,32 @@ static void TickTouchCombatInput()
 					else                       g_touchCombat.stickUD = 0;
 				}
 				else {
-					int lr = std::clamp(static_cast<int>(stick.x), -128, 128);
-					int ud = std::clamp(static_cast<int>(stick.y), -128, 128);
-					// Ensure non-zero stick tilts exceed CTaskSimpleUseGun::SetMoveAnim's
-					// (|lr|+|ud|)/128 >= 0.1f (~13) threshold locally and on PC/Mobile observers.
-					const int absSum = std::abs(lr) + std::abs(ud);
-					if (absSum > 0 && absSum < 16) {
-						if (std::abs(lr) >= std::abs(ud)) {
-							lr = (lr < 0) ? -16 : 16;
-						}
-						else {
-							ud = (ud < 0) ? -16 : 16;
+					// Apply a small radial deadzone to remove resting-thumb jitter and
+					// smoothly rescale [deadzone .. 128] -> [0 .. 128] for true analog feel.
+					constexpr float kStickDeadzone = 6.0f;
+					const float mag = std::hypot(stick.x, stick.y);
+					int lr = 0;
+					int ud = 0;
+					if (mag > kStickDeadzone) {
+						const float scaledMag = std::min(
+							128.0f,
+							(mag - kStickDeadzone) * (128.0f / (128.0f - kStickDeadzone)));
+						const float factor = scaledMag / mag;
+						lr = std::clamp(static_cast<int>(std::lround(stick.x * factor)), -128, 128);
+						ud = std::clamp(static_cast<int>(std::lround(stick.y * factor)), -128, 128);
+						// While aiming, ensure non-zero tilts clear CTaskSimpleUseGun::SetMoveAnim's
+						// (|x| + |y|) / 128 >= 0.1f (~13) leg-animation threshold without distorting
+						// normal slow-walk responsiveness.
+						if (g_touchCombat.aimLatch || EngineIsAiming(pLocal)) {
+							const int absSum = std::abs(lr) + std::abs(ud);
+							if (absSum > 0 && absSum < 16) {
+								if (std::abs(lr) >= std::abs(ud)) {
+									lr = (lr < 0) ? -16 : 16;
+								}
+								else {
+									ud = (ud < 0) ? -16 : 16;
+								}
+							}
 						}
 					}
 					g_touchCombat.stickLR = static_cast<int16_t>(lr);
@@ -539,33 +702,41 @@ static void TickTouchCombatInput()
 			}
 		}
 
-		int16_t finalLR = g_touchCombat.stickLR;
-		int16_t finalUD = g_touchCombat.stickUD;
-		if (finalLR == 0 && pUI && pUI->buttonpanel() && pUI->buttonpanel()->heldLR() != 0) {
-			finalLR = static_cast<int16_t>(pUI->buttonpanel()->heldLR());
+		// Only pre-populate LocalPlayerKeys.wKeyLR/UD in modes where the engine does
+		// not route movement through CPad::GetPedWalkLeftRight/UpDown (dancing,
+		// skydiving/parachuting, class selection, spectating). During active on-foot
+		// gameplay, CPad::GetPedWalk* (and scoped PlayerControlZeldaWeapon) writes
+		// LocalPlayerKeys only when the ped actually consumes walk input, preventing
+		// blocked/frozen states from broadcasting phantom stepping-in-place to remotes.
+		bool bDirectAxisSyncMode = pLocal->IsDancing() || pLocal->IsParachuting();
+		if (!bDirectAxisSyncMode && pNetGame && pNetGame->GetPlayerPool()) {
+			if (CLocalPlayer* pNetLocal = pNetGame->GetPlayerPool()->GetLocalPlayer()) {
+				bDirectAxisSyncMode = !pNetLocal->m_bIsActive || pNetLocal->IsSpectating();
+			}
 		}
-		if (finalUD == 0 && pUI && pUI->buttonpanel() && pUI->buttonpanel()->heldUD() != 0) {
-			finalUD = static_cast<int16_t>(pUI->buttonpanel()->heldUD());
+		if (bDirectAxisSyncMode) {
+			int16_t finalLR = g_touchCombat.stickLR;
+			int16_t finalUD = g_touchCombat.stickUD;
+			if (finalLR == 0 && pUI && pUI->buttonpanel() && pUI->buttonpanel()->heldLR() != 0) {
+				finalLR = static_cast<int16_t>(pUI->buttonpanel()->heldLR());
+			}
+			if (finalUD == 0 && pUI && pUI->buttonpanel() && pUI->buttonpanel()->heldUD() != 0) {
+				finalUD = static_cast<int16_t>(pUI->buttonpanel()->heldUD());
+			}
+			LocalPlayerKeys.wKeyLR = static_cast<uint16_t>(finalLR);
+			LocalPlayerKeys.wKeyUD = static_cast<uint16_t>(finalUD);
 		}
-		LocalPlayerKeys.wKeyLR = static_cast<uint16_t>(finalLR);
-		LocalPlayerKeys.wKeyUD = static_cast<uint16_t>(finalUD);
 
 		if (pLocal->IsDancing() && PollTouchDown(sa::WidgetIDs::WIDGET_SPRINT)) {
 			LocalPlayerKeys.bKeys[ePadKeys::KEY_SPRINT] = true;
 		}
 	}
 
-	// 4) Block button & authoritative on-foot KEY_HANDBRAKE state
+	// 4) Block button & authoritative on-foot aim KEY_HANDBRAKE state
+	// (Melee block/combo/fire outbound bits are injected exclusively in
+	// ApplyLocalCombatSyncKeys so they never feed back into local pad reads.)
 	g_touchCombat.blockDown = (GetBlockableLocalPed() != nullptr) && PollTouchDown(kBlockWidget);
-	if (IsLocalMeleeBlockActive()) {
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_HANDBRAKE] = true;
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_JUMP] = true;
-	}
-	else if (IsLocalMeleeComboActive()) {
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_HANDBRAKE] = true;
-		LocalPlayerKeys.bKeys[ePadKeys::KEY_SECONDARY_ATTACK] = true;
-	}
-	else if (bOnFoot && pLocal && (g_touchCombat.aimLatch || EngineIsAiming(pLocal))) {
+	if (bOnFoot && pLocal && (g_touchCombat.aimLatch || EngineIsAiming(pLocal))) {
 		LocalPlayerKeys.bKeys[ePadKeys::KEY_HANDBRAKE] = true;
 	}
 
@@ -599,7 +770,19 @@ DECL_HOOK(void, CTouchInterface_Clear)
 
 void ApplyLocalCombatSyncKeys(uint16_t& wKeys, uint16_t& lrAnalog, uint16_t& udAnalog)
 {
-	if (pUI && pUI->buttonpanel() && !IsLocalActivePedMovementLocked()) {
+	// Only inject ButtonPanel directional axes directly during inactive/spectating/
+	// dancing/parachuting states; during active on-foot play, CPad::GetPedWalk*
+	// already propagates them iff the ped actually consumes movement input.
+	bool bAllowDirectAxis = false;
+	if (CPlayerPed* pLocal = pGame ? pGame->FindPlayerPed() : nullptr) {
+		bAllowDirectAxis = pLocal->IsDancing() || pLocal->IsParachuting();
+	}
+	if (!bAllowDirectAxis && pNetGame && pNetGame->GetPlayerPool()) {
+		if (CLocalPlayer* pNetLocal = pNetGame->GetPlayerPool()->GetLocalPlayer()) {
+			bAllowDirectAxis = !pNetLocal->m_bIsActive || pNetLocal->IsSpectating();
+		}
+	}
+	if (bAllowDirectAxis && pUI && pUI->buttonpanel() && !IsLocalActivePedMovementLocked()) {
 		if (lrAnalog == 0 && pUI->buttonpanel()->heldLR() != 0) {
 			lrAnalog = pUI->buttonpanel()->heldLR();
 		}
@@ -625,9 +808,11 @@ void InstallTouchCombatHooks()
 		&CTouchInterface_IsReleased_fromProcessControl_hook, &CTouchInterface_IsReleased_fromProcessControl,
 		"Keep m_bFreeAiming across touch fire release while aim-latched");
 	REG_HOOK(Boot, CTouchInterface_Clear, CTouchInterface_Clear, "Touch combat & virtual stick logic-frame sampler");
-	REG_HOOK(Boot, CWidget_SetInitialTouchWidget, CWidget_SetInitialTouchWidget, "Protect active left thumbstick from multi-touch hijack");
+	REG_HOOK(Boot, CWidget_SetInitialTouchWidget, CWidget_SetInitialTouchWidget, "Protect active left thumbstick & redirect extra touch to look");
+	REG_HOOK(Boot, CWidget_SetPinchZoomWidget, CWidget_SetPinchZoomWidget, "Prevent pinch-zoom lock while left thumbstick is held");
+	REG_HOOK(Boot, CWidgetRegionMove_OnInitialTouch, CWidgetRegionMove_OnInitialTouch, "Virtual joystick scale (OnInitialTouch)");
 	REG_HOOK(Boot, CWidgetRegionMove_Update, CWidgetRegionMove_Update, "Virtual joystick scale (Update)");
 	REG_HOOK(Boot, CWidgetRegionMove_ClampInternalTouchAnchor, CWidgetRegionMove_ClampInternalTouchAnchor, "Virtual joystick scale (Anchor)");
 	REG_HOOK(Boot, CWidgetRegionMove_Draw, CWidgetRegionMove_Draw, "Virtual joystick scale (Draw)");
-	REG_HOOK(Boot, CWidgetRegionMove_IsTouched, CWidgetRegionMove_IsTouched, "Virtual joystick scale (IsTouched)");
+	REG_HOOK(Boot, CWidgetRegionMove_IsTouched, CWidgetRegionMove_IsTouched, "Virtual joystick zero-latency live input & scale (IsTouched)");
 }

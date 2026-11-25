@@ -60,6 +60,9 @@ public class SAMP extends GTASA {
         if (amlEnabled || jpatchEnabled) {
             // Sync JPatch .so enabled/disabled filename before AML scans mods/
             ModManager.syncJPatchBinaryState(this, jpatchEnabled);
+            if (jpatchEnabled) {
+                ModManager.enforceJPatchTouchSafety(this);
+            }
             ModManager.prepareAmlConfig(this);
 
             if (!sAmlLoaded) {
@@ -234,34 +237,36 @@ public class SAMP extends GTASA {
             return true;
         }
 
+        final int action = event.getActionMasked();
+        final int numEvents = event.getPointerCount();
+        final int actionIdx = event.getActionIndex();
+        final int pointerId = (actionIdx >= 0 && actionIdx < numEvents) ? event.getPointerId(actionIdx) : -1;
+
         int x1 = 0, y1 = 0, x2 = 0, y2 = 0, x3 = 0, y3 = 0, x4 = 0, y4 = 0;
         int presentMask = 0;
-        int numEvents = event.getPointerCount();
 
         for (int i = 0; i < numEvents; i++) {
-            int pointerId = event.getPointerId(i);
+            int pid = event.getPointerId(i);
 
-            if (pointerId == 0) {
+            if (pid == 0) {
                 x1 = (int) event.getX(i);
                 y1 = (int) event.getY(i);
                 presentMask |= (1 << 0);
-            } else if (pointerId == 1) {
+            } else if (pid == 1) {
                 x2 = (int) event.getX(i);
                 y2 = (int) event.getY(i);
                 presentMask |= (1 << 1);
-            } else if (pointerId == 2) {
+            } else if (pid == 2) {
                 x3 = (int) event.getX(i);
                 y3 = (int) event.getY(i);
                 presentMask |= (1 << 2);
-            } else if (pointerId == 3) {
+            } else if (pid == 3) {
                 x4 = (int) event.getX(i);
                 y4 = (int) event.getY(i);
                 presentMask |= (1 << 3);
             }
         }
 
-        int pointerId = event.getPointerId(event.getActionIndex());
-        int action = event.getActionMasked();
         int packedPointer = (pointerId & 0xFF) | (presentMask << 8);
 
         try {
@@ -269,7 +274,11 @@ public class SAMP extends GTASA {
         } catch (UnsatisfiedLinkError e) {
             e.printStackTrace();
         }
-        return super.onTouchEvent(event);
+        // Do NOT chain to super.onTouchEvent(event): NvEventQueueActivity.onTouchEvent
+        // pushes a duplicate legacy 2-finger multiTouchEvent() into libGTASA.so's native
+        // NVEvent queue, which conflicts with our 4-finger pipeline and third-party AML
+        // touch plugins (e.g. JPatch MultiTouch4).
+        return true;
     }
 
     public void cancelAllNativeTouches() {

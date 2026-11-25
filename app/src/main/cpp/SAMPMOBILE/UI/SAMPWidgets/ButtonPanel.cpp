@@ -592,8 +592,13 @@ void ButtonPanel::handleHardwareKey(int androidKeyCode, bool isDown)
 			break;
 
 		case 31: // KEYCODE_C
-			if (isDown) {
-				LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = true;
+			if (inVeh) {
+				if (isDown) {
+					LocalPlayerKeys.bKeys[ePadKeys::KEY_CROUCH] = true;
+				}
+			}
+			else {
+				NotifyLocalHardwareCrouchKey(isDown);
 			}
 			break;
 

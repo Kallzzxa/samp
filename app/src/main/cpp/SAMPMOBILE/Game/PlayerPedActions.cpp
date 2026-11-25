@@ -14,15 +14,44 @@
 #include <SA.h>
 #include <spdlog/spdlog.h>
 
+namespace {
+// Disassembly-verified CTaskSimpleDuck & CAnimBlendAssociation offsets (arm32 / arm64)
+constexpr uintptr_t kTaskDuckMoveAnimOff = VER_x32 ? 0x14 : 0x20;
+constexpr uintptr_t kTaskDuckAbortingOff = VER_x32 ? 0x19 : 0x29;
+constexpr uintptr_t kAnimAssocAnimIdOff  = VER_x32 ? 0x2C : 0x44;
+
+uintptr_t GetPedTaskDuck(sa::CPed* pPed)
+{
+	if (!pPed || !pPed->m_pIntelligence) return 0;
+	return eng::fn::CPedIntelligence_GetTaskDuck(pPed->m_pIntelligence, true);
+}
+
+bool IsDuckTaskAborting(uintptr_t taskDuck)
+{
+	return taskDuck && *reinterpret_cast<const uint8_t*>(taskDuck + kTaskDuckAbortingOff) != 0;
+}
+
+bool IsDuckTaskRolling(uintptr_t taskDuck)
+{
+	if (!taskDuck) return false;
+	const uintptr_t moveAnim = *reinterpret_cast<const uintptr_t*>(taskDuck + kTaskDuckMoveAnimOff);
+	if (!moveAnim) return false;
+	const int16_t animId = *reinterpret_cast<const int16_t*>(moveAnim + kAnimAssocAnimIdOff);
+	return (animId | 2) == 0x3B; // CROUCH_ROLL_L (0x39) or CROUCH_ROLL_R (0x3B)
+}
+} // namespace
+
 void CPlayerPed::SetSpecialAction(uint8_t byteSpecialAction)
 {
-	// duck:start
-	if (byteSpecialAction == SPECIAL_ACTION_DUCK && !IsCrouching()) {
-		ApplyCrouch();
+	// duck:start (also restart if an existing CTaskSimpleDuck is mid-abort)
+	const uintptr_t taskDuck = GetPedTaskDuck(m_ped);
+	if (byteSpecialAction == SPECIAL_ACTION_DUCK) {
+		if (!IsCrouching() || IsDuckTaskAborting(taskDuck)) {
+			ApplyCrouch();
+		}
 	}
-
-	// duck:stop
-	if (byteSpecialAction != SPECIAL_ACTION_DUCK && IsCrouching()) {
+	// duck:stop (also clean up if CTaskSimpleDuck survived without bIsDucking)
+	else if (IsCrouching() || taskDuck != 0) {
 		ResetCrouch();
 	}
 
@@ -331,17 +360,15 @@ void CPlayerPed::ToggleCellphone(bool on)
 
 void CPlayerPed::ApplyCrouch()
 {
-	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId)) {
+	if (!m_ped || !GamePool_Ped_GetAt(m_gtaId) || !m_ped->m_pIntelligence) {
 		return;
 	}
 
 	spdlog::debug("Apply crouch");
 
-	if (!IsCrouching()) {
-		if (m_ped->m_pIntelligence) {
-			// CPedIntelligence::SetTaskDuckSecondary
-			eng::fn::CPedIntelligence_SetTaskDuckSecondary( m_ped->m_pIntelligence, 0);
-		}
+	const uintptr_t taskDuck = GetPedTaskDuck(m_ped);
+	if (!IsCrouching() || IsDuckTaskAborting(taskDuck)) {
+		eng::fn::CPedIntelligence_SetTaskDuckSecondary(m_ped->m_pIntelligence, 0);
 	}
 }
 
@@ -353,11 +380,27 @@ void CPlayerPed::ResetCrouch()
 
 	spdlog::debug("Reset crouch");
 
-	m_ped->m_nPedFlags.bIsDucking = false;
+	const uintptr_t taskDuck = GetPedTaskDuck(m_ped);
+	if (!taskDuck) {
+		// No duck task left: clear any orphaned bIsDucking flag directly.
+		m_ped->m_nPedFlags.bIsDucking = false;
+		return;
+	}
 
-	if (m_ped->m_pIntelligence) {
-		// CPedIntelligence::ClearTaskDuckSecondary
-		eng::fn::CPedIntelligence_ClearTaskDuckSecondary( m_ped->m_pIntelligence);
+	if (IsDuckTaskRolling(taskDuck)) {
+		// CTaskSimpleDuck::MakeAbortable rejects priorities 0 and 1 during
+		// CROUCH_ROLL_L/R (0x39/0x3b), which would leave WEAPON_CROUCH stuck
+		// while bIsDucking is cleared. Priority 2 (ABORT_PRIORITY_IMMEDIATE)
+		// blends IDLE_STANCE (1000.0f), clears callbacks, and clears bIsDucking.
+		eng::fn::CTaskSimpleDuck_MakeAbortable(taskDuck, m_ped, 2, nullptr);
+		return;
+	}
+
+	if (!IsDuckTaskAborting(taskDuck)) {
+		// Let ClearTaskDuckSecondary (MakeAbortable priority 0) smoothly blend
+		// WEAPON_CROUCH -> IDLE_STANCE and clear bIsDucking on completion, rather
+		// than prematurely clearing bIsDucking while WEAPON_CROUCH is still active.
+		eng::fn::CPedIntelligence_ClearTaskDuckSecondary(m_ped->m_pIntelligence);
 	}
 }
 

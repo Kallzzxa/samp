@@ -312,11 +312,13 @@ void EnsureTouchWidgetsCreated()
 				pos[0], pos[1], pos[2], pos[3]);
 		}
 	}
-	// freshly created widgets can carry a stale bound-finger index
+	// Reset cached touch slot and hold frame counter to CWidget::CWidget's safe
+	// defaults (0, not -1). Writing -1 causes out-of-bounds reads in
+	// LIB_PointerGetButton, CWidget::IsTouched, and CWidgetRegionMove::Update.
 	for (int i = 0; i < sa::WidgetIDs::NUM_WIDGETS; ++i) {
 		uintptr_t w = widgets[i];
 		if (!w) continue;
-		*reinterpret_cast<int32_t*>(w + kWidgetBoundFingerOffset) = -1;
-		*reinterpret_cast<float*>(w + kWidgetHoldCountOffset) = 0.f;
+		*reinterpret_cast<int32_t*>(w + kWidgetBoundFingerOffset) = 0;
+		*reinterpret_cast<int32_t*>(w + kWidgetHoldCountOffset) = 0;
 	}
 }

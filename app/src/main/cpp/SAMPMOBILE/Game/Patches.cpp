@@ -329,8 +329,3 @@ void Patches::apply()
 	patches::set("CClock::Update", true);
 	patches::set("ToggleCJWalk", true);
 }
-
-void InstallVehicleEngineLightPatches()
-{
-	// ~
-}
