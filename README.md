@@ -31,7 +31,7 @@
 
 > **关于 GTA:SA Android v2.10 的说明：**
 > - Google Play 现已更新至 v2.11+，底层内存布局与本客户端不兼容，请务必使用 **v2.10**。
-> - `tools/prepare_gtasa.py` 会自动识别并剥离常见 v2.10 补丁包中的 Fastman92 注入（`libFastman92pluginLoader.so`），还原原版 `JNI_OnLoad`/`JNI_OnUnload`。
+> - `tools/engine/prepare_gtasa.py` 会自动识别并剥离常见 v2.10 补丁包中的 Fastman92 注入（`libFastman92pluginLoader.so`），还原原版 `JNI_OnLoad`/`JNI_OnUnload`。
 > - 这类补丁包还把 `libGTASA.so` 内部的「程序头表」挪到了文件末尾。真机能正常加载，但 x86 模拟器（雷电等）加载这种库会立刻崩溃，表现为进游戏瞬间闪退。脚本提取时会自动把它挪回标准位置，不需要额外操作。官方原版的 `libGTASA.so` 没有这个问题，脚本不会改动它。
 > - **如果 `libGTASA.so` 是 2026-11-23 之前提取的**（那时脚本还没有上面这一步），在模拟器上会闪退。重新执行一次提取、再重新编译即可。
 > - 若安装包仅含 64 位 `arm64-v8a`（缺少 32 位 `armeabi-v7a`），现代 64 位手机仍可直接编译运行，构建校验仅作提示不会拦截。
@@ -82,7 +82,7 @@ sdk.dir=C\:\\Users\\<YourUser>\\AppData\\Local\\Android\\Sdk
 3. 在仓库根目录执行一次：
 
 ```bash
-python tools/prepare_gtasa.py
+python tools/engine/prepare_gtasa.py
 ```
 
 不管 `dist/` 里有一个还是多个 APK，**都只执行这一次**，不要每个 APK 各执行一遍。
@@ -125,13 +125,13 @@ python tools/prepare_gtasa.py
 
 ```bash
 # 手动指定 APK 或 Split-APK 目录（文件名不受上面规则限制；多个 APK 写在同一条命令里）
-python tools/prepare_gtasa.py --apk dist/gtasa_2.10_arm32.apk dist/gtasa_2.10_arm64.apk
+python tools/engine/prepare_gtasa.py --apk dist/gtasa_2.10_arm32.apk dist/gtasa_2.10_arm64.apk
 
 # 手机上已装好 GTA:SA v2.10（无需导入单机数据包），连接 ADB 直接从手机提取
-python tools/prepare_gtasa.py --from-adb
+python tools/engine/prepare_gtasa.py --from-adb
 
 # 清理本地提取的专有文件（含下面提到的备份）
-python tools/prepare_gtasa.py --clean
+python tools/engine/prepare_gtasa.py --clean
 ```
 
 #### 脚本提取时做了什么
@@ -143,7 +143,7 @@ python tools/prepare_gtasa.py --clean
 可选参数 `--libs-only`：只做前两件事，不动 `app/src/main/assets/`。适用于资产已经提取过、只想更新原生库的情况。它可以和上面任何一种方式一起用：
 
 ```bash
-python tools/prepare_gtasa.py --libs-only
+python tools/engine/prepare_gtasa.py --libs-only
 ```
 
 其他行为：
@@ -191,7 +191,7 @@ gradlew.bat assembleDebug
 3. 指定已安装 **SA-MP 0.3.7** 的 PC 版 GTA:SA 目录，执行一条命令即可自动生成 `dist/gamedata.zip`：
 
 ```bash
-python tools/build_gamedata.py --pc-samp "D:\Program Files (x86)\Rockstar Games\GTA San Andreas"
+python tools/gamedata/build_gamedata.py --pc-samp "D:\Program Files (x86)\Rockstar Games\GTA San Andreas"
 ```
 
 > 可选参数：`--gtasa`（手动指定 OBB/APK 路径）、`--cjk-font`（手动指定字体）、`--out`（默认 `dist/gamedata.zip`，传目录路径则输出散文件夹）、`--keep-audio`（保留完整音频）、`--scm-dir`（替换脚本）。
@@ -213,21 +213,24 @@ python tools/build_gamedata.py --pc-samp "D:\Program Files (x86)\Rockstar Games\
 
 ## 本地自动校验与测试
 
-不依赖真机或模拟器即可执行以下验证：
+不依赖真机或模拟器即可通过统一入口 `tests/check.py` 执行 5 阶段客观校验与自动化测试（详见 [tests/README.md](tests/README.md)）：
 
 - **双 ABI 编译期布局守卫**：`app/src/main/cpp/SAMPMOBILE/AbiGuards.cpp` 在编译 `arm64-v8a` / `armeabi-v7a` 时校验指针宽度、RakNet 类型、SA-MP 同步包大小及 GTA:SA 核心引擎结构体布局。
-- **双 ABI 引擎符号严格审计**：`python tools/check_symbols.py --strict-audit` 核对 `Symbols.def` 全部 505 项符号在 `arm64-v8a` / `armeabi-v7a` 的 `libGTASA.so` 导出表中的存在性与类型，并拦截裸字符串查表与裸偏移。
-- **协议层与 `open.mp` 上游对拍单测**（WSL / Linux）：`sh tests/proto/run.sh`（18 项 C++ 单元测试，覆盖协议基元、录包格式及与 `open.mp` 官方收发包逻辑的对拍）。
-- **JUnit 单元测试**：`./gradlew testDebugUnitTest`
-- **跨平台静态与产物自检**（仅依赖 Python 3 标准库）：
+- **统一校验入口（集成 NDK `llvm-nm`/`llvm-readelf` 与 Android SDK `aapt2`/`zipalign`/`apksigner`）**：
 
   ```bash
-  # 校验开源仓库状态
-  python tools/selfcheck.py
+  # 日常快检（合规、平台契约、双 ABI ELF/537 符号表/DT_NEEDED/真实 JNI 导出、APK 工具校验）
+  python tests/check.py
 
-  # 校验完整提取与双 ABI 打包产物
-  python tools/selfcheck.py --require-gtasa --require-apk
+  # 全量校验（追加 C++ 电脑端单测、Gradle JVM 单测、gamedata 分片闭环）
+  python tests/check.py --full
+
+  # 发包前严格门禁（强制要求 GTA:SA + APK，并追加官方 Android Lint 检查）
+  python tests/check.py --release
   ```
+
+- **单独运行 C++ 电脑端单测**（WSL / Linux）：`sh tests/native/run.sh`（覆盖协议基元、输入仲裁、配置契约及与 `open.mp` 上游源码的对拍）。
+- **单独运行 Gradle JVM 单测**：`./gradlew testDebugUnitTest`
 
 ---
 

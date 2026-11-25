@@ -1,6 +1,6 @@
 // Centralized libGTASA.so (v2.10) symbol table for F03 (Engine Access Layer).
 // Every symbol is resolved once at startup by eng::resolveAll() and verified
-// offline against both arm64-v8a and armeabi-v7a by tools/check_symbols.py.
+// offline against both arm64-v8a and armeabi-v7a by `python tests/check.py --stage abi`.
 //
 // Macros expected by includer:
 //   SYM_DATA(id, mangled, defaultType, policy)             // policy: Required | Optional
