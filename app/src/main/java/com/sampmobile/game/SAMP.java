@@ -218,7 +218,7 @@ public class SAMP extends GTASA {
             mConsumedBackKey = false;
             return true;
         }
-        if (ui != null && !ui.isInputFocused()) {
+        if (ui != null) {
             try {
                 onHardwareKeyEvent(keyCode, false);
             } catch (UnsatisfiedLinkError ignored) {
@@ -411,8 +411,9 @@ public class SAMP extends GTASA {
         if (ui != null) {
             ui.destroy();
         }
-        super.onDestroy();
-        // Native libGTASA/libSAMPMOBILE globals cannot survive in-process Activity recreation.
+        // Kill the isolated :game process BEFORE NvEventQueueActivity.onDestroy() invokes
+        // quitAndWait() (10s Main-Looper wait + OS_ApplicationEvent UAF) & systemCleanup().
         android.os.Process.killProcess(android.os.Process.myPid());
+        super.onDestroy();
     }
 }

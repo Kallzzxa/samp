@@ -163,12 +163,16 @@ public class UI implements ButtonPanel.Listener, Voice.Listener, Dialog.Listener
         } catch (Throwable ignored) {
             // FirebaseInitProvider only runs in the main launcher process, not :game.
         }
-        samp.runOnUiThread(() -> {
-            samp.finish();
-            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
-                    () -> android.os.Process.killProcess(android.os.Process.myPid()),
-                    150);
-        });
+        Thread exitWatchdog = new Thread(() -> {
+            try {
+                Thread.sleep(150);
+            } catch (InterruptedException ignored) {
+            }
+            android.os.Process.killProcess(android.os.Process.myPid());
+        }, "samp-exit-watchdog");
+        exitWatchdog.setDaemon(true);
+        exitWatchdog.start();
+        samp.runOnUiThread(samp::finish);
     }
 
     public void onResumeEvent() {
