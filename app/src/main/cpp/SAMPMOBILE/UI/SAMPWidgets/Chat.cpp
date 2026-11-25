@@ -6,9 +6,6 @@
 #include <algorithm>
 #include <cctype>
 
-extern UI* pUI;
-extern Game* pGame;
-extern NetGame* pNetGame;
 
 bool Chat::m_timestamp = false;
 

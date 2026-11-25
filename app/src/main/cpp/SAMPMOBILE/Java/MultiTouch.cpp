@@ -7,7 +7,6 @@
 #include <android/input.h>
 #include <unistd.h>
 
-extern UI* pUI;
 
 /* MultiTouch */
 

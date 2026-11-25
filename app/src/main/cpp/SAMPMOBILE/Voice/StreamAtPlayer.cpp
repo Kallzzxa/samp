@@ -6,7 +6,6 @@
 
 #include "StreamInfo.h"
 
-extern NetGame* pNetGame;
 
 StreamAtPlayer::StreamAtPlayer(const uint32_t color, std::string name,
 		const float distance, const PLAYERID playerId) noexcept

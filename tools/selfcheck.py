@@ -68,18 +68,10 @@ PERSONAL_PATTERNS = [
     (re.compile(r"\badb(?:\.exe)?\s+-s\s+[A-Z0-9]{12,}\b"), "hardcoded ADB device serial"),
 ]
 
-SKIP_DIRS = {".git", ".gradle", "build", ".cxx", ".externalNativeBuild", ".idea", "dist"}
+SKIP_DIRS = {".git", ".gradle", "build", ".cxx", ".externalNativeBuild", ".idea", ".vscode", "dist", "reference"}
 TEXT_EXTS = {
     ".java", ".cpp", ".cc", ".c", ".h", ".hpp", ".gradle", ".xml", ".toml",
     ".properties", ".md", ".txt", ".py", ".ps1", ".sh", ".bat", ".json", ".yml", ".yaml",
-}
-
-KNOWN_LEGACY_JAVA_UI_NATIVES = {
-    # Legacy unused Java-UI callbacks superseded by native ImGui widgets.
-    "com.sampmobile.game.ui.UI.sendButtonPanelKey",
-    "com.sampmobile.game.ui.UI.voicePressed",
-    "com.sampmobile.game.ui.UI.sendScoreboardClick",
-    "com.sampmobile.game.ui.UI.chatSend",
 }
 
 
@@ -218,7 +210,7 @@ def check_anti_regression(r: Runner) -> None:
 
     addr_h = read_text("app/src/main/cpp/SAMPMOBILE/Addr.h")
     symbols_cpp = read_text("app/src/main/cpp/SAMPMOBILE/Game/Engine/Symbols.cpp")
-    util_cpp = read_text("app/src/main/cpp/SAMPMOBILE/Game/Util.cpp")
+    util_cpp = read_text("app/src/main/cpp/SAMPMOBILE/Game/TouchWidgets.cpp")
     settings_cpp = read_text("app/src/main/cpp/SAMPMOBILE/Settings.cpp")
     if (
         "eng::live::touchWidgets" in util_cpp
@@ -258,6 +250,102 @@ def check_anti_regression(r: Runner) -> None:
         r.ok("No empty res/ subdirectories")
     else:
         r.fail("No empty res/ subdirectories", ", ".join(empty_res_dirs))
+
+
+def check_structure(r: Runner) -> None:
+    deleted_legacy_files = [
+        "app/src/main/java/com/sampmobile/game/ui/widgets/ButtonPanel.java",
+        "app/src/main/java/com/sampmobile/game/ui/widgets/Chat.java",
+        "app/src/main/java/com/sampmobile/game/ui/widgets/Scoreboard.java",
+        "app/src/main/java/com/sampmobile/game/ui/widgets/Voice.java",
+        "app/src/main/java/com/sampmobile/game/ui/widgets/adapter/ScoreboardAdapter.java",
+        "app/src/main/java/com/sampmobile/launcher/UpdateActivity.java",
+        "app/src/main/java/com/sampmobile/launcher/UpdateService.java",
+        "app/src/main/java/com/sampmobile/launcher/utils/FileData.java",
+        "app/src/main/java/com/sampmobile/launcher/utils/SignatureChecker.java",
+        "app/src/main/cpp/SAMPMOBILE/UI/Widgets/EditBox.h",
+        "app/src/main/cpp/SAMPMOBILE/UI/Widgets/EditBox.cpp",
+    ]
+    revived = [rel for rel in deleted_legacy_files if (REPO_ROOT / rel).exists()]
+    if not revived:
+        r.ok("No revived dead legacy files", f"{len(deleted_legacy_files)} paths verified absent")
+    else:
+        r.fail("No revived dead legacy files", "reappeared: " + ", ".join(revived))
+
+    header_limits = [
+        ("app/src/main/cpp/SAMPMOBILE/Game/Animation.h", 100),
+        ("app/src/main/cpp/SAMPMOBILE/Game/Font.h", 100),
+    ]
+    bloated_headers: List[str] = []
+    for rel, max_lines in header_limits:
+        n = len(read_text(rel).splitlines())
+        if n > max_lines:
+            bloated_headers.append(f"{rel} ({n}L > {max_lines}L)")
+    if not bloated_headers:
+        r.ok("Header data-table hygiene", "Animation.h & Font.h keep lookup tables in .cpp")
+    else:
+        r.fail("Header data-table hygiene", "; ".join(bloated_headers))
+
+    cpp_root = REPO_ROOT / "app/src/main/cpp/SAMPMOBILE"
+    skip_cpp_parts = {"Deps", "GameSA", "Memory", "Cef", "RakNet"}
+    singleton_extern_re = re.compile(
+        r"^\s*extern\s+(?:UI|Game|NetGame|PlayerTags|AudioStream|SnapShotHelper|MaterialTextGenerator)"
+        r"\s*\*\s*p(?:UI|Game|NetGame|PlayerTags|AudioStream|SnapShotHelper|MaterialTextGenerator)\s*;",
+        re.MULTILINE,
+    )
+    extern_hits: List[str] = []
+    for p in sorted(cpp_root.rglob("*.cpp")):
+        if any(part in skip_cpp_parts for part in p.parts):
+            continue
+        if p.name == "Client.cpp":
+            continue
+        text = strip_c_comments(p.read_text(encoding="utf-8", errors="ignore"))
+        if singleton_extern_re.search(text):
+            extern_hits.append(p.relative_to(REPO_ROOT).as_posix())
+    if not extern_hits:
+        r.ok("Centralized singleton extern hygiene", "non-CEF C++ uses Client.h instead of raw externs")
+    else:
+        r.fail("Centralized singleton extern hygiene", "raw singleton extern in: " + ", ".join(extern_hits))
+
+    net_voice_hits: List[str] = []
+    net_dir = cpp_root / "Net"
+    for p in sorted(net_dir.glob("*.cpp")):
+        text = strip_c_comments(p.read_text(encoding="utf-8", errors="ignore"))
+        if re.search(r'#\s*include\s*"\.\./Voice/', text):
+            net_voice_hits.append(p.relative_to(REPO_ROOT).as_posix())
+    if not net_voice_hits:
+        r.ok("Net/Voice decoupling guard", "Net/*.cpp routes Voice lifecycle via Net/SessionHooks.h")
+    else:
+        r.fail("Net/Voice decoupling guard", "direct Voice include in: " + ", ".join(net_voice_hits))
+
+    cmake_txt = read_text("app/src/main/cpp/SAMPMOBILE/CMakeLists.txt")
+    if "CONFIGURE_DEPENDS" in cmake_txt:
+        r.ok("CMake source discovery guard", "SAMPMOBILE/CMakeLists.txt uses CONFIGURE_DEPENDS")
+    else:
+        r.fail("CMake source discovery guard", "SAMPMOBILE/CMakeLists.txt missing CONFIGURE_DEPENDS")
+
+    monolith_limit = 1300
+    data_table_files = {
+        "app/src/main/cpp/SAMPMOBILE/Game/Animation.cpp",
+        "app/src/main/cpp/SAMPMOBILE/Game/Font.cpp",
+    }
+    oversized: List[str] = []
+    for base in (cpp_root, REPO_ROOT / "app/src/main/java/com/sampmobile"):
+        for p in sorted(base.rglob("*")):
+            if p.suffix not in {".cpp", ".java"}:
+                continue
+            if any(part in (skip_cpp_parts | {"cef"}) for part in p.parts):
+                continue
+            rel = p.relative_to(REPO_ROOT).as_posix()
+            if rel in data_table_files:
+                continue
+            n = len(p.read_text(encoding="utf-8", errors="ignore").splitlines())
+            if n > monolith_limit:
+                oversized.append(f"{rel} ({n}L)")
+    if not oversized:
+        r.ok("Monolith size watchlist", f"all first-party .cpp/.java <= {monolith_limit} lines")
+    else:
+        r.warn("Monolith size watchlist", f"exceeds {monolith_limit} lines: " + ", ".join(oversized))
 
 
 def check_assets(r: Runner, require_gtasa: bool) -> None:
@@ -334,8 +422,6 @@ def check_jni_bindings(r: Runner) -> None:
         for m in native_decl_re.finditer(text):
             method = m.group(1)
             fq_method = f"{pkg}.{cls}.{method}"
-            if fq_method in KNOWN_LEGACY_JAVA_UI_NATIVES:
-                continue
             checked += 1
             jni_sym = (
                 "Java_"
@@ -494,6 +580,7 @@ def main() -> int:
     check_compliance(runner)
     check_build_and_manifest(runner)
     check_anti_regression(runner)
+    check_structure(runner)
     check_assets(runner, require_gtasa=args.require_gtasa)
     check_jni_bindings(runner)
     check_jnilibs_elf(runner, require_gtasa=args.require_gtasa)

@@ -11,9 +11,6 @@
 #include "PluginConfig.h"
 #include "../Game/AudioStream.h"
 
-extern UI* pUI;
-extern NetGame* pNetGame;
-extern AudioStream* pAudioStream;
 
 bool SpeakerList::Init() noexcept
 {

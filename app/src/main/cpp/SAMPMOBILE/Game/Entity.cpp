@@ -8,9 +8,6 @@
 #include "../Client.h"
 #include "Entity.h"
 
-extern UI* pUI;
-extern Game* pGame;
-extern NetGame* pNetGame;
 
 void CEntity::Add()
 {

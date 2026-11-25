@@ -4,8 +4,6 @@
 #include "../Client.h"
 #include "../Settings.h"
 
-extern Game* pGame;
-extern NetGame* pNetGame;
 
 CTextLabelPool::CTextLabelPool()
 {

@@ -4,9 +4,6 @@
 #include "Proto/RpcOutbound.h"
 #include "../Client.h"
 
-extern UI* pUI;
-extern Game* pGame;
-extern NetGame* pNetGame;
 
 CVehiclePool::CVehiclePool()
 {

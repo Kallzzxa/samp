@@ -11,7 +11,6 @@
 #include "Game.h"
 #include "../Client.h"
 
-extern Game* pGame;
 
 namespace {
 std::mutex g_audioStreamMutex;

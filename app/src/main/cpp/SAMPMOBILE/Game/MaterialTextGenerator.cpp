@@ -5,7 +5,6 @@
 #include <encoding.h>
 #include <algorithm>
 
-extern UI* pUI;
 
 MaterialTextGenerator::MaterialTextGenerator()
 {

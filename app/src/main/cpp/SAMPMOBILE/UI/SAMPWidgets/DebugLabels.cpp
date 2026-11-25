@@ -3,9 +3,6 @@
 #include "../../Game/Game.h"
 #include "../../Net/NetGame.h"
 
-extern UI* pUI;
-extern Game* pGame;
-extern NetGame* pNetGame;
 
 /* DebugLables */
 

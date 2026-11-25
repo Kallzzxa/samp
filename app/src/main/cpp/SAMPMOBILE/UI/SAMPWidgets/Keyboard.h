@@ -133,7 +133,6 @@ public:
 	void show(Widget* caller, bool hidden = false);
 	void hide();
 	void send();
-	void newSend(JNIEnv* env, jbyteArray str);
 
 	bool hiddenInput() { return m_hiddenInput; }
 

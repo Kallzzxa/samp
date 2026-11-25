@@ -1,3 +1,4 @@
+#include "../Client.h"
 //
 // Created by ALYN on 2024/8/30.
 //
@@ -5,9 +6,6 @@
 #include "Game.h"
 #include "../UI/UI.h"
 
-extern UI* pUI;
-extern Game* pGame;
-extern SnapShotHelper* pSnapShotHelper;
 
 extern RwTexture* TextDrawTexture[];
 

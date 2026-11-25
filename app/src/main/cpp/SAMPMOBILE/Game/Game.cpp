@@ -1,3 +1,4 @@
+#include "Patches.h"
 //
 // Created by ALYN on 2024/7/30.
 //
@@ -13,7 +14,6 @@ void InitScripting();
 
 bool bUsedPlayerSlots[PLAYER_PED_SLOTS];
 
-extern sa::CPlayerInfo* WORLD_PLAYERS;
 char* szGameTextMessage = nullptr;
 
 inline int FindFirstFreePlayerPedSlot()

@@ -3,6 +3,7 @@
 //
 
 #include "Game.h"
+#include "Hooks/HookDomains.h"
 #include "VehicleComponentTable.h"
 #include "../Client.h"
 #include "../UI/UI.h"
@@ -11,10 +12,6 @@
 #include <algorithm>
 #include <cmath>
 
-extern UI* pUI;
-extern Game* pGame;
-extern NetGame* pNetGame;
-extern MaterialTextGenerator* pMaterialTextGenerator;
 
 static sa::CVehicle* pCreatedTrain = nullptr;
 
@@ -69,7 +66,6 @@ CVehicle::CVehicle(int iType, float fX, float fY, float fZ, float fRotation, boo
 			}
 		}
 
-		extern bool g_bCreatingSirenVehicle;
 		g_bCreatingSirenVehicle = bSiren;
 		ScriptCommand(&create_car, iType, fX, fY, fZ, &dwRetID);
 		g_bCreatingSirenVehicle = false;
@@ -669,7 +665,6 @@ void CVehicle::DetachTrailer()
 	if (m_pTrailer) {
 		if (m_gtaId && VerifyInstance()) {
 			if (m_pTrailer->m_pVehicle && GamePool_Vehicle_GetAt(m_pTrailer->m_gtaId) == m_pTrailer->m_pVehicle) {
-				extern bool g_bIntentionalTrailerDetach;
 				g_bIntentionalTrailerDetach = true;
 				ScriptCommand(&detach_trailer_from_cab, m_pTrailer->m_gtaId, m_gtaId);
 				g_bIntentionalTrailerDetach = false;
@@ -856,7 +851,6 @@ void CVehicle::AttachTrailer()
 {
 	if (m_pTrailer && VerifyInstance() &&
 			m_pTrailer->m_pVehicle && GamePool_Vehicle_GetAt(m_pTrailer->m_gtaId) == m_pTrailer->m_pVehicle) {
-		extern bool g_bIntentionalTrailerDetach;
 		g_bIntentionalTrailerDetach = true;
 		ScriptCommand(&put_trailer_on_cab, m_pTrailer->m_gtaId, m_gtaId);
 		g_bIntentionalTrailerDetach = false;

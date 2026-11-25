@@ -3,24 +3,19 @@
 #include "../Client.h"
 #include "NetGame.h"
 #include "RpcHandlers.h"
+#include "ScmEvents.h"
+#include "SessionHooks.h"
 #include "Proto/RpcOutbound.h"
 #include "../UI/UI.h"
 #include "../Java/Java.h"
-#include "../Voice/Network.h"
-#include "../Voice/SpeakerList.h"
 #include <RakNet/GetTime.h>
 #include <cmath>
 
-extern UI* pUI;
-extern Game* pGame;
-extern NetGame* pNetGame;
 
 #define REJECT_REASON_BAD_VERSION 1
 #define REJECT_REASON_BAD_NICKNAME 2
 #define REJECT_REASON_BAD_MOD 3
 #define REJECT_REASON_BAD_PLAYERID 4
-
-void ProcessIncommingEvent(PLAYERID playerID, int iEventType, uint32_t dwParam1, uint32_t dwParam2, uint32_t dwParam3);
 
 void RpcHandlers::OnInitGame(const proto::InitGame& p)
 {
@@ -307,8 +302,7 @@ void RpcHandlers::OnConnectionRejected(const proto::ConnectionRejected& p)
 			break;
 	}
 
-	Network::OnRaknetDisconnect();
-	SpeakerList::Hide();
+	SessionHooks::NotifyDisconnect();
 	pNetGame->GetRakClient()->Disconnect(100);
 }
 
@@ -538,7 +532,7 @@ void RpcHandlers::OnScmEvent(const proto::ScmEvent& p)
 	spdlog::debug("dwParam2 {}", p.param2);
 	spdlog::debug("dwParam3 {}", p.param3);
 
-	ProcessIncommingEvent(p.playerId, p.eventType, p.param1, p.param2, p.param3);
+	ProcessIncomingScmEvent(p.playerId, p.eventType, p.param1, p.param2, p.param3);
 }
 
 void RpcHandlers::OnUpdateScoresPingsIPs(const proto::UpdateScoresPingsIPs& p)

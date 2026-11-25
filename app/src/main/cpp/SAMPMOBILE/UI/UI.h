@@ -19,7 +19,6 @@
 #include "Widgets/ProgressBar.h"
 #include "Widgets/ScrollPanel.h"
 #include "Widgets/ListBox.h"
-#include "Widgets/EditBox.h"
 
 #include "SAMPWidgets/PlayerTags.h"
 #include "SAMPWidgets/Keyboard.h"

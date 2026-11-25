@@ -1,7 +1,7 @@
+#include "../Client.h"
 #include "../Game/Game.h"
 #include "NetGame.h"
 
-extern Game* pGame;
 
 CGangZonePool::CGangZonePool()
 {

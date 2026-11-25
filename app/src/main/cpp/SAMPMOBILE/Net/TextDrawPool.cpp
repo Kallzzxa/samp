@@ -1,9 +1,8 @@
+#include "../Client.h"
 #include "../Game/Game.h"
 #include "NetGame.h"
 #include "Proto/RpcOutbound.h"
 
-extern Game* pGame;
-extern NetGame* pNetGame;
 
 CTextDrawPool::CTextDrawPool()
 {

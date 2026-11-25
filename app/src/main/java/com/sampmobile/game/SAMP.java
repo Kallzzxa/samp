@@ -17,7 +17,6 @@ import java.util.Objects;
 import com.sampmobile.game.ui.UI;
 import com.sampmobile.game.ui.cef.CefManager;
 import com.sampmobile.launcher.utils.ModManager;
-import com.sampmobile.launcher.utils.SignatureChecker;
 import com.sampmobile.launcher.utils.Utils;
 
 @Obfuscate
@@ -145,15 +144,6 @@ public class SAMP extends GTASA {
 
         // omp-cef 浏览器层：装上 DecorView，服务端 CreateBrowser 事件到达时可立即建窗
         CefManager.install(this);
-
-        // check signature
-        if (!SignatureChecker.isSignatureValid(this, getPackageName())) {
-            Log.e("SplashActivity", "No remake idiot!");
-            finish();
-            return;
-        } else {
-            Log.i("SplashActivity", "Using original client!");
-        }
 
         // Ensure SAMP/settings.json matches SharedPreferences (even on offline or direct launches)
         Utils.saveSettings(this);
@@ -310,78 +300,6 @@ public class SAMP extends GTASA {
         } catch (UnsatisfiedLinkError ignored) {
         }
     }
-
-/*
-    @Override
-    public boolean onTouchEvent(MotionEvent event) {
-        if (getSharedPreferences("samp_settings", Context.MODE_PRIVATE).getInt("game_version", 0) == 0) {
-            if (ui != null) {
-                ui.onTouchEvent(event);
-            }
-
-            int x1 = 0, y1 = 0, x2 = 0, y2 = 0, x3 = 0, y3 = 0, x4 = 0, y4 = 0;
-            int numEvents = event.getPointerCount();
-
-            for (int i = 0; i < numEvents; i++) {
-                int pointerId = event.getPointerId(i);
-
-                if (pointerId == 0) {
-                    x1 = (int) event.getX(i);
-                    y1 = (int) event.getY(i);
-                } else if (pointerId == 1) {
-                    x2 = (int) event.getX(i);
-                    y2 = (int) event.getY(i);
-                } else if (pointerId == 2) {
-                    x3 = (int) event.getX(i);
-                    y3 = (int) event.getY(i);
-                } else if (pointerId == 3) {
-                    x4 = (int) event.getX(i);
-                    y4 = (int) event.getY(i);
-                }
-            }
-
-            int pointerId = event.getPointerId(event.getActionIndex());
-            int action = event.getActionMasked();
-
-            try {
-                multiTouchEvent4Ex(action, pointerId, x1, y1, x2, y2, x3, y3, x4, y4);
-            } catch (UnsatisfiedLinkError e) {
-                e.printStackTrace();
-            }
-            return super.onTouchEvent(event);
-        }
-        // arz version
-        else {
-            int pointerCount = event.getPointerCount();
-            int i = 0;
-            int i2 = 0;
-            int i3 = 0;
-            int i4 = 0;
-            int i5 = 0;
-            int i6 = 0;
-            int i7 = 0;
-            int i8 = 0;
-            for (int i9 = 0; i9 < pointerCount; i9++) {
-                int pointerId = event.getPointerId(i9);
-                if (pointerId == 0) {
-                    i = (int) event.getX(i9);
-                    i2 = (int) event.getY(i9);
-                } else if (pointerId == 1) {
-                    i3 = (int) event.getX(i9);
-                    i4 = (int) event.getY(i9);
-                } else if (pointerId == 2) {
-                    i5 = (int) event.getX(i9);
-                    i6 = (int) event.getY(i9);
-                } else if (pointerId == 3) {
-                    i7 = (int) event.getX(i9);
-                    i8 = (int) event.getY(i9);
-                }
-            }
-            multiTouchEvent4(event.getActionMasked(), event.getPointerId(event.getActionIndex()), i, i2, i3, i4, i5, i6, i7, i8, event);
-            return true;
-        }
-    }
-*/
 
     @Override
     protected void onNewIntent(android.content.Intent intent) {

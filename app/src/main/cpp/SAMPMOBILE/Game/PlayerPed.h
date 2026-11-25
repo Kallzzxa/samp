@@ -63,7 +63,6 @@ public:
 	void SetInitialState();
 	void SetModelIndex(uint uiModel);
 	void ClearWeapons();
-	void ResetHealth();
 	void GiveWeapon(int iWeaponId, int iAmmo);
 	void SetArmedWeapon(uint8_t weapon);
 	void SetTargetRotation(float fRotation);
@@ -211,8 +210,6 @@ private:
 	int m_iDanceState = 0;
 	int m_iDanceStyle = -1;
 	int m_iLastDanceMove = 0;
-	int m_iDancingState = 0;
-	int m_iDancingAnim = 0;
 
 	bool m_bCellPhoneEnabled = false;
 

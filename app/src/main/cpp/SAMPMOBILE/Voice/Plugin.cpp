@@ -19,9 +19,10 @@
 #include "StreamAtObject.h"
 
 #include "../Game/AudioStream.h"
+#include "../Net/SessionHooks.h"
+#include "../Settings.h"
+#include <RakNet/PacketEnumerations.h>
 
-extern UI* pUI;
-extern AudioStream* pAudioStream;
 
 bool Plugin::OnPluginLoad() noexcept
 {
@@ -67,6 +68,35 @@ bool Plugin::OnSampLoad() noexcept
 		Network::Free();
 		return false;
 	}
+
+	SessionHookCallbacks hooks{};
+	hooks.onConnect = [](const char* host, uint16_t port) {
+		if (Settings::voice()) {
+			spdlog::info("Voice session connect {}:{}", host ? host : "", port);
+			Network::OnRaknetConnect(host, port);
+		}
+	};
+	hooks.onDisconnect = []() {
+		Network::OnRaknetDisconnect();
+		SpeakerList::Hide();
+	};
+	hooks.onHideOverlay = []() {
+		if (Settings::voice()) {
+			SpeakerList::Hide();
+		}
+	};
+	hooks.onClientJoinRpc = [](int rpcId, RakNet::BitStream& bs) {
+		if (Settings::voice()) {
+			Network::OnRaknetRpc(rpcId, bs);
+			SpeakerList::Hide();
+		}
+	};
+	hooks.onCustomPacket = [](uint8_t packetId, Packet* pkt) {
+		if (packetId == ID_VOICE_SYNC && Settings::voice()) {
+			Network::OnRaknetReceive(pkt);
+		}
+	};
+	SessionHooks::Register(hooks);
 
 	return true;
 }

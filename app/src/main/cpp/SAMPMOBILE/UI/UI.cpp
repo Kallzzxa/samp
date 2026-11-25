@@ -10,9 +10,6 @@
 #include "../Voice/SpeakerList.h"
 #include "../Voice/include/util/Render.h"
 
-extern Game* pGame;
-extern NetGame* pNetGame;
-extern PlayerTags* pPlayerTags;
 
 UI::UI(const ImVec2& display_size, const std::string& fonts_path)
 		: Widget(), ImGuiWrapper(display_size, fonts_path)

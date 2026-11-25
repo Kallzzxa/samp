@@ -10,8 +10,6 @@
 #include "../Net/Proto/RpcOutbound.h"
 #include "EditObject.h"
 
-extern UI* pUI;
-extern NetGame* pNetGame;
 
 namespace {
 bool g_hasOrigSnapshot = false;

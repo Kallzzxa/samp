@@ -2,8 +2,6 @@
 #include "Client.h"
 #include "Game/Game.h"
 #include "Enums/WidgetIDs.h"
-#include <bass.h>
-#include <opus.h>
 #include "Voice/PluginConfig.h"
 #include "Voice/Playback.h"
 #include "Voice/Record.h"
@@ -13,8 +11,6 @@
 #include <rapidjson/filewritestream.h>
 #include <rapidjson/prettywriter.h>
 #include <algorithm>
-
-extern Game* pGame;
 
 bool Settings::m_initialized = false;
 
@@ -26,7 +22,6 @@ char Settings::m_pass[64] = "";
 // settings
 char Settings::m_nick[30] = "samp_player";
 int Settings::m_sampversion = 0;
-bool Settings::m_newinterface = false;
 bool Settings::m_systemkeyboard = true;
 bool Settings::m_timestamp = false;
 bool Settings::m_fastconnect = false;

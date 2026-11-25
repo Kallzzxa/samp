@@ -29,7 +29,6 @@ public:
 	// settings
 	static char* nick() { return m_nick; }
 	static int sampversion() { return m_sampversion; }
-	static bool newinterface() { return m_newinterface; }
 	static bool systemkeyboard() { return m_systemkeyboard; }
 	static bool timestamp() { return m_timestamp; }
 	static void setTimestamp(bool v);
@@ -149,7 +148,6 @@ private:
 	// settings
 	static char m_nick[30];
 	static int m_sampversion;
-	static bool m_newinterface;
 	static bool m_systemkeyboard;
 	static bool m_timestamp;
 	static bool m_fastconnect;

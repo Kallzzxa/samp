@@ -5,7 +5,6 @@
 #include "StreamAtObject.h"
 #include "StreamInfo.h"
 
-extern NetGame* pNetGame;
 
 StreamAtObject::StreamAtObject(const uint32_t color, std::string name,
 		const float distance, const WORD objectId) noexcept

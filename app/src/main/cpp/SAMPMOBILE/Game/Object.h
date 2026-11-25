@@ -114,7 +114,6 @@ public:
 	bool m_bObjectMaterialTextureChanged;
 	bool m_bObjectMaterialColorChanged;
 	unsigned int m_uiLastObjectGeometry;
-	bool m_bAllowChangeObjectMaterial;
 	RwObject* m_pLastObjectMaterialRwObject;
 
 	/* attach */

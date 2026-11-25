@@ -1,3 +1,4 @@
+#include "../Client.h"
 #include "../Game/Game.h"
 #include "../Java/EditObject.h"
 #include "../UI/UI.h"
@@ -8,9 +9,6 @@
 #include <cmath>
 #include <cstdio>
 
-extern Game* pGame;
-extern NetGame* pNetGame;
-extern UI* pUI;
 
 CObjectPool::CObjectPool()
 {

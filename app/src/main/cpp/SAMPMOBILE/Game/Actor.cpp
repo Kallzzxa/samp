@@ -5,7 +5,6 @@
 #include "Game.h"
 #include "../Client.h"
 
-extern Game* pGame;
 
 CActor::CActor(int iSkin, float fX, float fY, float fZ, float fAngle)
 {

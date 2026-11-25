@@ -1,3 +1,4 @@
+#include "../Client.h"
 #include "../Game/Game.h"
 #include "../UI/UI.h"
 #include "NetGame.h"
@@ -8,8 +9,6 @@
 #include <algorithm>
 #include <cmath>
 
-extern NetGame* pNetGame;
-extern UI* pUI;
 
 std::string CMenuPool::formatMenuText(const std::string& raw, const char* resetHex)
 {

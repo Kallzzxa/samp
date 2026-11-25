@@ -1,3 +1,4 @@
+#include "../Client.h"
 //
 // Created by ALYN on 18-Feb-25.
 //
@@ -8,7 +9,6 @@
 #include "../Addr.h"
 #include "../Net/NetGame.h"
 
-extern NetGame* pNetGame;
 
 DECL_HOOK(void, CPickups_Update)
 {

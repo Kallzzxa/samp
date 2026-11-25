@@ -114,7 +114,10 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     };
 
     private int currentCategory = CAT_MULTIPLAYER;
-    private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
+    final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
+    private final SettingsScreenshotController screenshotController = new SettingsScreenshotController(this);
+    private final SettingsDiagnosticsController diagnosticsController = new SettingsDiagnosticsController(this);
+    private final SettingsGameDataController gameDataController = new SettingsGameDataController(this);
     private View rootView;
     private GtaTabStrip settingsTabs;
 
@@ -132,28 +135,10 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private TextView btn_gfx_preset_low, btn_gfx_preset_med, btn_gfx_preset_high, btn_gfx_preset_ultra;
     private TextView btn_open_hud_editor, btn_reset_hud_editor;
 
-    // 文件验证与资源管理选项卡
-    private GtaOptionView option_gd_edition;
-    private TextView tv_gd_summary, tv_gd_storage_meta, tv_gd_list_summary, tv_gd_list_empty;
-    private TextView btn_gd_import, btn_gd_download, btn_gd_verify, btn_gd_filter_all, btn_gd_filter_issues;
-    private View layout_gd_download_progress;
-    private TextView tv_gd_dl_status, tv_gd_dl_bytes;
-    private android.widget.ProgressBar pb_gd_download;
-    private RecyclerView rv_gd_files;
-    private final List<GameDataVerifier.FileCheckItem> allGameDataItems = new ArrayList<>();
-    private final List<GameDataVerifier.FileCheckItem> displayedGameDataItems = new ArrayList<>();
-    private GameDataFileAdapter gameDataFileAdapter;
-    private GameDataVerifier.Edition selectedGameDataEdition = GameDataVerifier.Edition.LITE;
-    private GameDataVerifier.Report lastGameDataReport;
-    private boolean gameDataFilterIssuesOnly = false;
-    private final AtomicBoolean gdDownloading = new AtomicBoolean(false);
-    private volatile GamedataInstallerTask activeDownloadTask;
-    private long lastDownloadProgressPostMs = 0L;
-
-    private final ActivityResultLauncher<String[]> gameDataZipPicker =
+    final ActivityResultLauncher<String[]> gameDataZipPicker =
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
                 if (uri != null && isAdded()) {
-                    GameDataImportDialog.startImport(requireActivity(), uri, this::refreshGameDataVerification);
+                    GameDataImportDialog.startImport(requireActivity(), uri, gameDataController::refreshVerification);
                 }
             });
 
@@ -193,20 +178,14 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private GtaSaSliderView slider_nametag_size, slider_textlabel_size;
     private TextView tv_nametag_size_val, tv_textlabel_size_val;
 
-    // 截图库
-    private TextView btn_ss_mode_hud, btn_ss_mode_game, tv_screenshots_summary, tv_screenshots_empty;
-    private RecyclerView rv_screenshots;
-    private final List<File> screenshotFiles = new ArrayList<>();
-    private ScreenshotAdapter screenshotAdapter;
-
-    // 问题反馈
-    private TextView tv_diag_status_title, tv_diag_status_desc;
+    // 截图模式按钮
+    private TextView btn_ss_mode_hud, btn_ss_mode_game;
 
     // 帮助与关于
     private TextView tv_help_mods_body, tv_help_faq_body, tv_help_commands;
     private TextView tv_about_version_line, tv_about_summary;
 
-    private SharedPreferences settings_prefs;
+    SharedPreferences settings_prefs;
     private RelativeLayout game_version_layout;
 
     private static final String[] SAMP_VERSION_ITEMS = {"0.3.7", "0.3.7-R4", "0.3.7-R5", "0.3.DL-R1"};
@@ -310,11 +289,11 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         if (!isAdded() || settings_prefs == null) return;
         setWidgetsForSettings();
         if (currentCategory == CAT_GAMEDATA) {
-            refreshGameDataVerification();
+            gameDataController.refreshVerification();
         } else if (currentCategory == CAT_SCREENSHOTS) {
-            refreshScreenshotGallery();
+            screenshotController.refresh();
         } else if (currentCategory == CAT_LOGS) {
-            refreshDiagnosticStatus();
+            diagnosticsController.refresh();
         }
     }
 
@@ -329,14 +308,14 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
 
     @Override
     public void onDestroyView() {
-        cancelActiveGameDataDownload();
+        gameDataController.cancelActiveDownload();
         LauncherThemeManager.removeListener(this);
         super.onDestroyView();
     }
 
     @Override
     public void onDestroy() {
-        cancelActiveGameDataDownload();
+        gameDataController.cancelActiveDownload();
         super.onDestroy();
         ioExecutor.shutdownNow();
     }
@@ -348,11 +327,9 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         updateGraphicsPresetUI();
         updateScreenshotModeUI();
         updateHudEditorButtonUI();
-        updateGameDataFilterUI();
-        updateGameDataDownloadButtonUI();
-        if (screenshotAdapter != null) {
-            screenshotAdapter.notifyDataSetChanged();
-        }
+        gameDataController.updateFilterUI();
+        gameDataController.updateDownloadButtonUI();
+        screenshotController.notifyThemeChanged();
     }
 
     private void initViews(View view) {
@@ -495,16 +472,10 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         // 截图库
         btn_ss_mode_hud = view.findViewById(R.id.btn_ss_mode_hud);
         btn_ss_mode_game = view.findViewById(R.id.btn_ss_mode_game);
-        tv_screenshots_summary = view.findViewById(R.id.tv_screenshots_summary);
-        tv_screenshots_empty = view.findViewById(R.id.tv_screenshots_empty);
-        rv_screenshots = view.findViewById(R.id.rv_screenshots);
-        rv_screenshots.setLayoutManager(new GridLayoutManager(requireContext(), 2));
-        screenshotAdapter = new ScreenshotAdapter();
-        rv_screenshots.setAdapter(screenshotAdapter);
+        screenshotController.bindViews(view);
 
         // 问题反馈
-        tv_diag_status_title = view.findViewById(R.id.tv_diag_status_title);
-        tv_diag_status_desc = view.findViewById(R.id.tv_diag_status_desc);
+        diagnosticsController.bindViews(view);
 
         // 帮助与关于
         tv_help_mods_body = view.findViewById(R.id.tv_help_mods_body);
@@ -514,28 +485,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         tv_about_summary = view.findViewById(R.id.tv_about_summary);
 
         // 文件验证与游戏资源选项卡
-        option_gd_edition = view.findViewById(R.id.option_gd_edition);
-        tv_gd_summary = view.findViewById(R.id.tv_gd_summary);
-        tv_gd_storage_meta = view.findViewById(R.id.tv_gd_storage_meta);
-        tv_gd_list_summary = view.findViewById(R.id.tv_gd_list_summary);
-        tv_gd_list_empty = view.findViewById(R.id.tv_gd_list_empty);
-        btn_gd_import = view.findViewById(R.id.btn_gd_import);
-        btn_gd_download = view.findViewById(R.id.btn_gd_download);
-        btn_gd_verify = view.findViewById(R.id.btn_gd_verify);
-        btn_gd_filter_all = view.findViewById(R.id.btn_gd_filter_all);
-        btn_gd_filter_issues = view.findViewById(R.id.btn_gd_filter_issues);
-        layout_gd_download_progress = view.findViewById(R.id.layout_gd_download_progress);
-        tv_gd_dl_status = view.findViewById(R.id.tv_gd_dl_status);
-        tv_gd_dl_bytes = view.findViewById(R.id.tv_gd_dl_bytes);
-        pb_gd_download = view.findViewById(R.id.pb_gd_download);
-        rv_gd_files = view.findViewById(R.id.rv_gd_files);
-        if (rv_gd_files != null) {
-            rv_gd_files.setLayoutManager(new LinearLayoutManager(requireContext()));
-            gameDataFileAdapter = new GameDataFileAdapter();
-            rv_gd_files.setAdapter(gameDataFileAdapter);
-        }
-        setupGameDataControls();
-        refreshGameDataVerification();
+        gameDataController.bindViews(view);
     }
 
     private void setupCategoryNavigation(View view) {
@@ -579,11 +529,11 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         }
 
         if (catIdx == CAT_GAMEDATA) {
-            refreshGameDataVerification();
+            gameDataController.refreshVerification();
         } else if (catIdx == CAT_SCREENSHOTS) {
-            refreshScreenshotGallery();
+            screenshotController.refresh();
         } else if (catIdx == CAT_LOGS) {
-            refreshDiagnosticStatus();
+            diagnosticsController.refresh();
         } else if (catIdx == CAT_HELP_ABOUT) {
             populateHelpAndAbout();
         }
@@ -747,17 +697,17 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
             updateScreenshotModeUI();
             Toast.makeText(requireContext(), "已设为：仅游戏画面", Toast.LENGTH_SHORT).show();
         });
-        view.findViewById(R.id.btn_ss_refresh).setOnClickListener(v -> refreshScreenshotGallery());
-        view.findViewById(R.id.btn_ss_clear_all).setOnClickListener(v -> confirmClearScreenshots());
+        view.findViewById(R.id.btn_ss_refresh).setOnClickListener(v -> screenshotController.refresh());
+        view.findViewById(R.id.btn_ss_clear_all).setOnClickListener(v -> screenshotController.confirmClear());
 
         // 问题反馈操作按钮
         view.findViewById(R.id.btn_log_refresh).setOnClickListener(v -> {
-            refreshDiagnosticStatus();
+            diagnosticsController.refresh();
             Toast.makeText(requireContext(), "运行状态检测已刷新", Toast.LENGTH_SHORT).show();
         });
-        view.findViewById(R.id.btn_log_copy_report).setOnClickListener(v -> copyDiagnosticReport());
-        view.findViewById(R.id.btn_log_share).setOnClickListener(v -> shareDiagnosticLogFile());
-        view.findViewById(R.id.btn_log_clear).setOnClickListener(v -> confirmClearLogs());
+        view.findViewById(R.id.btn_log_copy_report).setOnClickListener(v -> diagnosticsController.copyReport());
+        view.findViewById(R.id.btn_log_share).setOnClickListener(v -> diagnosticsController.shareLogFile());
+        view.findViewById(R.id.btn_log_clear).setOnClickListener(v -> diagnosticsController.confirmClearLogs());
 
         setupSwitchListeners();
         setupRestoreButton();
@@ -773,7 +723,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         return String.valueOf(fps);
     }
 
-    private ArrayAdapter<String> createDropdownAdapter(final String[] items) {
+    ArrayAdapter<String> createDropdownAdapter(final String[] items) {
         return new ArrayAdapter<String>(requireContext(), R.layout.layout_setting_version, new ArrayList<>(Arrays.asList(items))) {
             private final Filter noOpFilter = new Filter() {
                 @Override
@@ -1153,527 +1103,6 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    //  截图库
-    // ════════════════════════════════════════════════════════════════════════
-
-    private File getScreenshotsDir() {
-        File dir = new File(requireContext().getExternalFilesDir(null), "SAMP/screens");
-        if (!dir.exists()) dir.mkdirs();
-        return dir;
-    }
-
-    private void refreshScreenshotGallery() {
-        Context ctx = getContext();
-        if (ctx == null) return;
-        final Context appCtx = ctx.getApplicationContext();
-        ioExecutor.execute(() -> {
-            File extDir = appCtx.getExternalFilesDir(null);
-            if (extDir == null) return;
-            File dir = new File(extDir, "SAMP/screens");
-            if (!dir.exists()) dir.mkdirs();
-            File[] files = dir.listFiles((d, name) -> {
-                String lower = name.toLowerCase(Locale.US);
-                return lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg");
-            });
-
-            List<File> list = new ArrayList<>();
-            long totalBytes = 0;
-            if (files != null) {
-                Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
-                for (File f : files) {
-                    list.add(f);
-                    totalBytes += f.length();
-                }
-            }
-            final long finalBytes = totalBytes;
-            androidx.fragment.app.FragmentActivity act = getActivity();
-            if (act != null && isAdded()) {
-                act.runOnUiThread(() -> {
-                    if (!isAdded() || getView() == null) return;
-                    screenshotFiles.clear();
-                    screenshotFiles.addAll(list);
-                    screenshotAdapter.notifyDataSetChanged();
-                    tv_screenshots_empty.setVisibility(list.isEmpty() ? View.VISIBLE : View.GONE);
-                    tv_screenshots_summary.setText(String.format(Locale.US,
-                            "共 %d 张截图 (%.2f MB) · 点击图片可放大预览或保存到手机相册",
-                            list.size(), finalBytes / (1024.0 * 1024.0)));
-                });
-            }
-        });
-    }
-
-    private void confirmClearScreenshots() {
-        if (screenshotFiles.isEmpty()) {
-            Toast.makeText(requireContext(), "截图库已经是空的", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        showAlertDialog("确定要清空截图库中的所有 " + screenshotFiles.size() + " 张截图吗？", (d, w) -> {
-            List<File> toDelete = new ArrayList<>(screenshotFiles);
-            ioExecutor.execute(() -> {
-                for (File f : toDelete) {
-                    f.delete();
-                }
-                androidx.fragment.app.FragmentActivity act = getActivity();
-                if (act != null && isAdded()) {
-                    act.runOnUiThread(() -> {
-                        if (!isAdded() || getContext() == null) return;
-                        refreshScreenshotGallery();
-                        Toast.makeText(getContext(), "已清空全部截图", Toast.LENGTH_SHORT).show();
-                    });
-                }
-            });
-            d.dismiss();
-        }, (d, w) -> d.dismiss());
-    }
-
-    private void previewScreenshot(File file) {
-        Context ctx = requireContext();
-        LinearLayout box = new LinearLayout(ctx);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(24, 20, 24, 12);
-        box.setBackgroundResource(R.color.launcher_surface);
-
-        ImageView iv = new ImageView(ctx);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                (int) (ctx.getResources().getDisplayMetrics().heightPixels * 0.62f));
-        iv.setLayoutParams(lp);
-        iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        Glide.with(this).load(file).into(iv);
-        box.addView(iv);
-
-        BitmapFactory.Options opts = new BitmapFactory.Options();
-        opts.inJustDecodeBounds = true;
-        BitmapFactory.decodeFile(file.getAbsolutePath(), opts);
-
-        TextView meta = new TextView(ctx);
-        meta.setPadding(0, 12, 0, 4);
-        meta.setGravity(Gravity.CENTER);
-        meta.setTextColor(ctx.getResources().getColor(R.color.launcher_text_dim));
-        meta.setTextSize(12);
-        boolean isClean = file.getName().contains("_game");
-        meta.setText(String.format(Locale.US, "%dx%d  ·  %.0f KB  ·  %s",
-                opts.outWidth, opts.outHeight, file.length() / 1024.0,
-                isClean ? "仅游戏画面" : "含界面与聊天"));
-        box.addView(meta);
-
-        new AlertDialog.Builder(ctx)
-                .setView(box)
-                .setPositiveButton("保存到手机相册", (d, w) -> saveScreenshotToSystemGallery(file))
-                .setNeutralButton("分享截图", (d, w) -> shareFile(file, "image/png", "分享游戏截图"))
-                .setNegativeButton("关闭", (d, w) -> d.dismiss())
-                .show();
-    }
-
-    private void saveScreenshotToSystemGallery(File file) {
-        Context ctx = getContext();
-        if (ctx == null) return;
-        final Context appCtx = ctx.getApplicationContext();
-        ioExecutor.execute(() -> {
-            try {
-                ContentResolver resolver = appCtx.getContentResolver();
-                ContentValues values = new ContentValues();
-                values.put(MediaStore.Images.Media.DISPLAY_NAME, file.getName());
-                values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/SAMP-Mobile");
-                    values.put(MediaStore.Images.Media.IS_PENDING, 1);
-                }
-                Uri uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-                if (uri == null) throw new Exception("相册写入失败");
-
-                try (InputStream in = new FileInputStream(file);
-                     OutputStream out = resolver.openOutputStream(uri)) {
-                    if (out == null) throw new Exception("相册输出流打开失败");
-                    byte[] buf = new byte[8192];
-                    int n;
-                    while ((n = in.read(buf)) > 0) {
-                        out.write(buf, 0, n);
-                    }
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    values.clear();
-                    values.put(MediaStore.Images.Media.IS_PENDING, 0);
-                    resolver.update(uri, values, null, null);
-                }
-                androidx.fragment.app.FragmentActivity act = getActivity();
-                if (act != null && isAdded()) {
-                    act.runOnUiThread(() -> {
-                        if (!isAdded() || getContext() == null) return;
-                        Toast.makeText(getContext(), "已保存到手机相册", Toast.LENGTH_LONG).show();
-                    });
-                }
-            } catch (Exception e) {
-                androidx.fragment.app.FragmentActivity act = getActivity();
-                if (act != null && isAdded()) {
-                    act.runOnUiThread(() -> {
-                        if (!isAdded() || getContext() == null) return;
-                        Toast.makeText(getContext(), "保存相册失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    });
-                }
-            }
-        });
-    }
-
-    private class ScreenshotAdapter extends RecyclerView.Adapter<ScreenshotAdapter.VH> {
-        class VH extends RecyclerView.ViewHolder {
-            ImageView ivThumb;
-            TextView tvTitle, tvBadge, tvMeta, btnSave, btnShare, btnDelete;
-            VH(View itemView, ImageView ivThumb, TextView tvTitle, TextView tvBadge,
-               TextView tvMeta, TextView btnSave, TextView btnShare, TextView btnDelete) {
-                super(itemView);
-                this.ivThumb = ivThumb;
-                this.tvTitle = tvTitle;
-                this.tvBadge = tvBadge;
-                this.tvMeta = tvMeta;
-                this.btnSave = btnSave;
-                this.btnShare = btnShare;
-                this.btnDelete = btnDelete;
-            }
-        }
-
-        @NonNull
-        @Override
-        public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            Context ctx = parent.getContext();
-            float dp = ctx.getResources().getDisplayMetrics().density;
-
-            LinearLayout card = new LinearLayout(ctx);
-            card.setOrientation(LinearLayout.VERTICAL);
-            card.setBackgroundResource(R.drawable.launcher_row_bg);
-            int pad = (int) (8 * dp);
-            card.setPadding(pad, pad, pad, pad);
-            RecyclerView.LayoutParams lp = new RecyclerView.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            int m = (int) (4 * dp);
-            lp.setMargins(m, m, m, m);
-            card.setLayoutParams(lp);
-
-            ImageView iv = new ImageView(ctx);
-            iv.setLayoutParams(new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, (int) (105 * dp)));
-            iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            iv.setBackgroundResource(R.drawable.launcher_img_clip);
-            iv.setClipToOutline(true);
-            card.addView(iv);
-
-            LinearLayout titleRow = new LinearLayout(ctx);
-            titleRow.setOrientation(LinearLayout.HORIZONTAL);
-            titleRow.setGravity(Gravity.CENTER_VERTICAL);
-            titleRow.setPadding(0, (int) (6 * dp), 0, (int) (2 * dp));
-
-            TextView tvTitle = new TextView(ctx);
-            tvTitle.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            tvTitle.setSingleLine(true);
-            tvTitle.setTextColor(ctx.getResources().getColor(R.color.launcher_text));
-            tvTitle.setTextSize(11);
-            tvTitle.setTypeface(Typeface.DEFAULT_BOLD);
-            titleRow.addView(tvTitle);
-
-            TextView tvBadge = new TextView(ctx);
-            tvBadge.setBackgroundResource(R.drawable.launcher_btn_outline);
-            tvBadge.setPadding((int) (6 * dp), (int) (2 * dp), (int) (6 * dp), (int) (2 * dp));
-            tvBadge.setTextColor(LauncherThemeManager.getAccentColor(ctx));
-            tvBadge.setTextSize(9);
-            tvBadge.setTypeface(Typeface.DEFAULT_BOLD);
-            titleRow.addView(tvBadge);
-            card.addView(titleRow);
-
-            TextView tvMeta = new TextView(ctx);
-            tvMeta.setTextColor(ctx.getResources().getColor(R.color.launcher_text_dim));
-            tvMeta.setTextSize(10);
-            card.addView(tvMeta);
-
-            LinearLayout btnRow = new LinearLayout(ctx);
-            btnRow.setOrientation(LinearLayout.HORIZONTAL);
-            btnRow.setPadding(0, (int) (6 * dp), 0, 0);
-
-            TextView btnSave = makeMiniButton(ctx, "存相册", R.drawable.launcher_btn_outline, R.color.launcher_accent);
-            TextView btnShare = makeMiniButton(ctx, "分享", R.drawable.launcher_btn_outline, R.color.launcher_text);
-            TextView btnDel = makeMiniButton(ctx, "删除", R.drawable.launcher_btn_danger, R.color.launcher_danger);
-
-            btnRow.addView(btnSave);
-            btnRow.addView(btnShare);
-            btnRow.addView(btnDel);
-            card.addView(btnRow);
-
-            return new VH(card, iv, tvTitle, tvBadge, tvMeta, btnSave, btnShare, btnDel);
-        }
-
-        private TextView makeMiniButton(Context ctx, String text, int bgRes, int colorRes) {
-            float dp = ctx.getResources().getDisplayMetrics().density;
-            TextView tv = new TextView(ctx);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, (int) (26 * dp), 1f);
-            lp.setMargins((int) (2 * dp), 0, (int) (2 * dp), 0);
-            tv.setLayoutParams(lp);
-            tv.setGravity(Gravity.CENTER);
-            tv.setBackgroundResource(bgRes);
-            tv.setTextColor(ctx.getResources().getColor(colorRes));
-            tv.setTextSize(10);
-            tv.setTypeface(Typeface.DEFAULT_BOLD);
-            tv.setText(text);
-            return tv;
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull VH h, int position) {
-            File file = screenshotFiles.get(position);
-            int accentColor = LauncherThemeManager.getAccentColor(h.itemView.getContext());
-            Glide.with(SettingsPageFragment.this).load(file).centerCrop().into(h.ivThumb);
-            String dateStr = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date(file.lastModified()));
-            h.tvTitle.setText(dateStr);
-            boolean isClean = file.getName().contains("_game");
-            h.tvBadge.setText(isClean ? "仅游戏画面" : "含界面与聊天");
-            h.tvBadge.setTextColor(accentColor);
-            h.btnSave.setTextColor(accentColor);
-            h.tvMeta.setText(String.format(Locale.US, "文件大小：%.0f KB", file.length() / 1024.0));
-
-            h.itemView.setOnClickListener(v -> previewScreenshot(file));
-            h.ivThumb.setOnClickListener(v -> previewScreenshot(file));
-            h.btnSave.setOnClickListener(v -> saveScreenshotToSystemGallery(file));
-            h.btnShare.setOnClickListener(v -> shareFile(file, "image/png", "分享游戏截图"));
-            h.btnDelete.setOnClickListener(v -> {
-                file.delete();
-                refreshScreenshotGallery();
-                Toast.makeText(requireContext(), "截图已删除", Toast.LENGTH_SHORT).show();
-            });
-        }
-
-        @Override
-        public int getItemCount() {
-            return screenshotFiles.size();
-        }
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
-    //  问题反馈与后台诊断（不向用户直接裸露代码日志）
-    // ════════════════════════════════════════════════════════════════════════
-
-    private void refreshDiagnosticStatus() {
-        Context ctx = getContext();
-        if (ctx == null) return;
-        final Context appCtx = ctx.getApplicationContext();
-        ioExecutor.execute(() -> {
-            File baseDir = appCtx.getExternalFilesDir(null);
-            if (baseDir == null) return;
-            File logcatDir = new File(baseDir, "logcat");
-            int logFileCount = 0;
-            int crashHits = 0;
-
-            if (logcatDir.exists()) {
-                File[] all = logcatDir.listFiles((d, n) -> n.endsWith(".log"));
-                if (all != null) {
-                    logFileCount = all.length;
-                    Arrays.sort(all, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
-                    for (int i = 0; i < Math.min(all.length, 3); i++) {
-                        crashHits += extractCrashAndErrorLines(all[i]).size();
-                    }
-                }
-            }
-
-            final int finalLogCount = logFileCount;
-            final boolean hasCrash = crashHits > 0;
-            androidx.fragment.app.FragmentActivity act = getActivity();
-            if (act != null && isAdded()) {
-                act.runOnUiThread(() -> {
-                    if (!isAdded() || getView() == null) return;
-                    if (hasCrash) {
-                        tv_diag_status_title.setText("运行诊断状态：检测到历史异常记录");
-                        tv_diag_status_desc.setText(String.format(Locale.US,
-                                "系统已在后台自动保存 %d 份运行诊断记录。如您刚遇到闪退或卡顿，可直接点击下方「一键复制故障反馈信息」发送给客服或开发者协助排查。",
-                                finalLogCount));
-                    } else if (finalLogCount > 0) {
-                        tv_diag_status_title.setText("运行诊断状态：正常");
-                        tv_diag_status_desc.setText(String.format(Locale.US,
-                                "客户端运行环境自检通过，当前已归档 %d 份运行记录，近期未发现崩溃异常。",
-                                finalLogCount));
-                    } else {
-                        tv_diag_status_title.setText("运行诊断状态：就绪");
-                        tv_diag_status_desc.setText("当前尚无历史故障记录。进入游戏后系统将在后台自动守护并记录运行状态。");
-                    }
-                });
-            }
-        });
-    }
-
-    private String buildDiagnosticReportText(Context appCtx) {
-        File baseDir = appCtx.getExternalFilesDir(null);
-        File logcatDir = baseDir != null ? new File(baseDir, "logcat") : null;
-        StringBuilder sb = new StringBuilder();
-        sb.append("========== SA-MP Mobile 故障反馈诊断信息 ==========\n");
-        sb.append(buildDeviceSummaryLine(appCtx)).append("\n\n");
-
-        File latest = findLatestClientLog(logcatDir);
-        if (latest != null && latest.exists()) {
-            List<String> crashes = extractCrashAndErrorLines(latest);
-            if (!crashes.isEmpty()) {
-                sb.append("--- 异常摘要 (").append(latest.getName()).append(") ---\n");
-                for (String line : crashes) {
-                    sb.append(line).append("\n");
-                }
-                sb.append("\n");
-            }
-            sb.append("--- 最近一次客户端运行记录 (").append(latest.getName()).append(") ---\n");
-            sb.append(readFileTail(latest, 160));
-        } else {
-            sb.append("尚未生成客户端运行日志记录。\n");
-        }
-        return sb.toString();
-    }
-
-    private void copyDiagnosticReport() {
-        Context ctx = getContext();
-        if (ctx == null) return;
-        final Context appCtx = ctx.getApplicationContext();
-        ioExecutor.execute(() -> {
-            String report = buildDiagnosticReportText(appCtx);
-            androidx.fragment.app.FragmentActivity act = getActivity();
-            if (act != null && isAdded()) {
-                act.runOnUiThread(() -> {
-                    if (!isAdded() || getContext() == null) return;
-                    copyTextToClipboard("SA-MP Mobile 故障反馈", report);
-                    Toast.makeText(getContext(), "故障反馈信息已复制到剪贴板，可直接粘贴发送！", Toast.LENGTH_LONG).show();
-                });
-            }
-        });
-    }
-
-    private void shareDiagnosticLogFile() {
-        Context ctx = getContext();
-        if (ctx == null) return;
-        final Context appCtx = ctx.getApplicationContext();
-        ioExecutor.execute(() -> {
-            try {
-                File baseDir = appCtx.getExternalFilesDir(null);
-                if (baseDir == null) throw new IllegalStateException("存储目录不可用");
-                File dir = new File(baseDir, "logcat");
-                if (!dir.exists()) dir.mkdirs();
-                File reportFile = new File(dir, "SAMP_Feedback_Report.log");
-                String report = buildDiagnosticReportText(appCtx);
-                try (FileOutputStream fos = new FileOutputStream(reportFile)) {
-                    fos.write(report.getBytes(StandardCharsets.UTF_8));
-                }
-                androidx.fragment.app.FragmentActivity act = getActivity();
-                if (act != null && isAdded()) {
-                    act.runOnUiThread(() -> {
-                        if (!isAdded() || getContext() == null) return;
-                        shareFile(reportFile, "text/plain", "导出故障反馈日志文件");
-                    });
-                }
-            } catch (Exception e) {
-                androidx.fragment.app.FragmentActivity act = getActivity();
-                if (act != null && isAdded()) {
-                    act.runOnUiThread(() -> {
-                        if (!isAdded() || getContext() == null) return;
-                        Toast.makeText(getContext(), "导出反馈文件失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    });
-                }
-            }
-        });
-    }
-
-    private void confirmClearLogs() {
-        Context ctx = getContext();
-        if (ctx == null) return;
-        final Context appCtx = ctx.getApplicationContext();
-        showAlertDialog("确定要清理所有历史日志缓存文件吗？", (d, w) -> {
-            ioExecutor.execute(() -> {
-                File baseDir = appCtx.getExternalFilesDir(null);
-                File logcatDir = baseDir != null ? new File(baseDir, "logcat") : null;
-                if (logcatDir != null && logcatDir.exists()) {
-                    File[] files = logcatDir.listFiles();
-                    if (files != null) {
-                        for (File f : files) f.delete();
-                    }
-                }
-                androidx.fragment.app.FragmentActivity act = getActivity();
-                if (act != null && isAdded()) {
-                    act.runOnUiThread(() -> {
-                        if (!isAdded() || getContext() == null) return;
-                        refreshDiagnosticStatus();
-                        Toast.makeText(getContext(), "日志缓存已清理", Toast.LENGTH_SHORT).show();
-                    });
-                }
-            });
-            d.dismiss();
-        }, (d, w) -> d.dismiss());
-    }
-
-    private File findLatestClientLog(File logcatDir) {
-        if (logcatDir == null || !logcatDir.exists()) return null;
-        File[] files = logcatDir.listFiles((d, name) -> name.startsWith("client_") && name.endsWith(".log"));
-        if (files == null || files.length == 0) return null;
-        Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
-        return files[0];
-    }
-
-    private String readFileTail(File file, int maxLines) {
-        if (file == null || !file.exists()) return "";
-        List<String> lines = new ArrayList<>();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                lines.add(line);
-                if (lines.size() > maxLines * 2) {
-                    lines.subList(0, maxLines).clear();
-                }
-            }
-        } catch (Exception ignored) {}
-        int start = Math.max(0, lines.size() - maxLines);
-        StringBuilder sb = new StringBuilder();
-        for (int i = start; i < lines.size(); i++) {
-            sb.append(lines.get(i)).append('\n');
-        }
-        return sb.toString();
-    }
-
-    private List<String> extractCrashAndErrorLines(File file) {
-        List<String> result = new ArrayList<>();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
-            String line;
-            int contextAfterHit = 0;
-            while ((line = br.readLine()) != null) {
-                String lower = line.toLowerCase(Locale.US);
-                boolean hit = lower.contains("crashed") || lower.contains("fatal signal")
-                        || lower.contains("backtrace") || lower.contains("[error]")
-                        || lower.contains("[critical]") || lower.contains("sigsegv")
-                        || lower.contains("sigabrt") || lower.contains("last script command")
-                        || lower.contains("last rendered object");
-                if (hit) {
-                    result.add(line);
-                    contextAfterHit = 10;
-                } else if (contextAfterHit > 0) {
-                    result.add(line);
-                    contextAfterHit--;
-                }
-                if (result.size() > 150) break;
-            }
-        } catch (Exception ignored) {}
-        return result;
-    }
-
-    private String buildDeviceSummaryLine(Context appCtx) {
-        boolean is64 = android.os.Process.is64Bit();
-        String abi = is64 ? "64位" : "32位";
-        File extDir = appCtx.getExternalFilesDir(null);
-        long freeMB = 0;
-        if (extDir != null && extDir.exists()) {
-            StatFs stat = new StatFs(extDir.getAbsolutePath());
-            freeMB = (stat.getAvailableBlocksLong() * stat.getBlockSizeLong()) / (1024 * 1024);
-        }
-        return String.format(Locale.US,
-                "版本: v%s (%s) | 设备: %s %s | 系统: Android %s | 剩余空间: %d MB\n"
-                + "模组开关: Modloader=%b, AML=%b, JPatch=%b, MonetLoader=%b, CLEO=%b",
-                BuildConfig.VERSION_NAME, abi,
-                Build.MANUFACTURER, Build.MODEL, Build.VERSION.RELEASE, freeMB,
-                settings_prefs.getBoolean("modloader", false),
-                settings_prefs.getBoolean("aml_scripts", false),
-                settings_prefs.getBoolean("jpatch_enabled", false),
-                settings_prefs.getBoolean("monet_scripts", false),
-                settings_prefs.getBoolean("cleo_scripts", false));
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
     //  帮助与关于
     // ════════════════════════════════════════════════════════════════════════
 
@@ -1728,452 +1157,10 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    //  文件验证与游戏资源管理（手动导入 / 手动下载精简版 / 逐项文件状态）
-    // ════════════════════════════════════════════════════════════════════════
-
-    private void setupGameDataControls() {
-        if (option_gd_edition != null) {
-            option_gd_edition.setAdapter(createDropdownAdapter(GAMEDATA_EDITION_ITEMS));
-            option_gd_edition.setText(GAMEDATA_EDITION_ITEMS[0], false);
-            option_gd_edition.setOnItemClickListener((parent, v, pos, id) -> {
-                selectedGameDataEdition = (pos == 1)
-                        ? GameDataVerifier.Edition.FULL
-                        : GameDataVerifier.Edition.LITE;
-                refreshGameDataVerification();
-            });
-        }
-        if (btn_gd_import != null) {
-            btn_gd_import.setOnClickListener(v -> {
-                if (gdDownloading.get()) {
-                    Toast.makeText(requireContext(), "正在下载数据包，请先取消后再导入", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                gameDataZipPicker.launch(new String[]{"application/zip", "application/octet-stream", "*/*"});
-            });
-        }
-        if (btn_gd_download != null) {
-            btn_gd_download.setOnClickListener(v -> {
-                if (gdDownloading.get()) {
-                    cancelActiveGameDataDownload();
-                } else {
-                    onClickManualGameDataDownload();
-                }
-            });
-        }
-        if (btn_gd_verify != null) {
-            btn_gd_verify.setOnClickListener(v -> {
-                refreshGameDataVerification();
-                Toast.makeText(requireContext(), "正在重新验证游戏文件…", Toast.LENGTH_SHORT).show();
-            });
-        }
-        if (btn_gd_filter_all != null) {
-            btn_gd_filter_all.setOnClickListener(v -> {
-                gameDataFilterIssuesOnly = false;
-                updateGameDataFilterUI();
-                applyGameDataListFilter();
-            });
-        }
-        if (btn_gd_filter_issues != null) {
-            btn_gd_filter_issues.setOnClickListener(v -> {
-                gameDataFilterIssuesOnly = true;
-                updateGameDataFilterUI();
-                applyGameDataListFilter();
-            });
-        }
-        updateGameDataFilterUI();
-        updateGameDataDownloadButtonUI();
-    }
-
-    private void updateGameDataFilterUI() {
-        if (btn_gd_filter_all == null || btn_gd_filter_issues == null || !isAdded()) return;
-        int accentColor = LauncherThemeManager.getAccentColor(requireContext());
-        int colorOnAccent = requireContext().getResources().getColor(R.color.launcher_on_accent);
-        int colorText = requireContext().getResources().getColor(R.color.launcher_text);
-
-        boolean all = !gameDataFilterIssuesOnly;
-        btn_gd_filter_all.setBackgroundResource(all ? R.drawable.launcher_btn_primary : R.drawable.launcher_btn_outline);
-        btn_gd_filter_all.setBackgroundTintList(all ? ColorStateList.valueOf(accentColor) : null);
-        btn_gd_filter_all.setTextColor(all ? colorOnAccent : colorText);
-
-        btn_gd_filter_issues.setBackgroundResource(!all ? R.drawable.launcher_btn_primary : R.drawable.launcher_btn_outline);
-        btn_gd_filter_issues.setBackgroundTintList(!all ? ColorStateList.valueOf(accentColor) : null);
-        btn_gd_filter_issues.setTextColor(!all ? colorOnAccent : colorText);
-    }
-
-    private void updateGameDataDownloadButtonUI() {
-        if (btn_gd_download == null || !isAdded()) return;
-        if (gdDownloading.get()) {
-            btn_gd_download.setBackgroundResource(R.drawable.launcher_btn_danger);
-            btn_gd_download.setBackgroundTintList(null);
-            btn_gd_download.setTextColor(requireContext().getResources().getColor(R.color.launcher_danger));
-            btn_gd_download.setText("取消下载");
-        } else {
-            int accentColor = LauncherThemeManager.getAccentColor(requireContext());
-            btn_gd_download.setBackgroundResource(R.drawable.launcher_btn_primary);
-            btn_gd_download.setBackgroundTintList(ColorStateList.valueOf(accentColor));
-            btn_gd_download.setTextColor(requireContext().getResources().getColor(R.color.launcher_on_accent));
-            btn_gd_download.setText("启动器下载");
-        }
-    }
-
-    private void refreshGameDataVerification() {
-        Context ctx = getContext();
-        if (ctx == null || tv_gd_summary == null) return;
-        final Context appCtx = ctx.getApplicationContext();
-        final GameDataVerifier.Edition edition = selectedGameDataEdition;
-        ioExecutor.execute(() -> {
-            GameDataVerifier.Report report = GameDataVerifier.verify(appCtx, edition);
-            androidx.fragment.app.FragmentActivity act = getActivity();
-            if (act != null && isAdded()) {
-                act.runOnUiThread(() -> {
-                    if (!isAdded() || getView() == null) return;
-                    renderGameDataReport(report);
-                });
-            }
-        });
-    }
-
-    private void renderGameDataReport(GameDataVerifier.Report report) {
-        lastGameDataReport = report;
-        String editionLabel = (report.edition == GameDataVerifier.Edition.FULL)
-                ? "完整版校验（2.10 GiB）"
-                : "精简版校验";
-        String detectedPack = report.hasFullAudio ? "已含完整版音频" : "精简版结构";
-        if (report.problemCount() == 0) {
-            tv_gd_summary.setText(String.format(Locale.US,
-                    "状态：已就绪（%s · %s）", editionLabel, detectedPack));
-            tv_gd_summary.setTextColor(requireContext().getResources().getColor(R.color.ui_good));
-        } else if (report.coreReady && report.edition == GameDataVerifier.Edition.FULL) {
-            tv_gd_summary.setText(String.format(Locale.US,
-                    "状态：核心可进服，缺少完整版音频项 %d 处（切回精简版即可正常游玩）", report.problemCount()));
-            tv_gd_summary.setTextColor(requireContext().getResources().getColor(R.color.ui_warn));
-        } else {
-            tv_gd_summary.setText(String.format(Locale.US,
-                    "状态：未就绪（缺失 %d 项，异常 %d 项）· 请导入或下载游戏数据",
-                    report.missingCount, report.invalidCount));
-            tv_gd_summary.setTextColor(requireContext().getResources().getColor(R.color.ui_bad));
-        }
-
-        String verText = (report.installedVersion != null && !report.installedVersion.isEmpty())
-                ? " · 清单版本 " + report.installedVersion
-                : "";
-        tv_gd_storage_meta.setText(String.format(Locale.US,
-                "当前占用 %s · 可用空间 %s%s · 统一提供精简版下载（完整版 2.10 GiB 暂仅支持本地导入与校验）",
-                GameDataVerifier.formatBytes(report.totalDataBytes),
-                GameDataVerifier.formatBytes(report.freeSpaceBytes),
-                verText));
-
-        String skipHint = report.skippedCount > 0
-                ? String.format(Locale.US, " · 精简版跳过 %d 项", report.skippedCount)
-                : "";
-        tv_gd_list_summary.setText(String.format(Locale.US,
-                "已通过 %d/%d · 缺失 %d · 异常 %d%s",
-                report.okCount, report.requiredCount(),
-                report.missingCount, report.invalidCount, skipHint));
-
-        allGameDataItems.clear();
-        allGameDataItems.addAll(report.items);
-        applyGameDataListFilter();
-    }
-
-    private void applyGameDataListFilter() {
-        displayedGameDataItems.clear();
-        for (GameDataVerifier.FileCheckItem item : allGameDataItems) {
-            if (!gameDataFilterIssuesOnly || item.isProblem()) {
-                displayedGameDataItems.add(item);
-            }
-        }
-        if (gameDataFileAdapter != null) {
-            gameDataFileAdapter.notifyDataSetChanged();
-        }
-        if (tv_gd_list_empty != null && rv_gd_files != null) {
-            boolean empty = displayedGameDataItems.isEmpty();
-            tv_gd_list_empty.setVisibility(empty ? View.VISIBLE : View.GONE);
-            rv_gd_files.setVisibility(empty ? View.GONE : View.VISIBLE);
-        }
-    }
-
-    private void onClickManualGameDataDownload() {
-        if (!isAdded()) return;
-        if (selectedGameDataEdition == GameDataVerifier.Edition.FULL) {
-            new AlertDialog.Builder(requireActivity())
-                    .setTitle("完整版暂未开放下载")
-                    .setMessage("当前启动器统一提供精简版游戏资源下载，完整版（2.10 GiB）暂仅支持通过「本地导入」安装与文件校验。\n\n是否切换至精简版并开始下载？")
-                    .setPositiveButton("切换精简版并下载", (d, w) -> {
-                        selectedGameDataEdition = GameDataVerifier.Edition.LITE;
-                        if (option_gd_edition != null) {
-                            option_gd_edition.setText(GAMEDATA_EDITION_ITEMS[0], false);
-                        }
-                        refreshGameDataVerification();
-                        proceedLiteManualDownload();
-                    })
-                    .setNegativeButton("取消", null)
-                    .show();
-            return;
-        }
-        proceedLiteManualDownload();
-    }
-
-    private void proceedLiteManualDownload() {
-        if (!isAdded()) return;
-        String manifestUrl = GamedataState.resolveManifestUrl(requireContext());
-        if (manifestUrl.isEmpty()) {
-            new AlertDialog.Builder(requireActivity())
-                    .setTitle("未配置下载源")
-                    .setMessage("当前安装包未内置精简版数据下载源。\n\n请先准备好游戏数据包 .zip，点击「本地导入」直接导入到启动器中。")
-                    .setPositiveButton("去本地导入", (d, w) ->
-                            gameDataZipPicker.launch(new String[]{"application/zip", "application/octet-stream", "*/*"}))
-                    .setNegativeButton("知道了", null)
-                    .show();
-            return;
-        }
-
-        boolean coreReady = GameDataImporter.isGameDataReady(requireContext().getExternalFilesDir(null));
-        boolean hasProblems = lastGameDataReport != null && lastGameDataReport.problemCount() > 0;
-        if (coreReady && !hasProblems) {
-            new AlertDialog.Builder(requireActivity())
-                    .setTitle("本地资源已完整")
-                    .setMessage("检测到当前精简版核心文件已全部通过校验。是否仍要重新下载并覆盖修复？（您的设置与服务器列表将完整保留）")
-                    .setPositiveButton("强制重新下载", (d, w) -> startManualGameDataDownload(manifestUrl, true))
-                    .setNeutralButton("仅检查更新", (d, w) -> startManualGameDataDownload(manifestUrl, false))
-                    .setNegativeButton("取消", null)
-                    .show();
-            return;
-        }
-
-        startManualGameDataDownload(manifestUrl, true);
-    }
-
-    private void startManualGameDataDownload(String manifestUrl, boolean forceRedownload) {
-        if (!gdDownloading.compareAndSet(false, true)) return;
-        lastDownloadProgressPostMs = 0L;
-
-        if (layout_gd_download_progress != null) {
-            layout_gd_download_progress.setVisibility(View.VISIBLE);
-        }
-        if (pb_gd_download != null) {
-            pb_gd_download.setProgress(0);
-        }
-        if (tv_gd_dl_status != null) {
-            tv_gd_dl_status.setText("正在连接下载服务…");
-            tv_gd_dl_status.setTextColor(requireContext().getResources().getColor(R.color.launcher_text));
-        }
-        if (tv_gd_dl_bytes != null) {
-            tv_gd_dl_bytes.setText("0%");
-        }
-        updateGameDataDownloadButtonUI();
-
-        final Context appCtx = requireContext().getApplicationContext();
-        final GamedataInstallerTask task = new GamedataInstallerTask(appCtx, manifestUrl, forceRedownload);
-        activeDownloadTask = task;
-
-        Thread worker = new Thread(() -> task.run(new GamedataInstallerTask.Listener() {
-            @Override
-            public void onStage(GamedataInstallerTask.Stage stage) {
-                postToUi(() -> {
-                    if (tv_gd_dl_status == null) return;
-                    switch (stage) {
-                        case FETCHING_MANIFEST:
-                            tv_gd_dl_status.setText("正在获取精简版数据清单…");
-                            break;
-                        case CHECKING:
-                            tv_gd_dl_status.setText("正在检查数据版本…");
-                            break;
-                        case DOWNLOADING:
-                            tv_gd_dl_status.setText("正在下载游戏数据（支持断点续传）…");
-                            break;
-                        case VERIFYING:
-                            tv_gd_dl_status.setText("正在校验数据包完整性（SHA-256）…");
-                            break;
-                        case EXTRACTING:
-                            tv_gd_dl_status.setText("正在解压安装游戏文件…");
-                            break;
-                        case ACTIVATING:
-                            tv_gd_dl_status.setText("正在启用已安装资源…");
-                            break;
-                        case READY:
-                            break;
-                        default:
-                            break;
-                    }
-                });
-            }
-
-            @Override
-            public void onProgress(long bytesDone, long bytesTotal) {
-                long now = System.currentTimeMillis();
-                int perMille = bytesTotal > 0
-                        ? (int) Math.min(1000L, (bytesDone * 1000L) / bytesTotal)
-                        : 0;
-                boolean force = perMille >= 1000 || lastDownloadProgressPostMs == 0L;
-                if (!force && (now - lastDownloadProgressPostMs) < 200L) return;
-                lastDownloadProgressPostMs = now;
-                postToUi(() -> {
-                    if (pb_gd_download != null && bytesTotal > 0) {
-                        pb_gd_download.setProgress(perMille);
-                    }
-                    if (tv_gd_dl_bytes != null && bytesTotal > 0) {
-                        tv_gd_dl_bytes.setText(String.format(Locale.US, "%d%%  (%s / %s)",
-                                perMille / 10,
-                                GameDataVerifier.formatBytes(bytesDone),
-                                GameDataVerifier.formatBytes(bytesTotal)));
-                    }
-                });
-            }
-
-            @Override
-            public void onStatus(String message) {
-                if (message == null || message.isEmpty()) return;
-                postToUi(() -> {
-                    if (tv_gd_dl_status != null) {
-                        tv_gd_dl_status.setText(message);
-                    }
-                });
-            }
-
-            @Override
-            public void onError(String message, Throwable cause) {
-                gdDownloading.set(false);
-                activeDownloadTask = null;
-                postToUi(() -> {
-                    updateGameDataDownloadButtonUI();
-                    if (tv_gd_dl_status != null) {
-                        tv_gd_dl_status.setText(message != null ? message : "下载失败");
-                        tv_gd_dl_status.setTextColor(requireContext().getResources().getColor(R.color.ui_bad));
-                    }
-                    refreshGameDataVerification();
-                });
-            }
-
-            @Override
-            public void onDone(boolean installedNow) {
-                gdDownloading.set(false);
-                activeDownloadTask = null;
-                if (installedNow) {
-                    try {
-                        Utils.saveSettings(appCtx);
-                    } catch (Exception ignored) {
-                    }
-                }
-                postToUi(() -> {
-                    updateGameDataDownloadButtonUI();
-                    if (pb_gd_download != null) {
-                        pb_gd_download.setProgress(1000);
-                    }
-                    if (tv_gd_dl_bytes != null) {
-                        tv_gd_dl_bytes.setText("100%");
-                    }
-                    if (tv_gd_dl_status != null) {
-                        tv_gd_dl_status.setText(installedNow ? "精简版资源下载并安装完成" : "本地数据已是最新，无需重新下载");
-                        tv_gd_dl_status.setTextColor(requireContext().getResources().getColor(R.color.ui_good));
-                    }
-                    refreshGameDataVerification();
-                });
-            }
-        }), "gamedata-manual-download");
-        worker.start();
-    }
-
-    private void cancelActiveGameDataDownload() {
-        GamedataInstallerTask task = activeDownloadTask;
-        if (task != null) {
-            task.cancel();
-            if (isAdded() && tv_gd_dl_status != null) {
-                tv_gd_dl_status.setText("正在取消下载…");
-            }
-        }
-    }
-
-    private void postToUi(Runnable action) {
-        androidx.fragment.app.FragmentActivity act = getActivity();
-        if (act != null && isAdded()) {
-            act.runOnUiThread(() -> {
-                if (isAdded() && getView() != null) {
-                    action.run();
-                }
-            });
-        }
-    }
-
-    private class GameDataFileAdapter extends RecyclerView.Adapter<GameDataFileAdapter.VH> {
-        class VH extends RecyclerView.ViewHolder {
-            final View statusDot;
-            final TextView tvPath, tvDesc, tvSize, tvBadge;
-
-            VH(View itemView) {
-                super(itemView);
-                statusDot = itemView.findViewById(R.id.v_gd_status_dot);
-                tvPath = itemView.findViewById(R.id.tv_gd_file_path);
-                tvDesc = itemView.findViewById(R.id.tv_gd_file_desc);
-                tvSize = itemView.findViewById(R.id.tv_gd_file_size);
-                tvBadge = itemView.findViewById(R.id.tv_gd_file_badge);
-            }
-        }
-
-        @NonNull
-        @Override
-        public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View v = LayoutInflater.from(parent.getContext())
-                    .inflate(R.layout.item_gamedata_file, parent, false);
-            return new VH(v);
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull VH h, int position) {
-            GameDataVerifier.FileCheckItem item = displayedGameDataItems.get(position);
-            Context ctx = h.itemView.getContext();
-            h.tvPath.setText(item.path);
-            h.tvDesc.setText(item.group + " · " + item.label);
-
-            if (item.status == GameDataVerifier.Status.OK) {
-                String sizeText = item.directory
-                        ? String.format(Locale.US, "%d 个文件 · %s", item.fileCount, GameDataVerifier.formatBytes(item.bytes))
-                        : GameDataVerifier.formatBytes(item.bytes);
-                h.tvSize.setText(sizeText);
-            } else if (item.status == GameDataVerifier.Status.INVALID) {
-                h.tvSize.setText(GameDataVerifier.formatBytes(item.bytes));
-            } else {
-                h.tvSize.setText("—");
-            }
-
-            int colorRes;
-            String badgeText;
-            switch (item.status) {
-                case OK:
-                    colorRes = R.color.ui_good;
-                    badgeText = "正常";
-                    break;
-                case INVALID:
-                    colorRes = R.color.ui_warn;
-                    badgeText = "文件异常";
-                    break;
-                case SKIPPED_LITE:
-                    colorRes = R.color.launcher_text_dim;
-                    badgeText = "精简版跳过";
-                    break;
-                case MISSING:
-                default:
-                    colorRes = R.color.ui_bad;
-                    badgeText = "缺失";
-                    break;
-            }
-            int color = ctx.getResources().getColor(colorRes);
-            h.statusDot.setBackgroundTintList(ColorStateList.valueOf(color));
-            h.tvBadge.setText(badgeText);
-            h.tvBadge.setTextColor(color);
-        }
-
-        @Override
-        public int getItemCount() {
-            return displayedGameDataItems.size();
-        }
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
     //  通用工具方法
     // ════════════════════════════════════════════════════════════════════════
 
-    private void shareFile(File file, String mimeType, String chooserTitle) {
+    void shareFile(File file, String mimeType, String chooserTitle) {
         if (file == null || !file.exists()) {
             Toast.makeText(requireContext(), "文件不存在", Toast.LENGTH_SHORT).show();
             return;
@@ -2191,7 +1178,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         }
     }
 
-    private void copyTextToClipboard(String label, String text) {
+    void copyTextToClipboard(String label, String text) {
         ClipboardManager cm = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
         if (cm != null) {
             cm.setPrimaryClip(ClipData.newPlainText(label, text));
@@ -2211,7 +1198,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         ioExecutor.execute(() -> Utils.saveSettings(appCtx));
     }
 
-    private void showAlertDialog(String message, DialogInterface.OnClickListener positiveListener, DialogInterface.OnClickListener negativeListener) {
+    void showAlertDialog(String message, DialogInterface.OnClickListener positiveListener, DialogInterface.OnClickListener negativeListener) {
         new AlertDialog.Builder(requireActivity())
                 .setTitle("提示")
                 .setMessage(message)

@@ -54,4 +54,19 @@ private:
 	static int samp_netgame;
 };
 
+class UI;
+class Game;
+class NetGame;
+class PlayerTags;
+class AudioStream;
+class SnapShotHelper;
+class MaterialTextGenerator;
+
+extern UI* pUI;
+extern Game* pGame;
+extern NetGame* pNetGame;
+extern PlayerTags* pPlayerTags;
+extern AudioStream* pAudioStream;
+extern SnapShotHelper* pSnapShotHelper;
+extern MaterialTextGenerator* pMaterialTextGenerator;
 extern SymUtils* g_saSym;

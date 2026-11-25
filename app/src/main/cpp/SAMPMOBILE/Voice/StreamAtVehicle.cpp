@@ -6,7 +6,6 @@
 
 #include "StreamInfo.h"
 
-extern NetGame* pNetGame;
 
 StreamAtVehicle::StreamAtVehicle(const uint32_t color, std::string name,
 		const float distance, const VEHICLEID vehicleId) noexcept

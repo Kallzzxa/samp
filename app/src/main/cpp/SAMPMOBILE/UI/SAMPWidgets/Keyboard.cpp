@@ -4,8 +4,6 @@
 #include "../../Java/Java.h"
 #include "../../Settings.h"
 
-extern UI* pUI;
-extern Game* pGame;
 
 /* Keyboard */
 
@@ -146,22 +144,6 @@ void Keyboard::send()
 	m_history->add(input);
 	if (m_caller) m_caller->keyboardEvent(input);
 	this->hide();
-}
-
-void Keyboard::newSend(JNIEnv* env, jbyteArray str)
-{
-	if (!env || !str) return;
-	jsize sz = env->GetArrayLength(str);
-	if (sz < 0) return;
-
-	jbyte* elements = env->GetByteArrayElements(str, nullptr);
-	if (!elements) return;
-
-	std::string text(reinterpret_cast<const char*>(elements), static_cast<size_t>(sz));
-	env->ReleaseByteArrayElements(str, elements, JNI_ABORT);
-
-	if (m_caller) m_caller->keyboardEvent(text);
-	hide();
 }
 
 void Keyboard::activateEvent(bool active)

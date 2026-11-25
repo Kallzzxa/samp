@@ -1,3 +1,4 @@
+#include "../../Client.h"
 #include "../UI.h"
 #include "../../Game/Game.h"
 #include "../../Game/Hooks.h"
@@ -10,9 +11,6 @@
 
 /* ButtonPanel */
 
-extern UI* pUI;
-extern Game* pGame;
-extern NetGame* pNetGame;
 
 /* layout metrics in 640x480 design space, scaled to the display in
  * performLayout(). The panel anchors itself to the bottom edge center:

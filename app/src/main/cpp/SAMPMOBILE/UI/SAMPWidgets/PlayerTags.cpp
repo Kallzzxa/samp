@@ -1,11 +1,9 @@
+#include "../../Client.h"
 #include "../UI.h"
 #include "../../Game/Game.h"
 #include "../../Net/NetGame.h"
 #include "../../Settings.h"
 
-extern UI* pUI;
-extern Game* pGame;
-extern NetGame* pNetGame;
 
 PlayerTags::PlayerTags()
 {

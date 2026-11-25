@@ -282,17 +282,6 @@ void Client::initialize(const std::string& gameDir, bool offlineMode)
 	// GTA worker thread passes through it, so g_gameThreadTid is only the
 	// LAST spawned thread. The real render thread is comm="NVEvent".
 	std::thread([]() {
-		auto* gameStateSym = eng::as<uint32_t*>(eng::Sym::gGameState);
-		auto* loadPctSym = eng::as<float*>(eng::Sym::CLoadingScreen_m_PercentLoaded);
-#if defined(__aarch64__)
-		// libGTASA v2.10 arm64 internals (file vaddrs):
-		//   pauseA ptr at base+0x850770: "suspended" flag spun on by
-		//     NVEventAppMain's pause-wait loop and OS_SystemCheckPause
-		//   pauseB ptr at base+0x84DD18: flag that also exits that loop
-		//   resumed byte ptr at base+0x84BCC8: polled by the pre-init wait loop
-		//   nv_event queue head/tail ints at base+0x8B6108 / +0x8B610C
-		const uintptr_t base = g_saSym->GetLibAddr();
-#endif
 		for (int i = 0;; ++i) {
 			sleep(5);
 			// Boot is over once GameMain marks worldReady; avoid reading GTA

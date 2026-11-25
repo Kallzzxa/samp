@@ -13,8 +13,6 @@
 #include <mutex>
 #include <string>
 
-extern UI* pUI;
-extern NetGame* pNetGame;
 
 namespace {
 struct PendingDialogResp {
@@ -351,20 +349,6 @@ void Java::exitGame()
 	}
 	env->CallVoidMethod(m_uiActivity, m_exitGame);
 	clearJniException(env, "exitGame");
-}
-
-
-const std::string EXPECTED_SIGNATURE(OBFUSCATE("89cb277c5cd1a90145acb3c2a89cea995bfbd3b3e5ebe2b180d2248efc4aa041"));
-
-extern "C" JNIEXPORT jboolean JNICALL Java_com_sampmobile_launcher_utils_SignatureChecker_nativeCheckSignature(JNIEnv* env, jclass clazz, jstring computedSignature)
-{
-	if (!env || !computedSignature) return JNI_TRUE;
-	const char* computedSignatureCStr = env->GetStringUTFChars(computedSignature, nullptr);
-	if (computedSignatureCStr) {
-		std::string computedSignatureStr(computedSignatureCStr);
-		env->ReleaseStringUTFChars(computedSignature, computedSignatureCStr);
-	}
-	return JNI_TRUE;
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_sampmobile_game_SAMP_initializeSAMP(JNIEnv* env, jobject sampObj, jobject uiObj, jstring gameDir, jboolean isOffline)

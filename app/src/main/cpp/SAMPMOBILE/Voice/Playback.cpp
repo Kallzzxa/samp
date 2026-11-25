@@ -11,7 +11,6 @@
 #include "Header.h"
 #include "../Client.h"
 
-extern Game* pGame;
 
 bool Playback::Init() noexcept
 {

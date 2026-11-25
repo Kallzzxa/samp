@@ -1,8 +1,8 @@
+#include "../Client.h"
 #include "../Game/Game.h"
 #include "NetGame.h"
 #include "../UI/UI.h"
 
-extern NetGame* pNetGame;
 
 CPlayerBubblePool::CPlayerBubblePool()
 {

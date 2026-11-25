@@ -1,5 +1,11 @@
 #pragma once
 
+namespace sa {
+struct CPlayerInfo;
+}
+
+extern sa::CPlayerInfo* WORLD_PLAYERS;
+
 class Patches {
 public:
 	static void preApply();

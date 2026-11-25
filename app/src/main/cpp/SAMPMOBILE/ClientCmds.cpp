@@ -15,10 +15,6 @@
 #include <thread>
 #include <cstdlib>
 
-extern UI* pUI;
-extern NetGame* pNetGame;
-extern Game* pGame;
-extern AudioStream* pAudioStream;
 
 void cmdQuit(const std::string& params)
 {

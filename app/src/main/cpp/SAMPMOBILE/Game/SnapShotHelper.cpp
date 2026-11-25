@@ -1,7 +1,7 @@
+#include "../Client.h"
 #include "Game.h"
 #include <GLES2/gl2.h>
 
-extern Game* pGame;
 
 SnapShotHelper::SnapShotHelper()
 {

@@ -1,8 +1,8 @@
+#include "../Client.h"
 #include "../Game/Game.h"
 #include "../Game/RadarColors.h"
 #include "NetGame.h"
 
-extern NetGame* pNetGame;
 
 CPlayerPool::CPlayerPool()
 {

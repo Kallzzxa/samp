@@ -4,9 +4,6 @@
 #include "../../Net/NetGame.h"
 #include "../../Net/Proto/RpcOutbound.h"
 
-extern UI* pUI;
-extern Game* pGame;
-extern NetGame* pNetGame;
 
 struct _PLAYER_SCORE_INFO {
 	uint32_t dwID;

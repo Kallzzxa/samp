@@ -10,9 +10,6 @@
 #include <string>
 #include <unistd.h>
 
-extern UI* pUI;
-extern Game* pGame;
-extern NetGame* pNetGame;
 
 namespace {
 
