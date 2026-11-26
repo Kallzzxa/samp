@@ -7,6 +7,8 @@
 #include "../Game/Camera.h"
 #include "../Game/Object.h"
 #include "../Game/Util.h"
+#include "../Game/Artwork/ArtworkCore.h"
+#include "../Game/Artwork/ArtworkManager.h"
 #include "../Java/EditObject.h"
 #include "../UI/UI.h"
 #include "../UI/UISettings.h"
@@ -82,6 +84,68 @@ bool CObjectPool::New(OBJECTID ObjectID, int iModel, sa::CVector vecPos, sa::CVe
 	m_bObjectSlotState[ObjectID] = true;
 	m_iObjectCount++;
 	return true;
+}
+
+void CObjectPool::RefreshCustomModels()
+{
+	int refreshed = 0;
+	for (OBJECTID id = 0; id < MAX_OBJECTS; ++id) {
+		if (!m_bObjectSlotState[id] || !m_pObjects[id]) {
+			continue;
+		}
+		CObject* pObj = m_pObjects[id];
+		pObj->RefreshCustomMaterials();
+		const int serverModel = pObj->GetServerModelIndex();
+		if (!artwork::isCustomObjectId(serverModel)) {
+			continue;
+		}
+		if (artwork::isInternalCustomSlot(pObj->GetModelIndex())) {
+			continue; // already upgraded
+		}
+		const int32_t slot = artwork::ArtworkManager::instance().ensureCustomObjectLoaded(serverModel);
+		if (slot < 0) {
+			continue;
+		}
+		sa::CEntity* oldEntity = pObj->m_entity;
+		if (oldEntity) {
+			m_mapGtaPtrToID.erase(oldEntity);
+		}
+		if (pObj->SwapGtaModel(slot) && pObj->m_entity) {
+			m_mapGtaPtrToID[pObj->m_entity] = id;
+			++refreshed;
+		} else if (pObj->m_entity) {
+			m_mapGtaPtrToID[pObj->m_entity] = id;
+		}
+	}
+	if (refreshed > 0) {
+		spdlog::info("CObjectPool: refreshed {} custom objects after artwork download", refreshed);
+	}
+}
+
+void CObjectPool::RevertCustomModelsBeforeUnload()
+{
+	int reverted = 0;
+	for (OBJECTID id = 0; id < MAX_OBJECTS; ++id) {
+		if (!m_bObjectSlotState[id] || !m_pObjects[id]) {
+			continue;
+		}
+		CObject* pObj = m_pObjects[id];
+		pObj->ReleaseCustomMaterialsBeforeUnload();
+		if (!artwork::isInternalCustomSlot(pObj->GetModelIndex())) {
+			continue;
+		}
+		sa::CEntity* oldEntity = pObj->m_entity;
+		if (oldEntity) {
+			m_mapGtaPtrToID.erase(oldEntity);
+		}
+		if (pObj->SwapGtaModel(artwork::kFallbackObjectModelId) && pObj->m_entity) {
+			m_mapGtaPtrToID[pObj->m_entity] = id;
+		}
+		++reverted;
+	}
+	if (reverted > 0) {
+		spdlog::info("CObjectPool::RevertCustomModelsBeforeUnload: reverted {} custom object(s) to fallback", reverted);
+	}
 }
 
 bool CObjectPool::Delete(OBJECTID ObjectID)
@@ -415,7 +479,7 @@ void CObjectPool::SendSelectObject(OBJECTID objectId)
 	proto::SelectObjectReply reply{};
 	reply.selectType = 0;
 	reply.objectId = objectId;
-	reply.modelId = static_cast<uint32_t>(pObj->GetModelIndex());
+	reply.modelId = static_cast<uint32_t>(pObj->GetServerModelIndex());
 	reply.position = {mat.pos.x, mat.pos.y, mat.pos.z};
 
 	RakNet::BitStream bs;
@@ -453,7 +517,7 @@ void CObjectPool::DrawSelectOverlay(ImGuiRenderer* renderer)
 		if (scrPos.x < 0.0f || scrPos.x > disp.x || scrPos.y < 0.0f || scrPos.y > disp.y) continue;
 
 		char tag[48];
-		std::snprintf(tag, sizeof(tag), "#%u (%d)", static_cast<unsigned>(id), pObj->GetModelIndex());
+		std::snprintf(tag, sizeof(tag), "#%u (%d)", static_cast<unsigned>(id), pObj->GetServerModelIndex());
 		const ImVec2 tsz = renderer->calculateTextSize(tag, fontSize * 0.85f);
 		const ImVec2 boxMin(scrPos.x - tsz.x * 0.5f - 6.0f, scrPos.y - tsz.y * 0.5f - 3.0f);
 		const ImVec2 boxMax(scrPos.x + tsz.x * 0.5f + 6.0f, scrPos.y + tsz.y * 0.5f + 3.0f);

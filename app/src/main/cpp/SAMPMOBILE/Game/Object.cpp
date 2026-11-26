@@ -12,6 +12,8 @@
 #include "Scripting.h"
 #include "Util.h"
 #include "Vehicle.h"
+#include "Artwork/ArtworkCore.h"
+#include "Artwork/ArtworkManager.h"
 #include "Engine/Symbols.h"
 #include "../Net/NetGame.h"
 #include "../Net/RemotePlayer.h"
@@ -73,6 +75,11 @@ CObject::CObject(int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDraw
 	m_fMoveSpeed = 0.0f;
 	m_bNeedRotate = false;
 	m_iModel = iModel;
+	m_iServerModel = iModel;
+	m_bTimedModel = false;
+	m_timeOn = 0;
+	m_timeOff = 0;
+	m_bTimedHidden = false;
 	m_vecRotation = sa::CVector{0.0f, 0.0f, 0.0f};
 	m_matTarget = {};
 	m_quatStart = {};
@@ -83,6 +90,18 @@ CObject::CObject(int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDraw
 	m_dwMoveTick = 0;
 	m_bNoCameraCollision = false;
 	m_fDrawDistance = (std::isfinite(fDrawDistance) && fDrawDistance > 0.0f) ? fDrawDistance : 0.0f;
+
+	if (artwork::isCustomObjectId(iModel)) {
+		m_bTimedModel = artwork::ArtworkManager::instance().isTimedObject(iModel, m_timeOn, m_timeOff);
+		const int32_t slot = artwork::ArtworkManager::instance().ensureCustomObjectLoaded(iModel);
+		if (slot >= 0) {
+			iModel = slot;
+		} else {
+			const int32_t fallback = artwork::ArtworkManager::instance().resolveFallbackObjectModel(iModel);
+			spdlog::warn("CObject::CObject: custom object {} not ready/failed, using fallback {}", iModel, fallback);
+			iModel = fallback;
+		}
+	}
 
 	if (!IsValidModel(iModel)) {
 		spdlog::info("Object model {} is invalid, using default model.", iModel);
@@ -124,15 +143,12 @@ CObject::CObject(int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDraw
 
 	for (int i = 0; i < MAX_MATERIALS; i++) {
 		memset(&m_Material[i], 0, sizeof(MATERIAL_OBJECT));
-		m_pLastObjectMaterialTexture[i] = nullptr;
-		m_dwLastObjectMaterialColor[i] = {};
-		m_LastObjectMaterialSurface[i] = {1.0f, 0.0f, 1.0f};
 	}
+	m_originalAtomicMaterials.clear();
 
 	m_bHasCustomObjectMaterial = false;
 	m_bObjectMaterialTextureChanged = false;
 	m_bObjectMaterialColorChanged = false;
-	m_uiLastObjectGeometry = 0;
 	m_pLastObjectMaterialRwObject = nullptr;
 
 	m_bForceRender = (vecPos.x > 3000.0f || vecPos.x < -3000.0f ||
@@ -149,6 +165,18 @@ CObject::CObject(int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDraw
 		spdlog::info("OOB object: model={} entity={:p} rwObj={:p} moving={:p}", iModel,
 				(void*) m_entity, (void*) m_entity->m_pRwObject,
 				(void*) m_entity->m_pMovingList);
+	}
+
+	if (m_bTimedModel && m_entity && pGame) {
+		int hour = 0;
+		int minute = 0;
+		pGame->GetWorldTime(&hour, &minute);
+		if (!artwork::isTimedObjectVisible(hour, m_timeOn, m_timeOff)) {
+			m_bTimedHidden = true;
+			RemoveFromRepeatSector();
+			m_entity->Remove();
+			SetCollisionChecking(false);
+		}
 	}
 
 	TryEnableUVAnim();
@@ -198,10 +226,8 @@ CObject::~CObject()
 			}
 
 			memset(&m_Material[i], 0, sizeof(MATERIAL_OBJECT));
-			m_pLastObjectMaterialTexture[i] = 0;
-			m_dwLastObjectMaterialColor[i] = {};
 		}
-
+		m_originalAtomicMaterials.clear();
 		m_bHasCustomObjectMaterial = false;
 	}
 }
@@ -361,11 +387,35 @@ void CObject::Process(float fElapsedTime)
 		return;
 	}
 
-	if (!m_entity->m_pRwObject) {
-		EnsureRwObject();
+	// Timed 0.3.DL custom objects (AddSimpleModelTimed): toggle visibility & collision by world hour.
+	if (m_bTimedModel && pGame) {
+		int hour = 0;
+		int minute = 0;
+		pGame->GetWorldTime(&hour, &minute);
+		const bool shouldBeVisible = artwork::isTimedObjectVisible(hour, m_timeOn, m_timeOff);
+		if (!shouldBeVisible) {
+			if (!m_bTimedHidden) {
+				m_bTimedHidden = true;
+				RemoveFromRepeatSector();
+				m_entity->Remove();
+				SetCollisionChecking(false);
+			}
+		} else if (m_bTimedHidden) {
+			m_bTimedHidden = false;
+			SetCollisionChecking(true);
+			m_entity->Add();
+			EnsureRwObject();
+			UpdateRwMatrixAndFrame();
+		}
 	}
 
-	UpdateUVAnim();
+	if (!m_bTimedHidden) {
+		if (!m_entity->m_pRwObject) {
+			EnsureRwObject();
+		}
+
+		UpdateUVAnim();
+	}
 
 	// keep the flag tracking the entity's actual position — previously only
 	// the constructor and TeleportTo set it, so an object carried across
@@ -377,7 +427,7 @@ void CObject::Process(float fElapsedTime)
 				|| pos.y > 3000.0f || pos.y < -3000.0f;
 	}
 
-	if (m_bForceRender && m_entity) {
+	if (!m_bTimedHidden && m_bForceRender && m_entity) {
 		// Col data is position-streamed: CColStore's quadtree matches
 		// col files to in-bounds positions only, so an OOB object's
 		// shared colModel stays an empty shell — and an empty shell is
@@ -555,7 +605,7 @@ void CObject::Process(float fElapsedTime)
 	// keeps the entity collidable through the next engine collision pass.
 	// Reached by attached objects too, so a fresh attach still unlinks
 	// stale records.
-	if (m_entity && m_entity->m_pRwObject
+	if (!m_bTimedHidden && m_entity && m_entity->m_pRwObject
 			&& (m_bForceRender || !m_aInjectedInfo.empty())) {
 		EnsureRepeatSector();
 	}
@@ -615,10 +665,27 @@ void CObject::SetRotation(sa::CVector* vecRotation)
 		m_vecRotation.x = vecRotation->x;
 		m_vecRotation.y = vecRotation->y;
 		m_vecRotation.z = vecRotation->z;
-		if (m_bForceRender) {
+		if (m_bTimedHidden) {
+			RemoveFromRepeatSector();
+			m_entity->Remove();
+			SetCollisionChecking(false);
+		} else if (m_bForceRender) {
 			UpdateRwMatrixAndFrame();
 		}
 	}
+}
+
+void CObject::UpdateMatrix(RwMatrix matrix)
+{
+	if (!m_entity || !m_entity->m_matrix) {
+		return;
+	}
+	if (m_bTimedHidden) {
+		m_entity->SetMatrix(matrix);
+		UpdateRwMatrixAndFrame();
+		return;
+	}
+	CEntity::UpdateMatrix(matrix);
 }
 
 /**
@@ -660,7 +727,139 @@ void CObject::TeleportTo(float fX, float fY, float fZ)
 		m_bForceRender = false;
 	}
 
+	if (m_bTimedHidden && m_entity && !IsEntityPlaceable(m_entity)) {
+		RwMatrix mat = m_entity->GetMatrix().ToRwMatrix();
+		mat.pos = sa::CVector{fX, fY, fZ};
+		m_entity->SetMatrix(mat);
+		UpdateRwMatrixAndFrame();
+		return;
+	}
+
 	CEntity::TeleportTo(fX, fY, fZ);
+}
+
+bool CObject::SwapGtaModel(int iNewGtaModel)
+{
+	if (!m_entity || !m_gtaId || GamePool_Object_GetAt(m_gtaId) != reinterpret_cast<sa::CObject*>(m_entity) || IsEntityPlaceable(m_entity)) {
+		return false;
+	}
+	if (!IsValidModel(iNewGtaModel)) {
+		iNewGtaModel = 18631;
+	}
+	if (m_iModel == iNewGtaModel) {
+		return true;
+	}
+
+	// Pre-load the replacement model BEFORE tearing down the live entity so a missing/unloadable
+	// model never destroys a working object.
+	if (pGame && !pGame->IsModelLoaded(iNewGtaModel)) {
+		pGame->RequestModel(iNewGtaModel);
+		pGame->LoadRequestedModels();
+		if (!pGame->IsModelLoaded(iNewGtaModel)) {
+			spdlog::warn("CObject::SwapGtaModel: target model {} failed to load; keeping model {}",
+				iNewGtaModel, m_iModel);
+			return false;
+		}
+	}
+
+	const sa::CVector pos = m_entity->GetPosition();
+	sa::CVector rot = m_vecRotation;
+
+	// Cleanly detach and destroy the old GTA entity before creating the replacement.
+	auto it = s_liveObjectByEntity.find(m_entity);
+	if (it != s_liveObjectByEntity.end() && it->second == this) {
+		s_liveObjectByEntity.erase(it);
+	}
+	if (m_iPinnedColSlot >= 0) {
+		eng::fn::CColStore_RemoveRef(m_iPinnedColSlot);
+		m_iPinnedColSlot = -1;
+	}
+	RemoveFromRepeatSector();
+
+	const int oldModel = m_iModel;
+	ScriptCommand(&destroy_object, m_gtaId);
+	if (pGame && GetModelRefCounts(oldModel) == 0) {
+		pGame->RemoveModel(oldModel, false);
+	}
+
+	m_entity = nullptr;
+	m_gtaId = 0;
+	m_pUVAnimRwObject = nullptr;
+	m_bUVAnimEnabled = false;
+	m_pLastObjectMaterialRwObject = nullptr;
+	m_originalAtomicMaterials.clear();
+	m_bColDiagLogged = false;
+
+	int createdModel = iNewGtaModel;
+	uint32_t dwRetID = 0;
+	ScriptCommand(&create_object, createdModel, pos.x, pos.y, pos.z, &dwRetID);
+	sa::CObject* pNewEntity = dwRetID ? GamePool_Object_GetAt(dwRetID) : nullptr;
+	bool swapped = (dwRetID != 0 && pNewEntity != nullptr);
+
+	// Failure recovery: never leave a half-dead CObject with m_entity == nullptr.
+	if (!swapped) {
+		const int recoveryModel = (!artwork::isInternalCustomSlot(oldModel) && IsValidModel(oldModel))
+			? oldModel : artwork::kFallbackObjectModelId;
+		spdlog::error("CObject::SwapGtaModel: create_object failed (serverModel={}, newModel={}); recovering with model {}",
+			m_iServerModel, iNewGtaModel, recoveryModel);
+		if (pGame && !pGame->IsModelLoaded(recoveryModel)) {
+			pGame->RequestModel(recoveryModel);
+			pGame->LoadRequestedModels();
+		}
+		dwRetID = 0;
+		ScriptCommand(&create_object, recoveryModel, pos.x, pos.y, pos.z, &dwRetID);
+		pNewEntity = dwRetID ? GamePool_Object_GetAt(dwRetID) : nullptr;
+		if (!dwRetID || !pNewEntity) {
+			return false;
+		}
+		createdModel = recoveryModel;
+	}
+
+	m_entity = pNewEntity;
+	m_gtaId = dwRetID;
+	m_iModel = createdModel;
+	s_liveObjectByEntity[m_entity] = this;
+
+	EnsureRwObject();
+	RwMatrix mat = m_entity->GetMatrix().ToRwMatrix();
+	mat.pos = pos;
+	m_entity->SetMatrix(mat);
+	SetRotation(&rot);
+
+	if (m_bForceRender || m_fDrawDistance > 250.0f) {
+		UpdateRwMatrixAndFrame();
+	}
+
+	if (m_byteMoving & 1) {
+		m_entity->m_nFlags &= 0xFFFFFFF7;
+	}
+
+	if (artwork::isInternalCustomSlot(createdModel)) {
+		m_bTimedModel = artwork::ArtworkManager::instance().isTimedObject(m_iServerModel, m_timeOn, m_timeOff);
+		if (m_bTimedModel && pGame) {
+			int hour = 0;
+			int minute = 0;
+			pGame->GetWorldTime(&hour, &minute);
+			m_bTimedHidden = !artwork::isTimedObjectVisible(hour, m_timeOn, m_timeOff);
+		} else {
+			m_bTimedHidden = false;
+		}
+	} else {
+		m_bTimedModel = false;
+		m_bTimedHidden = false;
+	}
+	if (m_bTimedHidden) {
+		RemoveFromRepeatSector();
+		m_entity->Remove();
+		SetCollisionChecking(false);
+	}
+
+	TryEnableUVAnim();
+	RefreshCustomMaterials();
+	if (m_bHasCustomObjectMaterial) {
+		TryChangeToCustomObjectMaterial();
+	}
+	return swapped;
 }
 
 /**
@@ -882,7 +1081,11 @@ void CObject::SetMaterial(int iModel, uint8_t byteMaterialIndex, char* txdname, 
 		return;
 	}
 
-	if (iModel > 0 && (!IsValidModel(iModel) || !txdname || !txdname[0] || !texturename || !texturename[0])) {
+	if (artwork::isCustomModelId(iModel)) {
+		if (!texturename || !texturename[0]) {
+			return;
+		}
+	} else if (iModel > 0 && (!IsValidModel(iModel) || !txdname || !txdname[0] || !texturename || !texturename[0])) {
 		return;
 	}
 
@@ -892,11 +1095,22 @@ void CObject::SetMaterial(int iModel, uint8_t byteMaterialIndex, char* txdname, 
 	}
 	m_Material[byteMaterialIndex].pMaterialTexture = nullptr;
 	m_Material[byteMaterialIndex].bTextGenAttempts = 0;
+	m_Material[byteMaterialIndex].iCustomTextureModel = 0;
+	m_Material[byteMaterialIndex].szCustomTextureName[0] = '\0';
 
 	bool bIsNoneTex = (txdname && strcasecmp(txdname, "none") == 0)
 			|| (texturename && strcasecmp(texturename, "none") == 0);
 
-	if (iModel > 0) {
+	if (artwork::isCustomModelId(iModel)) {
+		if (!bIsNoneTex) {
+			m_Material[byteMaterialIndex].iCustomTextureModel = iModel;
+			std::snprintf(m_Material[byteMaterialIndex].szCustomTextureName,
+				sizeof(m_Material[byteMaterialIndex].szCustomTextureName), "%s", texturename);
+			m_Material[byteMaterialIndex].pMaterialTexture =
+				artwork::ArtworkManager::instance().findTextureInCustomModel(iModel, texturename);
+		}
+	}
+	else if (iModel > 0) {
 		if (!bIsNoneTex) {
 			if (!pGame->IsModelLoaded(iModel)) {
 				pGame->RequestModel(iModel);
@@ -929,6 +1143,39 @@ void CObject::SetMaterial(int iModel, uint8_t byteMaterialIndex, char* txdname, 
 	m_bHasCustomObjectMaterial = true;
 }
 
+void CObject::RefreshCustomMaterials()
+{
+	if (!m_bHasCustomObjectMaterial) {
+		return;
+	}
+	for (int i = 0; i < MAX_MATERIALS; ++i) {
+		if (m_Material[i].iType == MATERIAL_TYPE_TEXTURE
+			&& !m_Material[i].pMaterialTexture
+			&& artwork::isCustomModelId(m_Material[i].iCustomTextureModel)
+			&& m_Material[i].szCustomTextureName[0] != '\0') {
+			m_Material[i].pMaterialTexture = artwork::ArtworkManager::instance().findTextureInCustomModel(
+				m_Material[i].iCustomTextureModel, m_Material[i].szCustomTextureName);
+		}
+	}
+}
+
+void CObject::ReleaseCustomMaterialsBeforeUnload()
+{
+	if (!m_bHasCustomObjectMaterial) {
+		return;
+	}
+	ChangeToOriginalObjectMaterial();
+	for (int i = 0; i < MAX_MATERIALS; ++i) {
+		if (m_Material[i].iType == MATERIAL_TYPE_TEXTURE
+			&& artwork::isCustomModelId(m_Material[i].iCustomTextureModel)
+			&& m_Material[i].pMaterialTexture
+			&& m_Material[i].pMaterialTexture != g_blankTexture) {
+			RwTextureDestroy(m_Material[i].pMaterialTexture);
+			m_Material[i].pMaterialTexture = nullptr;
+		}
+	}
+}
+
 void CObject::SetMaterialText(uint8_t byteMaterialIndex, uint8_t byteMaterialSize, const char* szFontName, uint8_t byteFontSize, uint8_t byteFontBold, uint32_t dwFontColor, uint32_t dwBackgroundColor, uint8_t byteAlign, const char* szText)
 {
 	spdlog::debug("CObject::SetMaterialText({}, {}, {}, {}, {}, 0x{:X}, 0x{:X}, {}, {}).", byteMaterialIndex, byteMaterialSize, szFontName ? szFontName : "", byteFontSize, byteFontBold, dwFontColor, dwBackgroundColor, byteAlign, szText ? szText : "");
@@ -946,6 +1193,8 @@ void CObject::SetMaterialText(uint8_t byteMaterialIndex, uint8_t byteMaterialSiz
 			RwTextureDestroy(m_Material[byteMaterialIndex].pMaterialTexture);
 		}
 		m_Material[byteMaterialIndex].pMaterialTexture = nullptr;
+		m_Material[byteMaterialIndex].iCustomTextureModel = 0;
+		m_Material[byteMaterialIndex].szCustomTextureName[0] = '\0';
 
 		m_Material[byteMaterialIndex].TextInfo.byteMaterialSize = byteMaterialSize;
 
@@ -1098,19 +1347,20 @@ RpAtomic* StoreOriginalMaterialObjectCB(RpAtomic* result, void* data)
 	if (result && pObject && *(uint8_t*) result == 1) {
 		RpGeometry* geometry = result->geometry;
 		if (geometry) {
-			pObject->m_uiLastObjectGeometry = geometry->flags;
-
+			CObject::AtomicMaterialBackup backup{};
+			backup.atomic = result;
+			backup.geomFlags = geometry->flags;
 			int count = geometry->matList.numMaterials;
 			RpMaterial** materials = geometry->matList.materials;
 			if (count >= 1 && materials) {
-				for (int i = 0; i < count; i++) {
-					if (i >= MAX_MATERIALS) break;
+				for (int i = 0; i < count && i < MAX_MATERIALS; i++) {
 					if (!materials[i]) continue;
-					pObject->m_pLastObjectMaterialTexture[i] = materials[i]->texture;
-					pObject->m_dwLastObjectMaterialColor[i] = *(RwRGBA*) &materials[i]->color;
-					pObject->m_LastObjectMaterialSurface[i] = materials[i]->surfaceProps;
+					backup.textures[i] = materials[i]->texture;
+					backup.colors[i] = *(RwRGBA*) &materials[i]->color;
+					backup.surfaces[i] = materials[i]->surfaceProps;
 				}
 			}
+			pObject->m_originalAtomicMaterials.push_back(backup);
 		}
 	}
 
@@ -1123,25 +1373,29 @@ RpAtomic* ChangeOriginalMaterialObjectCB(RpAtomic* result, void* data)
 	if (result && pObject && *(uint8_t*) result == 1) {
 		RpGeometry* geometry = result->geometry;
 		if (geometry) {
-			int count = geometry->matList.numMaterials;
-			RpMaterial** materials = geometry->matList.materials;
-			if (count >= 1 && materials) {
-				geometry->flags = pObject->m_uiLastObjectGeometry;
-
-				for (int i = 0; i < count; i++) {
-					if (i >= MAX_MATERIALS) break;
-					if (!materials[i]) continue;
-					if (pObject->m_Material[i].pMaterialTexture && materials[i]->texture != pObject->m_pLastObjectMaterialTexture[i]) {
-						materials[i]->texture = pObject->m_pLastObjectMaterialTexture[i];
-					}
-					if (pObject->m_bObjectMaterialColorChanged && pObject->m_Material[i].dwMaterialColor) {
-						materials[i]->color = *(RwRGBA*) &pObject->m_dwLastObjectMaterialColor[i];
-						materials[i]->surfaceProps = pObject->m_LastObjectMaterialSurface[i];
+			const CObject::AtomicMaterialBackup* backup = nullptr;
+			for (const auto& entry : pObject->m_originalAtomicMaterials) {
+				if (entry.atomic == result) {
+					backup = &entry;
+					break;
+				}
+			}
+			if (backup) {
+				int count = geometry->matList.numMaterials;
+				RpMaterial** materials = geometry->matList.materials;
+				if (count >= 1 && materials) {
+					geometry->flags = backup->geomFlags;
+					for (int i = 0; i < count && i < MAX_MATERIALS; i++) {
+						if (!materials[i]) continue;
+						if (pObject->m_Material[i].pMaterialTexture && materials[i]->texture != backup->textures[i]) {
+							materials[i]->texture = backup->textures[i];
+						}
+						if (pObject->m_bObjectMaterialColorChanged && pObject->m_Material[i].dwMaterialColor) {
+							materials[i]->color = *(RwRGBA*) &backup->colors[i];
+							materials[i]->surfaceProps = backup->surfaces[i];
+						}
 					}
 				}
-
-				pObject->m_bObjectMaterialTextureChanged = false;
-				pObject->m_bObjectMaterialColorChanged = false;
 			}
 		}
 	}
@@ -1156,6 +1410,7 @@ void CObject::ChangeToCustomObjectMaterial()
 	}
 
 	if (m_pLastObjectMaterialRwObject != m_entity->m_pRwObject) {
+		m_originalAtomicMaterials.clear();
 		ForEachObjectAtomic(m_entity->m_pRwObject, StoreOriginalMaterialObjectCB, this);
 		m_pLastObjectMaterialRwObject = m_entity->m_pRwObject;
 	}
@@ -1169,6 +1424,8 @@ void CObject::ChangeToOriginalObjectMaterial()
 		if (m_bObjectMaterialTextureChanged || m_bObjectMaterialColorChanged) {
 			if (m_entity && m_entity->m_pRwObject && m_pLastObjectMaterialRwObject == m_entity->m_pRwObject) {
 				ForEachObjectAtomic(m_entity->m_pRwObject, ChangeOriginalMaterialObjectCB, this);
+				m_bObjectMaterialTextureChanged = false;
+				m_bObjectMaterialColorChanged = false;
 			}
 		}
 	}

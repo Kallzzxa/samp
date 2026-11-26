@@ -8,6 +8,7 @@
 typedef struct _NEW_ACTOR {
 	PLAYERID ActorID;
 	int iSkin;
+	int iCustomSkin;
 	sa::CVector vecPos;
 	float fAngle;
 	float fHealth;

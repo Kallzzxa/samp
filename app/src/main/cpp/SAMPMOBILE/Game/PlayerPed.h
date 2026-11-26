@@ -78,6 +78,10 @@ public:
 	uint8_t GetCurrentWeapon();
 	void SetInitialState();
 	void SetModelIndex(uint uiModel);
+	void SetSkin(int baseSkin, int customSkin = 0);
+	void RememberServerSkin(int baseSkin, int customSkin = 0);
+	bool RefreshCustomSkin();
+	void RevertCustomSkinBeforeUnload();
 	void ClearWeapons();
 	void GiveWeapon(int iWeaponId, int iAmmo);
 	void SetArmedWeapon(uint8_t weapon);
@@ -221,6 +225,8 @@ public:
 	void ResetDamageEntity();
 
 private:
+	void ApplyGtaModelIndex(uint uiModel);
+
 	int m_bCuffedState = 0;
 	int m_bCarryState = 0;
 
@@ -249,6 +255,8 @@ private:
 
 public:
 	sa::CPed* m_ped = nullptr;
+	int m_iServerSkin = -1;
+	int m_iFallbackSkin = 0;
 	uint8_t m_bytePlayerNumber = 0;
 	uint32_t m_dwArrow = 0;
 	uint32_t m_dwParachuteObject = 0;

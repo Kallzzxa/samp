@@ -401,7 +401,7 @@ void CRemotePlayer::Say(char* szMessage)
 	}
 }
 
-bool CRemotePlayer::Spawn(uint8_t byteTeam, int iSkin, sa::CVector* vecPos, float fRotation, uint32_t dwColor, uint8_t byteFightingStyle)
+bool CRemotePlayer::Spawn(uint8_t byteTeam, int iSkin, sa::CVector* vecPos, float fRotation, uint32_t dwColor, uint8_t byteFightingStyle, int iCustomSkin)
 {
 	if (m_pPlayerPed) {
 		pGame->RemovePlayer(m_pPlayerPed);
@@ -409,9 +409,12 @@ bool CRemotePlayer::Spawn(uint8_t byteTeam, int iSkin, sa::CVector* vecPos, floa
 	}
 	ResetAllSyncAttributes();
 
-	spdlog::info("CRemotePlayer::Spawn: {} {} {} {} {} {} {}", m_PlayerID, byteTeam, iSkin, vecPos->x, vecPos->y, vecPos->z, fRotation);
-	CPlayerPed* pPlayerPed = pGame->NewPlayer(iSkin, vecPos->x, vecPos->y, vecPos->z, fRotation, true, m_bIsNPC);
+	const int effectiveSkin = ResolveEffectivePedSkin(iSkin, iCustomSkin);
+	spdlog::info("CRemotePlayer::Spawn: {} {} {} (custom={} eff={}) {} {} {} {}",
+		m_PlayerID, byteTeam, iSkin, iCustomSkin, effectiveSkin, vecPos->x, vecPos->y, vecPos->z, fRotation);
+	CPlayerPed* pPlayerPed = pGame->NewPlayer(effectiveSkin, vecPos->x, vecPos->y, vecPos->z, fRotation, true, m_bIsNPC);
 	if (pPlayerPed) {
+		pPlayerPed->RememberServerSkin(iSkin, iCustomSkin);
 		SetRadarColor(m_PlayerID, dwColor);
 
 		if (m_dwMarker) {

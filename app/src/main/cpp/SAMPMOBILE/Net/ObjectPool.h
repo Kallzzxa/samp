@@ -40,6 +40,11 @@ public:
 
 	void ProcessMaterialText();
 
+	// 0.3.DL artwork lifecycle: upgrade fallback objects once custom models finish downloading,
+	// and revert live custom objects back to a vanilla model before unloading custom slots.
+	void RefreshCustomModels();
+	void RevertCustomModelsBeforeUnload();
+
 	// T15: SelectObject mode (RPC 27)
 	bool IsSelectState() const { return m_bSelectState.load(std::memory_order_acquire); }
 	void SetSelectState(bool bEnable);

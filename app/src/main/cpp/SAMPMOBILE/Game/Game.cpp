@@ -11,6 +11,8 @@
 #include "Scripting.h"
 #include "Util.h"
 #include "Vehicle.h"
+#include "Artwork/ArtworkCore.h"
+#include "Artwork/ArtworkManager.h"
 #include "Engine/PatchRegistry.h"
 #include "Engine/Symbols.h"
 #include "../Addr.h"
@@ -118,6 +120,10 @@ bool Game::IsModelLoaded(int iModel)
 {
 	//spdlog::info("Game::IsModelLoaded: {}", iModel);
 
+	if (artwork::isInternalCustomSlot(iModel)) {
+		sa::CBaseModelInfo* mi = GetModelInfoByID(iModel);
+		return mi && mi->m_pRwObject != nullptr;
+	}
 	if (iModel > 20000 || iModel < 0) {
 		return true;
 	}
@@ -131,6 +137,9 @@ bool Game::IsModelLoaded(int iModel)
 void Game::RequestModel(int iModel)
 {
 	//spdlog::info("Game::RequestModel: {}", iModel);
+	if (artwork::isInternalCustomSlot(iModel)) {
+		return;
+	}
 	ScriptCommand(&request_model, iModel);
 	// sa::CStreaming::RequestModel(iModel, 2);
 }
@@ -831,9 +840,14 @@ bool Game::RemovePlayer(CPlayerPed* pPed)
  * @param pdwIndex
  * @return
  */
-uint32_t Game::CreatePickup(int iModel, int iType, float x, float y, float z, int* pdwIndex)
+uint32_t Game::CreatePickup(int iModel, int iType, float x, float y, float z, int* pdwIndex, int* pEffectiveModel)
 {
 	//spdlog::info("Game::CreatePickup: {}, {}, {}, {}, {}, {}", iModel, iType, x, y, z, *pdwIndex);
+
+	if (artwork::isCustomObjectId(iModel)) {
+		const int32_t slot = artwork::ArtworkManager::instance().ensureCustomObjectLoaded(iModel);
+		iModel = (slot >= 0) ? slot : artwork::ArtworkManager::instance().resolveFallbackObjectModel(iModel);
+	}
 
 	if (!IsValidModel(iModel)) {
 		iModel = 18631;
@@ -845,6 +859,7 @@ uint32_t Game::CreatePickup(int iModel, int iType, float x, float y, float z, in
 		if (!IsModelLoaded(iModel)) {
 			spdlog::error("Game::CreatePickup: model {} failed to load", iModel);
 			if (pdwIndex) *pdwIndex = -1;
+			if (pEffectiveModel) *pEffectiveModel = -1;
 			return 0;
 		}
 	}
@@ -853,6 +868,9 @@ uint32_t Game::CreatePickup(int iModel, int iType, float x, float y, float z, in
 	ScriptCommand(&create_pickup, iModel, iType, x, y, z, &hnd);
 	if (pdwIndex) {
 		*pdwIndex = (hnd != 0) ? static_cast<int>(hnd & 0xFFFFu) : -1;
+	}
+	if (pEffectiveModel) {
+		*pEffectiveModel = (hnd != 0) ? iModel : -1;
 	}
 
 	return hnd;

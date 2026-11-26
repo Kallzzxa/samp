@@ -32,7 +32,7 @@ public:
 
 	void SetGravityProcessing(bool state);
 
-	void UpdateMatrix(RwMatrix mat);
+	virtual void UpdateMatrix(RwMatrix mat);
 	void UpdateRwMatrixAndFrame();
 
 	void Render();

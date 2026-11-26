@@ -63,6 +63,8 @@ typedef struct _MATERIAL_OBJECT {
 	MATERIAL_TEXT TextInfo;
 	RwTexture* pMaterialTexture;
 	uint32_t dwMaterialColor;
+	int iCustomTextureModel;
+	char szCustomTextureName[64];
 } MATERIAL_OBJECT;
 
 class CObject : public CEntity {
@@ -78,6 +80,7 @@ public:
 	sa::CVector GetScale();
 	void SetRotation(sa::CVector* vecRotation);
 	void GetRotation(float* pfX, float* pfY, float* pfZ);
+	void UpdateMatrix(RwMatrix matrix) override;
 	void RotateMatrix(sa::CVector vecRot);
 	void ApplyMoveSpeed();
 	float DistanceRemaining(RwMatrix* matPos);
@@ -112,17 +115,28 @@ public:
 
 	static CObject* FindByGtaEntity(sa::CEntity* pEntity);
 	int GetModelIndex() const { return m_iModel; }
+	int GetServerModelIndex() const { return m_iServerModel; }
+	// Recreates the underlying GTA CObject entity with a different GTA model index while
+	// preserving transform, draw distance, camera-col flag, timed visibility, and materials.
+	bool SwapGtaModel(int iNewGtaModel);
+	void RefreshCustomMaterials();
+	void ReleaseCustomMaterialsBeforeUnload();
 
 public:
+	struct AtomicMaterialBackup {
+		RpAtomic* atomic = nullptr;
+		uint32_t geomFlags = 0;
+		RwTexture* textures[MAX_MATERIALS]{};
+		RwRGBA colors[MAX_MATERIALS]{};
+		RwSurfaceProperties surfaces[MAX_MATERIALS]{};
+	};
+
 	bool m_bHasCustomObjectMaterial;
 	MATERIAL_OBJECT m_Material[MAX_MATERIALS];
-	RwTexture* m_pLastObjectMaterialTexture[MAX_MATERIALS];
-	RwRGBA m_dwLastObjectMaterialColor[MAX_MATERIALS];
-	RwSurfaceProperties m_LastObjectMaterialSurface[MAX_MATERIALS];
+	std::vector<AtomicMaterialBackup> m_originalAtomicMaterials;
 
 	bool m_bObjectMaterialTextureChanged;
 	bool m_bObjectMaterialColorChanged;
-	unsigned int m_uiLastObjectGeometry;
 	RwObject* m_pLastObjectMaterialRwObject;
 
 	/* attach */
@@ -146,6 +160,11 @@ public:
 private:
 	sa::CVector m_vecRotation;
 	int m_iModel;
+	int m_iServerModel;
+	bool m_bTimedModel;
+	uint8_t m_timeOn;
+	uint8_t m_timeOff;
+	bool m_bTimedHidden;
 
 	float m_fMoveSpeed;
 	bool m_bNeedRotate;

@@ -134,6 +134,7 @@ void init_logger(const std::string& gameDir)
 		// Set log level and pattern (debug if marker flag exists, else info)
 		const bool debugEnabled = (access(logLevelFlagPath(gameDir).c_str(), F_OK) == 0);
 		logger->set_level(debugEnabled ? spdlog::level::debug : spdlog::level::info);
+		logger->flush_on(spdlog::level::warn);
 		logger->set_pattern("[%d-%m-%Y %H:%M:%S] [%^%l%$] %v");
 
 		// Set as default logger

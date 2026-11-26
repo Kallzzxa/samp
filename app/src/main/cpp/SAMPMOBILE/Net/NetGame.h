@@ -118,9 +118,6 @@ private:
 	int m_gameState;
 	int m_lastConnectAttempt;
 	uint32_t m_mapIcon[MAX_MAP_ICONS];
-	int32_t m_dlVirtualWorld = 0;
-	bool m_dlVirtualWorldKnown = false;
-	bool m_dlFinishDownloadPending = false;
 
 	struct NET_POOLS {
 		CPlayerPool* playerPool;

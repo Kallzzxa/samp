@@ -361,6 +361,77 @@ def _check_compiled_binaries_and_jni(
                 r.fail(f"Compiled JNI exports [{abi}]", "; ".join(missing_jni))
 
 
+def _check_got_relocations(r: Runner, readelf_bin: Optional[Path], require_gtasa: bool) -> None:
+    """Verify Addr.h hardcoded GOT redirection offsets match real ELF GLOB_DAT relocations on both ABIs."""
+    addr_h = REPO_ROOT / "app/src/main/cpp/SAMPMOBILE/Addr.h"
+    if not addr_h.is_file():
+        r.fail("Addr.h GOT relocation audit", "missing Addr.h")
+        return
+    if not readelf_bin:
+        r.warn("Addr.h GOT relocation audit", "llvm-readelf not found; skipped")
+        return
+
+    text = addr_h.read_text(encoding="utf-8", errors="ignore")
+    # Match: static constexpr uintptr_t <NAME> = !VER_x32 ? 0x<ARM64> : 0x<ARM32>;
+    got_specs = [
+        ("GOT_CModelInfo_ms_modelInfoPtrs", "_ZN10CModelInfo16ms_modelInfoPtrsE"),
+        ("GOT_CStreaming_ms_aInfoForModel", "_ZN10CStreaming16ms_aInfoForModelE"),
+        ("_ZN6CWorld7PlayersE_ptr", "_ZN6CWorld7PlayersE"),
+    ]
+    parsed_addrs: Dict[str, Tuple[int, int]] = {}
+    for const_name, sym_name in got_specs:
+        m = re.search(
+            rf"{re.escape(const_name)}\s*=\s*!VER_x32\s*\?\s*0x([0-9A-Fa-f]+)\s*:\s*0x([0-9A-Fa-f]+)",
+            text,
+        )
+        if not m:
+            r.fail("Addr.h GOT relocation audit", f"could not parse {const_name} in Addr.h")
+            return
+        parsed_addrs[sym_name] = (int(m.group(1), 16), int(m.group(2), 16))
+
+    expected_reloc_type = {"arm64-v8a": "R_AARCH64_GLOB_DAT", "armeabi-v7a": "R_ARM_GLOB_DAT"}
+    for abi, so_path in SO_GTASA.items():
+        if not so_path.is_file():
+            if require_gtasa:
+                r.fail(f"GOT relocation audit [{abi}]", f"missing {so_path.relative_to(REPO_ROOT).as_posix()}")
+            else:
+                r.info(f"GOT relocation audit [{abi}]", "skipped (local libGTASA.so not extracted)")
+            continue
+
+        rel_out = subprocess.check_output([str(readelf_bin), "-rW", str(so_path)], text=True, errors="ignore")
+        sym_relocs: Dict[str, List[Tuple[int, str]]] = {s: [] for _, s in got_specs}
+        for line in rel_out.splitlines():
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+            sym = parts[4].split("@", 1)[0]
+            if sym in sym_relocs:
+                try:
+                    off = int(parts[0], 16)
+                except ValueError:
+                    continue
+                sym_relocs[sym].append((off, parts[2]))
+
+        errors: List[str] = []
+        want_type = expected_reloc_type[abi]
+        for const_name, sym in got_specs:
+            want_off = parsed_addrs[sym][0] if abi == "arm64-v8a" else parsed_addrs[sym][1]
+            hits = sym_relocs[sym]
+            got_hits = [(o, t) for (o, t) in hits if t == want_type]
+            non_got = [(o, t) for (o, t) in hits if t != want_type]
+            if not any(o == want_off for (o, _) in got_hits):
+                actual = ", ".join(f"0x{o:x}({t})" for o, t in hits) or "none"
+                errors.append(f"{const_name}: Addr.h=0x{want_off:x} != ELF [{actual}]")
+            if non_got:
+                extra = ", ".join(f"0x{o:x}({t})" for o, t in non_got)
+                errors.append(f"{const_name}: unexpected non-GOT reloc(s) [{extra}]")
+
+        if not errors:
+            r.ok(f"GOT relocation audit [{abi}]", f"{len(got_specs)} relocated table GOT slots verified (zero non-GOT relocs)")
+        else:
+            r.fail(f"GOT relocation audit [{abi}]", "; ".join(errors))
+
+
 def run_binary_abi_checks(
     r: Runner,
     require_gtasa: bool = False,
@@ -372,4 +443,5 @@ def run_binary_abi_checks(
 
     _check_prebuilt_jnilibs(r, require_gtasa=require_gtasa)
     _check_symbols_def(r, nm_bin=nm_bin, require_gtasa=require_gtasa)
+    _check_got_relocations(r, readelf_bin=readelf_bin, require_gtasa=require_gtasa)
     _check_compiled_binaries_and_jni(r, nm_bin=nm_bin, readelf_bin=readelf_bin, apk_path=apk_path)

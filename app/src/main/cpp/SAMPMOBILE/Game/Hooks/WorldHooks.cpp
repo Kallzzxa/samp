@@ -9,6 +9,8 @@
 #include "../RadarColors.h"
 #include "../Vehicle.h"
 #include "../Util.h"
+#include "../RepeatSectorUtil.h"
+#include "../Artwork/ArtworkCore.h"
 #include "../Engine/PatchRegistry.h"
 #include "../Engine/Symbols.h"
 #include "../../Net/NetGame.h"
@@ -26,20 +28,103 @@
 #include <RakNet/RakClientInterface.h>
 #include <RakNet/SAMP/SAMPRPC.h>
 #include <spdlog/spdlog.h>
+#include "Core/PtrNode.h"
 #include "Core/Rect.h"
+#include "Model/Col/ColBox.h"
+#include "Model/Col/ColSphere.h"
+#include <algorithm>
 #include <cmath>
 
-// T34: SetObjectNoCameraCollision — let GTA camera LOS & sphere checks ignore flagged SA-MP objects
+// T34: SetObjectNoCameraCollision — let GTA camera LOS & sphere checks ignore flagged SA-MP objects,
+// and ensure custom 0.3.DL objects collide with camera unless explicitly flagged noCameraCol.
 DECL_HOOK(bool, CWorld_CameraToIgnoreThisObject, sa::CEntity *pEntity)
 {
 	if (pEntity)
 	{
-		if (CObject *pObj = CObject::FindByGtaEntity(pEntity); pObj && pObj->m_bNoCameraCollision)
+		if (CObject *pObj = CObject::FindByGtaEntity(pEntity))
 		{
-			return true;
+			if (pObj->m_bNoCameraCollision)
+			{
+				return true;
+			}
+			if (artwork::isInternalCustomSlot(pEntity->m_nModelIndex))
+			{
+				return false;
+			}
 		}
 	}
 	return CWorld_CameraToIgnoreThisObject(pEntity);
+}
+
+// Stock CCollision::BuildCacheOfCameraCollision clamps sector coords to [0, 119], so when the
+// player/camera is out-of-bounds (|x|>3000 or |y|>3000), camera sphere-cast never scans the
+// repeat-sector hash buckets (coord & 0xF) containing OOB objects. Scan unclamped OOB repeat
+// buckets after the stock pass (CheckCameraCollisionObjects deduplicates via ms_nCurrentScanCode).
+DECL_HOOK(bool, CCollision_BuildCacheOfCameraCollision, sa::CColSphere *sph1, sa::CColSphere *sph2)
+{
+	bool hit = CCollision_BuildCacheOfCameraCollision(sph1, sph2);
+	if (!sph1 || !sph2)
+	{
+		return hit;
+	}
+	const uint8_t *pCollideObjs = eng::as<uint8_t *>(eng::Sym::CCollision_bCamCollideWithObjects);
+	if (!pCollideObjs || *pCollideObjs == 0)
+	{
+		return hit;
+	}
+
+	const float r = sph1->m_fRadius;
+	const float minX = std::min(sph1->m_vecCenter.x, sph2->m_vecCenter.x) - r;
+	const float maxX = std::max(sph1->m_vecCenter.x, sph2->m_vecCenter.x) + r;
+	const float minY = std::min(sph1->m_vecCenter.y, sph2->m_vecCenter.y) - r;
+	const float maxY = std::max(sph1->m_vecCenter.y, sph2->m_vecCenter.y) + r;
+
+	int rawLeft = static_cast<int>(floorf(minX / 50.0f + 60.0f));
+	int rawRight = static_cast<int>(floorf(maxX / 50.0f + 60.0f));
+	int rawBottom = static_cast<int>(floorf(minY / 50.0f + 60.0f));
+	int rawTop = static_cast<int>(floorf(maxY / 50.0f + 60.0f));
+
+	if (rawLeft >= 0 && rawRight <= 119 && rawBottom >= 0 && rawTop <= 119)
+	{
+		return hit;
+	}
+
+	if (rawRight - rawLeft > 15) rawRight = rawLeft + 15;
+	if (rawTop - rawBottom > 15) rawTop = rawBottom + 15;
+
+	const float minZ = std::min(sph1->m_vecCenter.z, sph2->m_vecCenter.z) - r;
+	const float maxZ = std::max(sph1->m_vecCenter.z, sph2->m_vecCenter.z) + r;
+	const float dx = maxX - minX;
+	const float dy = maxY - minY;
+	const float dz = maxZ - minZ;
+
+	sa::CColSphere boundSph{};
+	boundSph.m_vecCenter.x = minX + dx * 0.5f;
+	boundSph.m_vecCenter.y = minY + dy * 0.5f;
+	boundSph.m_vecCenter.z = minZ + dz * 0.5f;
+	boundSph.m_fRadius = sqrtf(dx * dx + dy * dy + dz * dz) * 0.5f;
+	boundSph.m_Surface.m_nMaterial = static_cast<sa::eSurfaceType>(0);
+	boundSph.m_Surface.m_nPiece = 0;
+	boundSph.m_Surface.m_nLighting = sa::tColLighting(0xFF);
+	boundSph.m_Surface.m_nLight = 0;
+
+	sa::CColBox dummyBox{};
+	uint32_t seenMask[8] = {};
+	for (int cy = rawBottom; cy <= rawTop; ++cy)
+	{
+		for (int cx = rawLeft; cx <= rawRight; ++cx)
+		{
+			const int group = ((cy & 0xF) << 4) | (cx & 0xF);
+			const uint32_t bit = 1u << (group & 31);
+			if (seenMask[group >> 5] & bit) continue;
+			seenMask[group >> 5] |= bit;
+			if (eng::fn::CCollision_CheckCameraCollisionObjects<bool>(cx, cy, &dummyBox, &boundSph, sph1, sph2))
+			{
+				hit = true;
+			}
+		}
+	}
+	return hit;
 }
 
 DECL_HOOK(int, CRadar_SetCoordBlip, uint32_t BlpType, sa::CVector vecPosition, uint32_t nColour, uint32_t DispFlag, char *pScriptName)
@@ -363,6 +448,43 @@ DECL_HOOK(sa::CRect, CPhysical_GetBoundRect, sa::CPhysical *_this)
 	return r;
 }
 
+// Stock GTA:SA CPhysical::Add() inserts into the 16x16 CWorld::ms_aRepeatSectors hash grid
+// WITHOUT deduplicating repeat-sector buckets (so a 2500m custom 0.3.DL map chunk inserts
+// 1,100+ duplicate nodes into only 256 buckets!) AND WITHOUT null-checking operator new()
+// on CEntryInfoNode / CPtrNodeDoubleLink (crashing with SIGSEGV if the pool ever fills up).
+// Deduplicating buckets (max 256 per entity) + null-checking allocations eliminates both
+// duplicate collision/render scans and pool-exhaustion crashes on massive custom-map servers.
+DECL_HOOK(void, CPhysical_Add, sa::CPhysical *_this)
+{
+	if (!_this) return;
+	if (_this->m_bIsBIGBuilding) {
+		CPhysical_Add(_this);
+		return;
+	}
+
+	const sa::CRect r = CPhysical_GetBoundRect_hook(_this);
+	const int minX = static_cast<int>(floorf(r.left / 50.0f + 60.0f));
+	const int maxX = static_cast<int>(floorf(r.right / 50.0f + 60.0f));
+	const int minY = static_cast<int>(floorf(r.bottom / 50.0f + 60.0f));
+	const int maxY = static_cast<int>(floorf(r.top / 50.0f + 60.0f));
+
+	if (minX < -120 || minX > 120 || maxX < -120 || maxX > 120
+			|| minY < -120 || minY > 120 || maxY < -120 || maxY > 120
+			|| minX > maxX || minY > maxY) {
+		return;
+	}
+
+	const auto res = sa_world::linkEntityToRepeatSectors(_this, minX, minY, maxX, maxY);
+	if (res.poolExhausted) {
+		static bool s_loggedPoolFull = false;
+		if (!s_loggedPoolFull) {
+			s_loggedPoolFull = true;
+			spdlog::error("CPhysical::Add: repeat-sector pool exhausted (model={}); skipping remaining cells to prevent crash",
+				static_cast<int>(_this->m_nModelIndex));
+		}
+	}
+}
+
 // set while a script/opcode-initiated attach or detach is running, so that
 // the BreakTowLink hook can tell intentional breaks from GTA-spontaneous ones
 bool g_bIntentionalTrailerDetach = false;
@@ -462,6 +584,8 @@ void InstallWorldHooks()
 	REG_HOOK(Boot, CTrailer_BreakTowLink, CTrailer_BreakTowLink, "Prevent spurious trailer detach");
 	REG_HOOK(Boot, CVehicle_UsesSiren, CVehicle_UsesSiren, "Enable horn-siren on non-emergency vehicles with addSiren");
 	REG_HOOK(Boot, CPhysical_GetBoundRect, CPhysical_GetBoundRect, "OOB (|x|>3000) sector bound remapping");
+	REG_HOOK(Boot, CPhysical_Add, CPhysical_Add, "Deduped & null-safe repeat-sector registration for large custom maps");
 	REG_HOOK(Boot, CWorld_CameraToIgnoreThisObject, CWorld_CameraToIgnoreThisObject, "SetObjectNoCameraCollision camera ignore");
+	REG_HOOK(Boot, CCollision_BuildCacheOfCameraCollision, CCollision_BuildCacheOfCameraCollision, "OOB object camera collision scan");
 	REG_HOOK(Boot, CPlantMgr_ProcessEntryCollisionDataSections_AddLocTris, CPlantMgr_AddLocTris, "Guard bad col triangle indices");
 }

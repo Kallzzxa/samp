@@ -63,7 +63,7 @@ public:
 	uint32_t GetPlayerColorAsARGB();
 
 	void Process();
-	bool Spawn(uint8_t byteTeam, int iSkin, sa::CVector* vecPos, float fRotation, uint32_t dwColor, uint8_t byteFightingStyle);
+	bool Spawn(uint8_t byteTeam, int iSkin, sa::CVector* vecPos, float fRotation, uint32_t dwColor, uint8_t byteFightingStyle, int iCustomSkin = 0);
 	void Remove();
 	void HandleDeath();
 	void WeaponSyncCheck(uint8_t netCurrentWeapon);

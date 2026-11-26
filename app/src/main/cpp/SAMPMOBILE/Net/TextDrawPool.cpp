@@ -218,3 +218,21 @@ void CTextDrawPool::SnapshotProcess()
 		}
 	}
 }
+
+void CTextDrawPool::RefreshCustomModels()
+{
+	for (int i = 0; i < MAX_TEXT_DRAWS; i++) {
+		if (m_bSlotState[i] && m_pTextDraw[i]) {
+			m_pTextDraw[i]->RefreshCustomAsset();
+		}
+	}
+}
+
+void CTextDrawPool::ReleaseCustomModelsBeforeUnload()
+{
+	for (int i = 0; i < MAX_TEXT_DRAWS; i++) {
+		if (m_bSlotState[i] && m_pTextDraw[i]) {
+			m_pTextDraw[i]->ReleaseCustomAssetBeforeUnload();
+		}
+	}
+}

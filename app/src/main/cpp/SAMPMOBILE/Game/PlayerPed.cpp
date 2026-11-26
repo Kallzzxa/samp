@@ -7,6 +7,8 @@
 #include "Pad.h"
 #include "Scripting.h"
 #include "Util.h"
+#include "Artwork/ArtworkCore.h"
+#include "Artwork/ArtworkManager.h"
 #include "Vehicle.h"
 #include "PlayerContextScope.h"
 #include "Engine/PatchRegistry.h"
@@ -706,9 +708,66 @@ uint EnsureValidPedModelPrototype(uint uiModel)
 	return uiModel;
 }
 
+void CPlayerPed::RememberServerSkin(int baseSkin, int customSkin)
+{
+	m_iFallbackSkin = baseSkin;
+	m_iServerSkin = artwork::isCustomSkinId(customSkin) ? customSkin : baseSkin;
+}
+
+void CPlayerPed::SetSkin(int baseSkin, int customSkin)
+{
+	RememberServerSkin(baseSkin, customSkin);
+	const int effective = ResolveEffectivePedSkin(baseSkin, customSkin);
+	if (IsValidPedModel(static_cast<uint>(effective))) {
+		ApplyGtaModelIndex(static_cast<uint>(effective));
+	}
+}
+
+bool CPlayerPed::RefreshCustomSkin()
+{
+	if (!m_ped || !artwork::isCustomSkinId(m_iServerSkin) || artwork::isInternalCustomSlot(m_ped->m_nModelIndex)) {
+		return false;
+	}
+	const int32_t slot = artwork::ArtworkManager::instance().ensureCustomSkinLoaded(m_iServerSkin);
+	if (slot >= 0 && IsValidPedModel(static_cast<uint>(slot))) {
+		ApplyGtaModelIndex(static_cast<uint>(slot));
+		return true;
+	}
+	return false;
+}
+
+void CPlayerPed::RevertCustomSkinBeforeUnload()
+{
+	if (!m_ped || !artwork::isInternalCustomSlot(m_ped->m_nModelIndex)) {
+		return;
+	}
+	const uint fallback = (m_iFallbackSkin >= 0 && !artwork::isInternalCustomSlot(m_iFallbackSkin)
+		&& IsValidPedModel(static_cast<uint>(m_iFallbackSkin)))
+		? static_cast<uint>(m_iFallbackSkin)
+		: 0u;
+	ApplyGtaModelIndex(fallback);
+}
+
 void CPlayerPed::SetModelIndex(uint uiModel)
 {
-	spdlog::debug("SetModelIndex: {}", uiModel);
+	if (artwork::isCustomSkinId(static_cast<int>(uiModel))) {
+		const int baseSkin = (m_iFallbackSkin >= 0 && !artwork::isCustomSkinId(m_iFallbackSkin)
+			&& !artwork::isInternalCustomSlot(m_iFallbackSkin))
+			? m_iFallbackSkin
+			: artwork::ArtworkManager::instance().resolveFallbackSkinModel(static_cast<int32_t>(uiModel));
+		SetSkin(baseSkin, static_cast<int>(uiModel));
+		return;
+	}
+	if (!artwork::isInternalCustomSlot(static_cast<int>(uiModel))) {
+		m_iServerSkin = static_cast<int>(uiModel);
+		m_iFallbackSkin = static_cast<int>(uiModel);
+	}
+	ApplyGtaModelIndex(uiModel);
+}
+
+void CPlayerPed::ApplyGtaModelIndex(uint uiModel)
+{
+	spdlog::debug("ApplyGtaModelIndex: {}", uiModel);
 
 	if (!m_ped) {
 		spdlog::error("SetModelIndex: m_ped is null");

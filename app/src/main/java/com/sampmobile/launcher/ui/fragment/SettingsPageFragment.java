@@ -117,6 +117,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private final SettingsScreenshotController screenshotController = new SettingsScreenshotController(this);
     private final SettingsDiagnosticsController diagnosticsController = new SettingsDiagnosticsController(this);
     private final SettingsGameDataController gameDataController = new SettingsGameDataController(this);
+    private final SettingsArtworkCacheController artworkCacheController = new SettingsArtworkCacheController(this);
     private View rootView;
     private GtaTabStrip settingsTabs;
 
@@ -138,6 +139,13 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
                 if (uri != null && isAdded()) {
                     GameDataImportDialog.startImport(requireActivity(), uri, gameDataController::refreshVerification);
+                }
+            });
+
+    final ActivityResultLauncher<String[]> artworkCachePicker =
+            registerForActivityResult(new ActivityResultContracts.OpenMultipleDocuments(), uris -> {
+                if (uris != null && !uris.isEmpty() && isAdded()) {
+                    artworkCacheController.onDocumentsPicked(uris);
                 }
             });
 
@@ -265,7 +273,9 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         if (!isAdded()) return;
         settings = ClientSettings.reloadLauncher(requireContext());
         setWidgetsForSettings();
-        if (currentCategory == CAT_GAMEDATA) {
+        if (currentCategory == CAT_MULTIPLAYER) {
+            artworkCacheController.refresh();
+        } else if (currentCategory == CAT_GAMEDATA) {
             gameDataController.refreshVerification();
         } else if (currentCategory == CAT_SCREENSHOTS) {
             screenshotController.refresh();
@@ -306,6 +316,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         updateHudEditorButtonUI();
         gameDataController.updateFilterUI();
         gameDataController.updateDownloadButtonUI();
+        artworkCacheController.updateTheme(accentColor);
         screenshotController.notifyThemeChanged();
     }
 
@@ -463,6 +474,9 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
 
         // 文件验证与游戏资源选项卡
         gameDataController.bindViews(view);
+
+        // 0.3.DL 自定义模型缓存管理
+        artworkCacheController.bindViews(view);
     }
 
     private void setupCategoryNavigation(View view) {
@@ -505,7 +519,9 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
             categoryPanels[i].setVisibility((i == catIdx) ? View.VISIBLE : View.GONE);
         }
 
-        if (catIdx == CAT_GAMEDATA) {
+        if (catIdx == CAT_MULTIPLAYER) {
+            artworkCacheController.refresh();
+        } else if (catIdx == CAT_GAMEDATA) {
             gameDataController.refreshVerification();
         } else if (catIdx == CAT_SCREENSHOTS) {
             screenshotController.refresh();

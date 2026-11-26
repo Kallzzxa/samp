@@ -1,6 +1,7 @@
 #include "OobCollision.h"
 #include "Game.h"
 #include "Object.h"
+#include "RepeatSectorUtil.h"
 #include "Util.h"
 #include "Vehicle.h"
 #include "Engine/Symbols.h"
@@ -57,7 +58,7 @@ static void ComputeRepeatSectorRect(sa::CPhysical* pEntity, int iRect[4])
  *  null-check nw() results, so if a pathological map ever pushed demand
  *  past the pool, the next engine Add would write through a null
  *  pointer. 19000 leaves ~1000 records of engine headroom. */
-static const int OOB_RECORD_BUDGET = 19000;
+static const int OOB_RECORD_BUDGET = 120000;
 static int s_iOobInjectedTotal = 0;
 
 /** bookkeeping clear for records engine teardown already freed — drop
@@ -76,59 +77,9 @@ static void DropDeadInjection(std::vector<CEntryInfoNode*>& infos)
 static void InjectIntoRepeatSectors(sa::CPhysical* pEntity, const int iRect[4],
 		std::vector<CEntryInfoNode*>& infos)
 {
-	constexpr size_t kPtrSize = sizeof(void*);
-	constexpr size_t kRepeatSectorSize = 3 * kPtrSize;
-	size_t uListOff;
-	switch (pEntity->m_nType) {
-		case sa::ENTITY_TYPE_VEHICLE: uListOff = 0; break;
-		case sa::ENTITY_TYPE_PED:     uListOff = kPtrSize; break;
-		case sa::ENTITY_TYPE_OBJECT:  uListOff = 2 * kPtrSize; break;
-		default: return;
-	}
-
-	auto pSectors = eng::addr(eng::Sym::CWorld_ms_aRepeatSectors);
-	if (!pSectors) return;
-
-	// cells 16 apart hash to the same group — dedup
-	uint32_t aSeenMask[8] = {};
-	for (int cy = iRect[1]; cy <= iRect[3]; ++cy) {
-		for (int cx = iRect[0]; cx <= iRect[2]; ++cx) {
-			int iGroup = ((cy & 0xF) << 4) | (cx & 0xF);
-			uint32_t uBit = 1u << (iGroup & 31);
-			if (aSeenMask[iGroup >> 5] & uBit) continue;
-			aSeenMask[iGroup >> 5] |= uBit;
-			if (s_iOobInjectedTotal >= OOB_RECORD_BUDGET) return;
-
-			auto** ppHead = reinterpret_cast<sa::CPtrNodeDoubleLink**>(
-					pSectors + static_cast<size_t>(iGroup) * kRepeatSectorSize + uListOff);
-			auto* pNode = eng::fn::CPtrNodeDoubleLink_OpNew<sa::CPtrNodeDoubleLink*>(
-					sizeof(sa::CPtrNodeDoubleLink));
-			auto* pInfo = eng::fn::CEntryInfoNode_OpNew<CEntryInfoNode*>(
-					sizeof(CEntryInfoNode));
-			if (!pNode || !pInfo) {
-				if (pNode) eng::fn::CPtrNodeDoubleLink_OpDelete( pNode);
-				if (pInfo) eng::fn::CEntryInfoNode_OpDelete( pInfo);
-				return;
-			}
-
-			pNode->m_item = pEntity;
-			pNode->m_next = *ppHead;
-			pNode->m_prev = nullptr;
-			if (*ppHead) (*ppHead)->m_prev = pNode;
-			*ppHead = pNode;
-
-			pInfo->m_pDoubleLinkList = reinterpret_cast<CPtrListDoubleLink*>(ppHead);
-			pInfo->m_pDoubleLink = reinterpret_cast<CPtrNodeDoubleLink*>(pNode);
-			pInfo->m_pRepeatSector = reinterpret_cast<CRepeatSector*>(pSectors + static_cast<size_t>(iGroup) * kRepeatSectorSize);
-			pInfo->m_pPrevious = nullptr;
-			pInfo->m_pNext = pEntity->m_pCollisionList.m_pNode;
-			if (pInfo->m_pNext) pInfo->m_pNext->m_pPrevious = pInfo;
-			pEntity->m_pCollisionList.m_pNode = pInfo;
-
-			++s_iOobInjectedTotal;
-			infos.push_back(pInfo);
-		}
-	}
+	sa_world::linkEntityToRepeatSectors(
+		pEntity, iRect[0], iRect[1], iRect[2], iRect[3],
+		&infos, &s_iOobInjectedTotal, OOB_RECORD_BUDGET);
 }
 
 /** unlink everything InjectIntoRepeatSectors added. Every record is

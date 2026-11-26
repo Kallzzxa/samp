@@ -3,6 +3,8 @@
 #include "Game.h"
 #include "Patches.h"
 #include "PlayerPed.h"
+#include "Artwork/ArtworkCore.h"
+#include "Artwork/ArtworkManager.h"
 #include "Engine/Symbols.h"
 #include "../Addr.h"
 #include "../Net/NetGame.h"
@@ -464,14 +466,12 @@ bool IsValidModel(int iModelID)
 
 bool IsValidPedModel(uint modelID)
 {
-	if (modelID <= 30000) {
-		sa::CBaseModelInfo* modelInfo = GetModelInfoByID(modelID);
+	if (modelID < static_cast<uint>(artwork::kRelocatedModelTableSize)) {
+		sa::CBaseModelInfo* modelInfo = GetModelInfoByID(static_cast<int>(modelID));
 		if (!modelInfo) {
 			spdlog::error("IsValidPedModel: {} is not a valid ped model.", modelID);
 			return false;
 		}
-
-		spdlog::info("IsValidPedModel: ({})", modelID);
 
 		if ((*(uintptr_t*) modelInfo) == g_saSym->Abs<uintptr_t>(addr::vptr$CPedModelInfo)) {
 			return true;
@@ -484,12 +484,12 @@ bool IsValidPedModel(uint modelID)
 
 sa::CBaseModelInfo* GetModelInfoByID(int iModelID)
 {
-	if (iModelID < 0 || iModelID > 30000) {
+	if (iModelID < 0 || iModelID >= artwork::kRelocatedModelTableSize) {
 		spdlog::error("Invalid model ID: {}", iModelID);
 		return nullptr;
 	}
 
-	auto modelInfoPtrs = eng::as<sa::CBaseModelInfo**>(eng::Sym::CModelInfo_ms_modelInfoPtrs);
+	auto modelInfoPtrs = Patches::modelInfoPtrs();
 
 	if (!modelInfoPtrs) {
 		spdlog::error("Failed to retrieve model info pointers.");
@@ -506,7 +506,14 @@ sa::CBaseModelInfo* GetModelInfoByID(int iModelID)
 
 int ResolveEffectivePedSkin(int baseSkin, int customSkin)
 {
-	if (customSkin > 20000 && IsValidPedModel(static_cast<uint>(customSkin))) {
+	if (artwork::isCustomSkinId(customSkin)) {
+		const int32_t slot = artwork::ArtworkManager::instance().ensureCustomSkinLoaded(customSkin);
+		if (slot >= 0 && IsValidPedModel(static_cast<uint>(slot))) {
+			return slot;
+		}
+		return baseSkin;
+	}
+	if (artwork::isInternalCustomSlot(customSkin) && IsValidPedModel(static_cast<uint>(customSkin))) {
 		return customSkin;
 	}
 	return baseSkin;

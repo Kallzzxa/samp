@@ -42,6 +42,8 @@ public:
 	void processPendingTouches();
 
 	void SnapshotProcess();
+	void RefreshCustomModels();
+	void ReleaseCustomModelsBeforeUnload();
 
 private:
 	void SendClick();

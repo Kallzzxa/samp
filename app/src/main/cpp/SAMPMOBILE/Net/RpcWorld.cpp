@@ -20,6 +20,7 @@
 #include "../Game/TextDraw.h"
 #include "../Game/Vehicle.h"
 #include "../Game/Util.h"
+#include "../Game/Artwork/ArtworkCore.h"
 #include "../Java/EditObject.h"
 #include "../UI/UI.h"
 #include "../UI/SAMPWidgets/Chat.h"
@@ -86,9 +87,12 @@ static void ApplyObjectMaterial(CObject* pObject, const proto::ObjectMaterial& m
 			return;
 		}
 
-		int iMaterialModel = m.modelId;
-		if (m.modelId == 0xFFFF || m.modelId > 20000) {
-			iMaterialModel = -1;
+		int iMaterialModel = -1;
+		if (m.modelId != 0xFFFF) {
+			const int32_t decoded = artwork::decodeWireModelId16(m.modelId);
+			if (artwork::isCustomModelId(decoded) || (decoded >= 0 && decoded <= 20000)) {
+				iMaterialModel = decoded;
+			}
 		}
 
 		pObject->SetMaterial(iMaterialModel, m.materialIndex,

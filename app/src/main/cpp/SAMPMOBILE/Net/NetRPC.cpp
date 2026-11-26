@@ -16,6 +16,7 @@
 #include "../Client.h"
 #include "../Settings.h"
 #include "../Game/Game.h"
+#include "../Game/Artwork/ArtworkManager.h"
 #include "../Game/PlayerPed.h"
 #include "../Game/RadarColors.h"
 #include "../Game/Vehicle.h"
@@ -379,8 +380,7 @@ void RpcHandlers::OnWorldPlayerAdd(const proto::WorldPlayerAdd& p)
 		CRemotePlayer* pRemotePlayer = pPlayerPool->GetAt(p.playerId);
 		if (pRemotePlayer) {
 			sa::CVector vecPos(p.position.x, p.position.y, p.position.z);
-			const int effectiveSkin = ResolveEffectivePedSkin(p.skin, p.customSkin);
-			if (pRemotePlayer->Spawn(p.team, effectiveSkin, &vecPos, p.rotation, p.color, p.fightingStyle)) {
+			if (pRemotePlayer->Spawn(p.team, p.skin, &vecPos, p.rotation, p.color, p.fightingStyle, p.customSkin)) {
 				CPlayerPed* pPlayerPed = pRemotePlayer->GetPlayerPed();
 				if (pPlayerPed) {
 					for (int i = 0; i < 11; i++) {
@@ -966,7 +966,8 @@ void RpcHandlers::OnShowActor(const proto::ShowActor& p)
 
 	NEW_ACTOR newActor{};
 	newActor.ActorID = p.actorId;
-	newActor.iSkin = effectiveSkin;
+	newActor.iSkin = p.skin;
+	newActor.iCustomSkin = p.customSkin;
 	newActor.vecPos = sa::CVector(p.position.x, p.position.y, p.position.z);
 	newActor.fAngle = p.angle;
 	newActor.fHealth = p.health;
@@ -1086,21 +1087,24 @@ void RpcHandlers::OnDlModelRequest(const proto::DlModelRequest& p)
 {
 	spdlog::debug("RPC: DlModelRequest (pool={} count={} type={} vw={} base={} new={})",
 			p.poolId, p.count, p.type, p.virtualWorld, p.baseId, p.newId);
+	artwork::ArtworkManager::instance().onModelRecord(p);
 }
 
 void RpcHandlers::OnDlModelReset(const proto::DlModelReset&)
 {
 	spdlog::debug("RPC: DlModelReset");
-	pNetGame->ResetDlArtworkState();
+	artwork::ArtworkManager::instance().onModelReset();
 }
 
 void RpcHandlers::OnDlModelUrl(const proto::DlModelUrl& p)
 {
-	spdlog::debug("RPC: DlModelUrl (type={} crc={:#x} url={})",
-			p.fileType, p.fileChecksum, p.downloadLink);
+	spdlog::debug("RPC: DlModelUrl (kind={} type={} crc={:#x} url={})",
+			p.kind, p.fileType, p.fileChecksum, p.downloadLink);
+	artwork::ArtworkManager::instance().onDownloadCommand(p);
 }
 
 void RpcHandlers::OnDlDownloadCompleted(const proto::DlDownloadCompleted&)
 {
 	spdlog::debug("RPC: DlDownloadCompleted");
+	artwork::ArtworkManager::instance().onDownloadCompletedRpc();
 }

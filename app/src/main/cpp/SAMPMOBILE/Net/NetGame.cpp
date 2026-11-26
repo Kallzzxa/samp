@@ -17,9 +17,11 @@
 #include "Proto/Sync.h"
 #include "../Client.h"
 #include "../Game/Game.h"
+#include "../Game/Artwork/ArtworkManager.h"
 #include "../Game/Animation.h"
 #include "../Game/AudioStream.h"
 #include "../Game/Camera.h"
+#include "../Game/Object.h"
 #include "../Game/PlayerPed.h"
 #include "../Game/RadarColors.h"
 #include "../Game/Scripting.h"
@@ -91,6 +93,116 @@ unsigned char GetPacketID(Packet* p)
 	}
 }
 
+namespace {
+
+void detachCustomPedAssets(CPlayerPed* ped, const char* who)
+{
+	if (!ped) return;
+	for (int i = 0; i < 10; ++i) {
+		if (ped->m_attachedObjects[i].slotUsed && ped->m_attachedObjects[i].object
+			&& artwork::isInternalCustomSlot(ped->m_attachedObjects[i].object->GetModelIndex())) {
+			ped->RemoveAttachedObject(i);
+		}
+	}
+	if (ped->m_ped && artwork::isInternalCustomSlot(ped->m_ped->m_nModelIndex)) {
+		spdlog::info("NetGame: reverting {} from custom slot {} to fallback skin", who, ped->m_ped->m_nModelIndex);
+		ped->RevertCustomSkinBeforeUnload();
+	}
+}
+
+void refreshCustomPedAssets(CPlayerPed* ped)
+{
+	if (!ped) return;
+	auto& art = artwork::ArtworkManager::instance();
+	ped->RefreshCustomSkin();
+	for (int i = 0; i < 10; ++i) {
+		if (ped->m_attachedObjects[i].slotUsed
+			&& artwork::isCustomObjectId(ped->m_attachedObjects[i].info.iModel)
+			&& ped->m_attachedObjects[i].object
+			&& !artwork::isInternalCustomSlot(ped->m_attachedObjects[i].object->GetModelIndex())) {
+			if (art.ensureCustomObjectLoaded(ped->m_attachedObjects[i].info.iModel) >= 0) {
+				NEW_ATTACHED_OBJECT copy = ped->m_attachedObjects[i].info;
+				ped->SetAttachedObject(i, &copy);
+			}
+		}
+	}
+}
+
+void onArtworkBeforeUnloadModels()
+{
+	if (pGame) {
+		detachCustomPedAssets(pGame->FindPlayerPed(), "local ped");
+	}
+	if (!pNetGame) return;
+
+	if (CPlayerPool* pp = pNetGame->GetPlayerPool()) {
+		for (PLAYERID i = 0; i < MAX_PLAYERS; ++i) {
+			if (!pp->GetSlotState(i)) continue;
+			if (CRemotePlayer* rp = pp->GetAt(i)) {
+				detachCustomPedAssets(rp->GetPlayerPed(), "remote ped");
+			}
+		}
+	}
+	if (CActorPool* ap = pNetGame->GetActorPool()) {
+		for (PLAYERID i = 0; i < MAX_ACTORS; ++i) {
+			if (CActor* actor = ap->GetAt(i)) {
+				actor->RevertCustomSkinBeforeUnload();
+			}
+		}
+	}
+	if (CObjectPool* op = pNetGame->GetObjectPool()) {
+		op->RevertCustomModelsBeforeUnload();
+	}
+	if (CPickupPool* pk = pNetGame->GetPickupPool()) {
+		pk->DestroyCustomModelsBeforeUnload();
+	}
+	if (CTextDrawPool* td = pNetGame->GetTextDrawPool()) {
+		td->ReleaseCustomModelsBeforeUnload();
+	}
+}
+
+void onArtworkResourcesReady()
+{
+	if (pGame) {
+		refreshCustomPedAssets(pGame->FindPlayerPed());
+	}
+	if (!pNetGame) return;
+
+	if (CObjectPool* op = pNetGame->GetObjectPool()) {
+		op->RefreshCustomModels();
+	}
+	if (CPlayerPool* pp = pNetGame->GetPlayerPool()) {
+		for (PLAYERID i = 0; i < MAX_PLAYERS; ++i) {
+			if (!pp->GetSlotState(i)) continue;
+			if (CRemotePlayer* rp = pp->GetAt(i)) {
+				refreshCustomPedAssets(rp->GetPlayerPed());
+			}
+		}
+	}
+	if (CActorPool* ap = pNetGame->GetActorPool()) {
+		for (PLAYERID i = 0; i < MAX_ACTORS; ++i) {
+			if (CActor* actor = ap->GetAt(i)) {
+				actor->RefreshCustomSkin();
+			}
+		}
+	}
+	if (CPickupPool* pk = pNetGame->GetPickupPool()) {
+		pk->RefreshCustomModels();
+	}
+	if (CTextDrawPool* td = pNetGame->GetTextDrawPool()) {
+		td->RefreshCustomModels();
+	}
+}
+
+bool isLocalPlayerActiveForArtwork()
+{
+	if (!pNetGame || !pNetGame->GetPlayerPool()) return false;
+	CLocalPlayer* local = pNetGame->GetPlayerPool()->GetLocalPlayer();
+	return local != nullptr && local->m_bIsActive;
+}
+
+} // namespace
+
 NetGame::NetGame(const char* host, int port, const char* playerName, const char* password)
 {
 	spdlog::info("NetGame initializing..");
@@ -119,6 +231,15 @@ NetGame::NetGame(const char* host, int port, const char* playerName, const char*
 
 	RpcTable::registerAll(m_rakClient, m_session.protoVersion);
 	m_rakClient->SetPassword(password);
+
+	if (m_session.protoVersion == proto::ProtoVersion::V03DL) {
+		artwork::ArtworkHostCallbacks cbs{};
+		cbs.onBeforeUnloadModels = &onArtworkBeforeUnloadModels;
+		cbs.onResourcesReady = &onArtworkResourcesReady;
+		cbs.isLocalPlayerActive = &isLocalPlayerActiveForArtwork;
+		artwork::ArtworkManager::instance().setHostCallbacks(cbs);
+		artwork::ArtworkManager::instance().onSessionStart(m_host, static_cast<uint16_t>(m_port));
+	}
 
 	SessionHooks::NotifyConnect(host, static_cast<uint16_t>(port));
 
@@ -150,6 +271,8 @@ NetGame::~NetGame()
 	m_rakClient = nullptr;
 
 	UninitializePools();
+	artwork::ArtworkManager::instance().onSessionEnd();
+	artwork::ArtworkManager::instance().clearHostCallbacks();
 
 	if (Settings::voice()) {
 		SessionHooks::NotifyDisconnect();
@@ -242,7 +365,11 @@ void NetGame::Process()
 	pGame->PreloadObjectsAnims();
 
 	if (GetGameState() == GAMESTATE_CONNECTED) {
-		ProcessPools();
+		// Match PC 0.3.DL CNetGame::Process(): gate world/pool ticks until active artwork
+		// downloads complete and RPC 185 (or its watchdog) releases the gate.
+		if (!artwork::ArtworkManager::instance().isDownloadGateActive()) {
+			ProcessPools();
+		}
 		if (pGame) {
 			pGame->ProcessAudio();
 		}
@@ -361,7 +488,6 @@ void NetGame::ShutdownForGameModeRestart(SessionState::ResetReason reason)
 	ResetPickupPool();
 	ResetObjectPool();
 	ResetMenuPool();
-	ResetDlArtworkState();
 	if (pUI && pUI->netstats()) {
 		pUI->netstats()->resetServerStats();
 	}
@@ -402,6 +528,7 @@ void NetGame::ShutdownForGameModeRestart(SessionState::ResetReason reason)
 			pLocalPed->SetDead();
 			pLocalPed->SetArmour(0.0f);
 		}
+		ResetDlArtworkState();
 		pGame->ResetLocalMoney();
 		pGame->EnableZoneNames(false);
 		GameResetRadarColors();
@@ -700,34 +827,18 @@ void NetGame::SendNextClass()
 
 void NetGame::NotifyDlVirtualWorld(int32_t virtualWorld)
 {
-	if (!m_dlVirtualWorldKnown || virtualWorld != m_dlVirtualWorld) {
-		m_dlVirtualWorld = virtualWorld;
-		m_dlVirtualWorldKnown = true;
-		m_dlFinishDownloadPending = true;
-	}
+	artwork::ArtworkManager::instance().onVirtualWorldChanged(virtualWorld);
 }
 
 void NetGame::ResetDlArtworkState()
 {
-	m_dlVirtualWorld = 0;
-	m_dlVirtualWorldKnown = false;
-	m_dlFinishDownloadPending = false;
+	artwork::ArtworkManager::instance().onGameModeRestart();
 }
 
 void NetGame::ProcessDlArtworkHandshake()
 {
-	if (!m_dlFinishDownloadPending) {
+	if (m_session.protoVersion != proto::ProtoVersion::V03DL) {
 		return;
 	}
-	if (!m_rakClient || !m_rakClient->IsConnected() || m_session.protoVersion != proto::ProtoVersion::V03DL) {
-		return;
-	}
-	m_dlFinishDownloadPending = false;
-
-	RakNet::BitStream bsOut;
-	proto::Writer writer(bsOut);
-	proto::DlFinishDownloadReq req{};
-	req.serialize(writer, proto::ProtoVersion::V03DL);
-	m_rakClient->RPC(&RPC_DlFinishDownload, &bsOut, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false, UNASSIGNED_NETWORK_ID, nullptr);
-	spdlog::debug("NetGame: sent 0.3.DL FinishDownload (RPC 184) for vw={}", m_dlVirtualWorld);
+	artwork::ArtworkManager::instance().processFrame(this);
 }

@@ -593,7 +593,7 @@ bool CLocalPlayer::Spawn()
 	}
 
 	m_pPlayerPed->RestartIfWastedAt(&m_SpawnInfo.vecPos, m_SpawnInfo.fRotation);
-	m_pPlayerPed->SetModelIndex(static_cast<uint>(ResolveEffectivePedSkin(m_SpawnInfo.iSkin, m_iCustomSpawnSkin)));
+	m_pPlayerPed->SetSkin(m_SpawnInfo.iSkin, m_iCustomSpawnSkin);
 	m_pPlayerPed->ClearWeapons();
 	m_pPlayerPed->ResetDamageEntity();
 
@@ -844,7 +844,7 @@ void CLocalPlayer::HandleClassSelectionOutcome(bool bOutcome)
 	if (bOutcome) {
 		if (m_pPlayerPed) {
 			m_pPlayerPed->ClearWeapons();
-			m_pPlayerPed->SetModelIndex(static_cast<uint>(ResolveEffectivePedSkin(m_SpawnInfo.iSkin, m_iCustomSpawnSkin)));
+			m_pPlayerPed->SetSkin(m_SpawnInfo.iSkin, m_iCustomSpawnSkin);
 		}
 
 		m_bClearedToSpawn = true;

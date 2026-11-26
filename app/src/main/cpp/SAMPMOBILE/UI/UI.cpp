@@ -10,6 +10,7 @@
 #include "SAMPWidgets/Scoreboard.h"
 #include "SAMPWidgets/DebugLabels.h"
 #include "SAMPWidgets/DeathWindow.h"
+#include "SAMPWidgets/DownloadOverlay.h"
 #include "SAMPWidgets/NetStats.h"
 #include "../Client.h"
 #include "../ClientSubsystems.h"
@@ -263,6 +264,8 @@ void UI::drawList()
 		if (pNetGame && pNetGame->GetMenuPool()) pNetGame->GetMenuPool()->Render(renderer());
 		if (pGame) pGame->DrawImGuiGameText(renderer());
 	}
+
+	artwork::DrawDownloadOverlay(renderer(), displaySize().x, displaySize().y);
 
 	// Custom crosshair styles (1=精简十字, 2=中心圆点, 3=十字加圆点)
 	int chStyle = Settings::crosshairStyle();

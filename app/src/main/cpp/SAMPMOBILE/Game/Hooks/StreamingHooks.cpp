@@ -5,6 +5,8 @@
 #include "../ModLoader.h"
 #include "../CleoEngine.h"
 #include "../Util.h"
+#include "../Artwork/ArtworkCore.h"
+#include "../Artwork/ArtworkManager.h"
 #include "../Engine/PatchRegistry.h"
 #include "../Engine/Symbols.h"
 #include "../../Addr.h"
@@ -155,7 +157,7 @@ check_mod:
 
 DECL_HOOK(sa::CPedModelInfo *, CModelInfo_AddPedModel, int id)
 {
-	if (id < 0 || id >= 25000) return nullptr;
+	if (id < 0 || id >= artwork::kRelocatedModelTableSize) return nullptr;
 	auto model = new sa::CPedModelInfo{};
 	model->vtable = eng::vmtSlot(eng::Sym::vtable_CPedModelInfo, 1); // CPedModelInfo::~CPedModelInfo
 
@@ -166,14 +168,16 @@ DECL_HOOK(sa::CPedModelInfo *, CModelInfo_AddPedModel, int id)
 	// CClumpModelInfo::Init
 	model->Init();
 
-	auto ms_modelInfoPtrs = g_saSym->Abs<sa::CBaseModelInfo **>(addr::CModelInfo_ms_modelInfoPtrs);
-	ms_modelInfoPtrs[id] = model;
+	auto ms_modelInfoPtrs = Patches::modelInfoPtrs();
+	if (ms_modelInfoPtrs) {
+		ms_modelInfoPtrs[id] = model;
+	}
 	return model;
 }
 
 DECL_HOOK(sa::CAtomicModelInfo *, CModelInfo_AddAtomicModel, int id)
 {
-	if (id < 0 || id >= 25000) return nullptr;
+	if (id < 0 || id >= artwork::kRelocatedModelTableSize) return nullptr;
 	auto model = new sa::CAtomicModelInfo{};
 	model->vtable = eng::vmtSlot(eng::Sym::vtable_CAtomicModelInfo, 1); // CAtomicModelInfo::~CAtomicModelInfo
 
@@ -185,9 +189,54 @@ DECL_HOOK(sa::CAtomicModelInfo *, CModelInfo_AddAtomicModel, int id)
 	model->Init();
 
 	// CModelInfo::ms_modelInfoPtrs
-	auto ms_modelInfoPtrs = g_saSym->Abs<sa::CBaseModelInfo **>(addr::CModelInfo_ms_modelInfoPtrs);
-	ms_modelInfoPtrs[id] = model;
+	auto ms_modelInfoPtrs = Patches::modelInfoPtrs();
+	if (ms_modelInfoPtrs) {
+		ms_modelInfoPtrs[id] = model;
+	}
 	return model;
+}
+
+DECL_HOOK(void, CStreaming_RequestModel_Art, int id, int flags)
+{
+	if (artwork::isInternalCustomSlot(id)) {
+		return;
+	}
+	CStreaming_RequestModel_Art(id, flags);
+}
+
+DECL_HOOK(void, CStreaming_RemoveModel_Art, int id)
+{
+	if (artwork::isInternalCustomSlot(id)) {
+		return;
+	}
+	CStreaming_RemoveModel_Art(id);
+}
+
+DECL_HOOK(void, CStreaming_SetModelIsDeletable_Art, int id)
+{
+	if (artwork::isInternalCustomSlot(id)) {
+		return;
+	}
+	CStreaming_SetModelIsDeletable_Art(id);
+}
+
+DECL_HOOK(void, CStreaming_SetMissionDoesntRequireModel_Art, int id)
+{
+	if (artwork::isInternalCustomSlot(id)) {
+		return;
+	}
+	CStreaming_SetMissionDoesntRequireModel_Art(id);
+}
+
+DECL_HOOK(RwTexture *, RwTextureRead_Art, const char *name, const char *mask)
+{
+	if (name && *name) {
+		if (RwTexture *tex = artwork::findTextureInActiveCustomTxd(name)) {
+			tex->refCount++;
+			return tex;
+		}
+	}
+	return RwTextureRead_Art(name, mask);
 }
 
 static const char *texdb_format_ext(sa::TextureDatabaseFormat fmt)
@@ -485,6 +534,11 @@ void InstallStreamingHooks()
 	REG_HOOK(Boot, CPools_Initialise, CPools_Initialise, "Expanded entity pools");
 	REG_HOOK(Boot, TextureDatabaseRuntime_Load, TextureDatabaseRuntime_Load, "ModLoader texdb load intercept");
 	REG_HOOK(Boot, CTxdStore_TxdStoreFindCB, CTxdStore_TxdStoreFindCB, "Custom TXD lookup fallback");
+	REG_HOOK(Boot, RwTextureRead, RwTextureRead_Art, "0.3.DL custom TXD priority texture lookup");
+	REG_HOOK(Boot, CStreaming_RequestModel, CStreaming_RequestModel_Art, "0.3.DL custom slot streaming guard (Request)");
+	REG_HOOK(Boot, CStreaming_RemoveModel, CStreaming_RemoveModel_Art, "0.3.DL custom slot streaming guard (Remove)");
+	REG_HOOK(Boot, CStreaming_SetModelIsDeletable, CStreaming_SetModelIsDeletable_Art, "0.3.DL custom slot streaming guard (Deletable)");
+	REG_HOOK(Boot, CStreaming_SetMissionDoesntRequireModel, CStreaming_SetMissionDoesntRequireModel_Art, "0.3.DL custom slot streaming guard (MissionRelease)");
 	REG_HOOK(Boot, CLoadingScreen_DisplayPCScreen, DisplayScreen, "Custom loading splash screen");
 	if (CleoEngine::isEnabled())
 	{

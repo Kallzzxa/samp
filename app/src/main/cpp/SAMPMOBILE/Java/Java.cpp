@@ -8,6 +8,7 @@
 #include "../UI/SAMPWidgets/ButtonPanel.h"
 #include "../UI/SAMPWidgets/Chat.h"
 #include "../Net/NetGame.h"
+#include "../Game/Artwork/ArtworkManager.h"
 
 #include <spdlog/spdlog.h>
 #include <deque>
@@ -124,6 +125,18 @@ Java::Java(JNIEnv* env, jobject sampObj, jobject uiObj)
 
 	m_exitGame = env->GetMethodID(uiClass, "exitGame", "()V");
 	clearJniException(env, "GetMethodID(exitGame)");
+
+	if (jclass dlClass = env->FindClass("com/sampmobile/game/ArtworkDownloader")) {
+		m_artworkDownloaderClass = static_cast<jclass>(env->NewGlobalRef(dlClass));
+		m_artworkEnqueue = env->GetStaticMethodID(m_artworkDownloaderClass, "enqueue",
+			"(IIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;J)V");
+		clearJniException(env, "GetStaticMethodID(ArtworkDownloader.enqueue)");
+		m_artworkCancelAll = env->GetStaticMethodID(m_artworkDownloaderClass, "cancelAll", "(I)V");
+		clearJniException(env, "GetStaticMethodID(ArtworkDownloader.cancelAll)");
+		env->DeleteLocalRef(dlClass);
+	} else {
+		clearJniException(env, "FindClass(ArtworkDownloader)");
+	}
 
 	env->DeleteLocalRef(sampClass);
 	env->DeleteLocalRef(uiClass);
@@ -309,6 +322,58 @@ void Java::exitGame()
 	clearJniException(env, "exitGame");
 }
 
+void Java::startArtworkDownload(int32_t generation, int32_t fileType, uint32_t crc,
+	const std::string& url, const std::string& fallbackUrl,
+	const std::string& tempPath, const std::string& finalPath, uint32_t expectedSize)
+{
+	JNIEnv* env = getEnv();
+	if (!env || !m_artworkDownloaderClass || !m_artworkEnqueue) {
+		artwork::ArtworkManager::instance().notifyWorkerFinished(
+			generation, static_cast<uint8_t>(fileType), crc, false,
+			artwork::DownloadFailureKind::Unsupported, "JNI downloader unavailable");
+		return;
+	}
+	jstring jUrl = env->NewStringUTF(url.c_str());
+	jstring jFallback = fallbackUrl.empty() ? nullptr : env->NewStringUTF(fallbackUrl.c_str());
+	jstring jTmp = env->NewStringUTF(tempPath.c_str());
+	jstring jDst = env->NewStringUTF(finalPath.c_str());
+	if (!jUrl || (!fallbackUrl.empty() && !jFallback) || !jTmp || !jDst) {
+		if (jUrl) env->DeleteLocalRef(jUrl);
+		if (jFallback) env->DeleteLocalRef(jFallback);
+		if (jTmp) env->DeleteLocalRef(jTmp);
+		if (jDst) env->DeleteLocalRef(jDst);
+		clearJniException(env, "startArtworkDownload(NewStringUTF)");
+		artwork::ArtworkManager::instance().notifyWorkerFinished(
+			generation, static_cast<uint8_t>(fileType), crc, false,
+			artwork::DownloadFailureKind::TransientNet, "JNI string alloc failed");
+		return;
+	}
+	env->CallStaticVoidMethod(m_artworkDownloaderClass, m_artworkEnqueue,
+		static_cast<jint>(generation),
+		static_cast<jint>(fileType),
+		static_cast<jint>(crc),
+		jUrl,
+		jFallback,
+		jTmp,
+		jDst,
+		static_cast<jlong>(expectedSize));
+	clearJniException(env, "startArtworkDownload");
+	env->DeleteLocalRef(jUrl);
+	if (jFallback) env->DeleteLocalRef(jFallback);
+	env->DeleteLocalRef(jTmp);
+	env->DeleteLocalRef(jDst);
+}
+
+void Java::cancelArtworkDownloads(int32_t newGeneration)
+{
+	JNIEnv* env = getEnv();
+	if (!env || !m_artworkDownloaderClass || !m_artworkCancelAll) {
+		return;
+	}
+	env->CallStaticVoidMethod(m_artworkDownloaderClass, m_artworkCancelAll, static_cast<jint>(newGeneration));
+	clearJniException(env, "cancelArtworkDownloads");
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_sampmobile_game_SAMP_initializeSAMP(JNIEnv* env, jobject sampObj, jobject uiObj, jstring gameDir, jboolean isOffline)
 {
 	if (!env || !gameDir) return;
@@ -387,4 +452,62 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_sampmobile_game_ui_UI_handleNativ
 	(void) env;
 	(void) obj;
 	return InputArbiter::requestNativeBackDismiss() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_sampmobile_game_ArtworkDownloader_onDownloadProgress(
+	JNIEnv* env, jclass cls, jint generation, jint fileType, jint crc, jlong downloaded, jlong total)
+{
+	(void) env;
+	(void) cls;
+	artwork::ArtworkManager::instance().notifyWorkerProgress(
+		static_cast<int32_t>(generation),
+		static_cast<uint8_t>(fileType),
+		static_cast<uint32_t>(crc),
+		downloaded > 0 ? static_cast<uint64_t>(downloaded) : 0u,
+		total > 0 ? static_cast<uint64_t>(total) : 0u);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_sampmobile_game_ArtworkDownloader_onDownloadFinished(
+	JNIEnv* env, jclass cls, jint generation, jint fileType, jint crc, jboolean success, jint failureKind, jstring error)
+{
+	(void) cls;
+	std::string errStr;
+	if (env && error) {
+		const char* cstr = env->GetStringUTFChars(error, nullptr);
+		if (cstr) {
+			errStr = cstr;
+			env->ReleaseStringUTFChars(error, cstr);
+		}
+	}
+	artwork::ArtworkManager::instance().notifyWorkerFinished(
+		static_cast<int32_t>(generation),
+		static_cast<uint8_t>(fileType),
+		static_cast<uint32_t>(crc),
+		success == JNI_TRUE,
+		static_cast<artwork::DownloadFailureKind>(failureKind),
+		errStr);
+}
+
+extern "C" JNIEXPORT jint JNICALL Java_com_sampmobile_game_ArtworkDownloader_validateAndCommitFile(
+	JNIEnv* env, jclass cls, jint fileType, jstring tempPath, jstring finalPath)
+{
+	(void) cls;
+	if (!env || !tempPath || !finalPath) {
+		return static_cast<jint>(artwork::DownloadFailureKind::UnsafeUrl);
+	}
+	const char* tmpCStr = env->GetStringUTFChars(tempPath, nullptr);
+	const char* dstCStr = env->GetStringUTFChars(finalPath, nullptr);
+	if (!tmpCStr || !dstCStr) {
+		if (tmpCStr) env->ReleaseStringUTFChars(tempPath, tmpCStr);
+		if (dstCStr) env->ReleaseStringUTFChars(finalPath, dstCStr);
+		return static_cast<jint>(artwork::DownloadFailureKind::TransientNet);
+	}
+	const std::string tmp(tmpCStr);
+	const std::string dst(dstCStr);
+	env->ReleaseStringUTFChars(tempPath, tmpCStr);
+	env->ReleaseStringUTFChars(finalPath, dstCStr);
+
+	const artwork::FileType ft = (fileType == 1) ? artwork::FileType::Dff
+		: ((fileType == 2) ? artwork::FileType::Txd : artwork::FileType::None);
+	return static_cast<jint>(artwork::ArtworkManager::validateAndCommitDownloadedFile(ft, tmp, dst));
 }

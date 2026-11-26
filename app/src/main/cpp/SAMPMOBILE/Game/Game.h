@@ -52,7 +52,7 @@ public:
 
 	void DrawGangZone(float fPos[], uint32_t dwColor, bool bFullMap);
 
-	uint32_t CreatePickup(int iModel, int iType, float fX, float fY, float fZ, int* pdwindex);
+	uint32_t CreatePickup(int iModel, int iType, float fX, float fY, float fZ, int* pdwindex, int* pEffectiveModel = nullptr);
 	uint32_t CreateWeaponPickup(int iModel, int iAmmo, float fX, float fY, float fZ);
 	CObject* NewObject(int iModel, sa::CVector vecPos, sa::CVector vecRot, float fDrawDistance);
 	CPlayerPed* NewPlayer(int iSkin, float fX, float fY, float fZ, float fRotation, bool unk, bool bIsNPC);

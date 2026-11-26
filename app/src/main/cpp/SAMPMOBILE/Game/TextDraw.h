@@ -90,9 +90,13 @@ public:
 	void LoadTexture();
 
 	void SnapshotProcess();
+	void RefreshCustomAsset();
+	void ReleaseCustomAssetBeforeUnload();
 
 private:
 	char m_szText[801];
+	bool m_bUsesCustomAsset = false;
+	bool m_bPendingCustomAsset = false;
 
 public:
 	TEXT_DRAW_DATA m_TextDrawData;

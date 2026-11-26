@@ -37,7 +37,8 @@ void CActorPool::New(NEW_ACTOR* pNewActor)
 			pNewActor->vecPos.x,
 			pNewActor->vecPos.y,
 			pNewActor->vecPos.z,
-			pNewActor->fAngle);
+			pNewActor->fAngle,
+			pNewActor->iCustomSkin);
 
 	if (!pActor || !pActor->m_actor) {
 		delete pActor;

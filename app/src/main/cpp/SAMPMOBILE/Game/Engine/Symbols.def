@@ -92,6 +92,10 @@ SYM_DATA(TextureDatabaseRuntime_registered, "_ZN22TextureDatabaseRuntime10regist
 SYM_DATA(TheCamera, "TheCamera", void, Required) // TheCamera
 SYM_DATA(TheText, "TheText", void, Required) // TheText
 SYM_DATA(vtable_CAtomicModelInfo, "_ZTV16CAtomicModelInfo", void, Required) // vtable for CAtomicModelInfo
+SYM_DATA(vtable_CDamageAtomicModelInfo, "_ZTV22CDamageAtomicModelInfo", void, Required) // vtable for CDamageAtomicModelInfo
+SYM_DATA(vtable_CLodAtomicModelInfo, "_ZTV19CLodAtomicModelInfo", void, Required) // vtable for CLodAtomicModelInfo
+SYM_DATA(vtable_CTimeModelInfo, "_ZTV14CTimeModelInfo", void, Required) // vtable for CTimeModelInfo
+SYM_DATA(vtable_CLodTimeModelInfo, "_ZTV17CLodTimeModelInfo", void, Required) // vtable for CLodTimeModelInfo
 SYM_DATA(vtable_CPedModelInfo, "_ZTV13CPedModelInfo", void, Required) // vtable for CPedModelInfo
 SYM_DATA(vtable_CTaskSimpleRunNamedAnim, "_ZTV23CTaskSimpleRunNamedAnim", void, Required) // vtable for CTaskSimpleRunNamedAnim
 SYM_DATA(vtable_CTaskSimpleSlideToCoord, "_ZTV23CTaskSimpleSlideToCoord", void, Required) // vtable for CTaskSimpleSlideToCoord
@@ -253,6 +257,7 @@ SYM_FN(CPedIntelligence_FlushImmediately, "_ZN16CPedIntelligence16FlushImmediate
 SYM_FN(CPedIntelligence_GetTaskUseGun, "_ZNK16CPedIntelligence13GetTaskUseGunEv", uintptr_t, Required) // CPedIntelligence::GetTaskUseGun() const
 SYM_FN(CPedIntelligence_SetTaskDuckSecondary, "_ZN16CPedIntelligence20SetTaskDuckSecondaryEt", void, Required) // CPedIntelligence::SetTaskDuckSecondary(unsigned short)
 SYM_FN(CPhysical_GetBoundRect, "_ZNK9CPhysical12GetBoundRectEv", void, Required) // CPhysical::GetBoundRect() const
+SYM_FN(CPhysical_Add, "_ZN9CPhysical3AddEv", void, Required) // CPhysical::Add()
 SYM_FN(CPhysical_ProcessEntityCollision, "_ZN9CPhysical22ProcessEntityCollisionEP7CEntityP9CColPoint", uint32_t, Required) // CPhysical::ProcessEntityCollision(CEntity*, CColPoint*)
 SYM_FN(CPickup_GetRidOfObjects, "_ZN7CPickup15GetRidOfObjectsEv", void, Required) // CPickup::GetRidOfObjects()
 SYM_FN(CPickup_GiveUsAPickUpObject, "_ZN7CPickup19GiveUsAPickUpObjectEPP7CObjecti", void, Required) // CPickup::GiveUsAPickUpObject(CObject**, int)
@@ -561,3 +566,36 @@ SYM_FN(DoGameRestart, "_Z13DoGameRestartv", bool, Required)
 SYM_FN(Menu_NewGame, "_Z12Menu_NewGamev", void, Required)
 SYM_FN(StartGameScreen_OnLoadGame, "_ZN15StartGameScreen10OnLoadGameEv", void, Required)
 SYM_FN(StartGameScreen_OnDeleteGame, "_ZN15StartGameScreen12OnDeleteGameEv", void, Required)
+
+// SA-MP 0.3.DL / open.mp Artwork engine loading, collision & streaming guards
+SYM_FN(RwStreamOpen, "_Z12RwStreamOpen12RwStreamType18RwStreamAccessTypePKv", void*, Required)
+SYM_FN(RwStreamClose, "_Z13RwStreamCloseP8RwStreamPv", int32_t, Required)
+SYM_FN(RwStreamFindChunk, "_Z17RwStreamFindChunkP8RwStreamjPjS1_", int32_t, Required)
+SYM_FN(RpClumpStreamRead, "_Z17RpClumpStreamReadP8RwStream", void*, Required)
+SYM_FN(RwTextureSetName, "_Z16RwTextureSetNameP9RwTexturePKc", void*, Required)
+SYM_FN(RwTextureSetMaskName, "_Z20RwTextureSetMaskNameP9RwTexturePKc", void*, Required)
+SYM_FN(RwTexDictionaryCreate, "_Z21RwTexDictionaryCreatev", void*, Required)
+SYM_FN(RwTexDictionaryDestroy, "_Z22RwTexDictionaryDestroyP15RwTexDictionary", int32_t, Required)
+SYM_FN(RwTexDictionaryAddTexture, "_Z25RwTexDictionaryAddTextureP15RwTexDictionaryP9RwTexture", void*, Required)
+SYM_FN(RwTexDictionaryRemoveTexture, "_Z28RwTexDictionaryRemoveTextureP9RwTexture", void*, Required)
+SYM_FN(RwTexDictionaryForAllTextures, "_Z29RwTexDictionaryForAllTexturesPK15RwTexDictionaryPFP9RwTextureS3_PvES4_", void*, Required)
+SYM_FN(CBaseModelInfo_Init, "_ZN14CBaseModelInfo4InitEv", void, Required)
+SYM_FN(CFileLoader_LoadAtomicFile_Stream, "_ZN11CFileLoader14LoadAtomicFileEP8RwStreamj", bool, Required)
+SYM_FN(CFileLoader_LoadCollisionModel, "_ZN11CFileLoader18LoadCollisionModelEPhR9CColModelPKc", void, Required)
+SYM_FN(CFileLoader_LoadCollisionModelVer2, "_ZN11CFileLoader22LoadCollisionModelVer2EPhjR9CColModelPKc", void, Required)
+SYM_FN(CFileLoader_LoadCollisionModelVer3, "_ZN11CFileLoader22LoadCollisionModelVer3EPhjR9CColModelPKc", void, Required)
+SYM_FN(CFileLoader_LoadCollisionModelVer4, "_ZN11CFileLoader22LoadCollisionModelVer4EPhjR9CColModelPKc", void, Required)
+SYM_FN_ABI(CColModel_OpNew, "_ZN9CColModelnwEm", "_ZN9CColModelnwEj", void*, Required)
+SYM_FN(CColModel_OpDelete, "_ZN9CColModeldlEPv", void, Required)
+SYM_FN(CColModel_Ctor, "_ZN9CColModelC2Ev", void, Required)
+SYM_FN(CColModel_Dtor, "_ZN9CColModelD2Ev", void, Required)
+SYM_FN(CColModel_MakeMultipleAlloc, "_ZN9CColModel17MakeMultipleAllocEv", void, Required)
+SYM_FN(CBaseModelInfo_SetColModel, "_ZN14CBaseModelInfo11SetColModelEP9CColModelb", void, Required)
+SYM_FN(CAtomicModelInfo_DeleteRwObject, "_ZN16CAtomicModelInfo14DeleteRwObjectEv", void, Required)
+SYM_FN(CPedModelInfo_SetClump, "_ZN13CPedModelInfo8SetClumpEP7RpClump", void, Required)
+SYM_FN(CPedModelInfo_DeleteRwObject, "_ZN13CPedModelInfo14DeleteRwObjectEv", void, Required)
+SYM_FN(CStreaming_SetModelIsDeletable, "_ZN10CStreaming19SetModelIsDeletableEi", void, Required)
+SYM_FN(CStreaming_SetMissionDoesntRequireModel, "_ZN10CStreaming28SetMissionDoesntRequireModelEi", void, Required)
+SYM_FN(CCollision_BuildCacheOfCameraCollision, "_ZN10CCollision27BuildCacheOfCameraCollisionEP10CColSphereS1_", bool, Required)
+SYM_FN(CCollision_CheckCameraCollisionObjects, "_ZN10CCollision27CheckCameraCollisionObjectsEiiP7CColBoxP10CColSphereS3_S3_", bool, Required)
+SYM_DATA(CCollision_bCamCollideWithObjects, "_ZN10CCollision22bCamCollideWithObjectsE", uint8_t, Required)

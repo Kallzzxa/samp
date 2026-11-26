@@ -160,11 +160,13 @@ void RpcHandlers::OnSetPlayerSkin(const proto::SetPlayerSkin& p)
 		return;
 	}
 
-	const int skinId = ResolveEffectivePedSkin(static_cast<int>(p.skinId), static_cast<int>(p.customSkinId));
-	if (IsValidPedModel(static_cast<uint>(skinId))) {
+	const int baseSkin = static_cast<int>(p.skinId);
+	const int customSkin = static_cast<int>(p.customSkinId);
+	const int previewSkin = ResolveEffectivePedSkin(baseSkin, customSkin);
+	if (IsValidPedModel(static_cast<uint>(previewSkin))) {
 		if (pPlayerPool->GetLocalPlayerID() == p.playerId) {
 			if (pPlayerPool->GetLocalPlayer() && pPlayerPool->GetLocalPlayer()->GetPlayerPed()) {
-				pPlayerPool->GetLocalPlayer()->GetPlayerPed()->SetModelIndex(static_cast<uint>(skinId));
+				pPlayerPool->GetLocalPlayer()->GetPlayerPed()->SetSkin(baseSkin, customSkin);
 			}
 		}
 		else if (p.playerId < MAX_PLAYERS) {
@@ -178,7 +180,7 @@ void RpcHandlers::OnSetPlayerSkin(const proto::SetPlayerSkin& p)
 				if (!pPlayerPed) {
 					return;
 				}
-				pPlayerPed->SetModelIndex(static_cast<uint>(skinId));
+				pPlayerPed->SetSkin(baseSkin, customSkin);
 			}
 		}
 	}

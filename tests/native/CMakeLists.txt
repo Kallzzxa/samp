@@ -35,6 +35,14 @@ endfunction()
 add_native_test(input_arbiter      core/test_input_arbiter.cpp)
 add_native_test(settings_contract  core/test_settings_contract.cpp)
 
+add_library(artwork_core STATIC
+        "${CLIENT}/Game/Artwork/ArtworkCore.cpp"
+        "${CLIENT}/Game/Artwork/TxdParser.cpp"
+        "${CLIENT}/Game/Artwork/DffValidator.cpp"
+        "${CLIENT}/Game/Artwork/Lzma1Decoder.cpp")
+target_include_directories(artwork_core PUBLIC "${CLIENT}")
+add_native_test(artwork_core       core/test_artwork_core.cpp       artwork_core)
+
 # ---- Protocol & netcap format tests ----
 add_native_test(bitstream          proto/test_bitstream.cpp         rakbits)
 add_native_test(netcap             proto/test_netcap.cpp)
@@ -71,7 +79,7 @@ if (EXISTS "${OMP_DIR}/Shared/NetCode/netcode.hpp")
     target_compile_options(omp_oracle PRIVATE -w)
     set_target_properties(omp_oracle PROPERTIES CXX_STANDARD 17)
 
-    foreach(omp_name IN ITEMS omp_interop omp_batch1 omp_batch2 omp_batch3 omp_batch4 omp_batch5 omp_batch6 omp_batch7)
+    foreach(omp_name IN ITEMS omp_interop omp_batch1 omp_batch2 omp_batch3 omp_batch4 omp_batch5 omp_batch6 omp_batch7 omp_artwork)
         add_native_test(${omp_name} "interop/test_${omp_name}.cpp" rakbits omp_oracle)
         set_target_properties(test_${omp_name} PROPERTIES CXX_STANDARD 17)
     endforeach()
