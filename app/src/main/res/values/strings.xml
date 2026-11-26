@@ -49,7 +49,7 @@
     <string name="chat_size_h">Chat Size Height</string>
     <string name="reset">Reset</string>
     <string name="reset_settings">Reset Settings</string>
-    <string name="more_details">Can't find an answer? Ask in our Discord community!</string>
+    <string name="more_details">Can\'t find an answer? Ask in our Discord community!</string>
     <string name="question">Question</string>
     <string name="answer">Answer</string>
     <string name="title">Title</string>
@@ -135,7 +135,7 @@
     <string name="nav_offline_short">Offline</string>
     <string name="add_server_short">Add</string>
     <string name="servers_count">%1$d servers</string>
-    <string name="servers_empty_favorites">Favorites is empty\nTap "Add" at the top right to enter a server address, or pick one from "Internet" to favorite it</string>
+    <string name="servers_empty_favorites">Favorites is empty\nTap \"Add\" at the top right to enter a server address, or pick one from \"Internet\" to favorite it</string>
     <string name="servers_empty_recent">No servers joined yet\nServers you join will appear here</string>
     <string name="servers_empty_search">No matching servers</string>
     <string name="servers_empty_internet">Server list is empty\nCheck your connection, then tap Refresh at the top right</string>
