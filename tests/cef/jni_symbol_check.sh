@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# 检查 CefManager.java 里声明的每个 native 方法在编译产物里真的有对应符号，
-# 而且是**未 mangle** 的 JNI 名字。
+# Check that every native method declared in CefManager.java really has a matching symbol in the build output,
+# and that it is an **unmangled** JNI name.
 #
-# 为什么需要这一条：native 方法忘了写 extern "C" 时，C++ 会把它 mangle 成
-# _Z66Java_...，Java 侧调用直接抛 UnsatisfiedLinkError。如果 Java 那边又用
-# try/catch 吞掉了，现象就是"代码改了、编译过了、行为完全没变"，而且在
-# logcat 不可靠的机器上连痕迹都找不到。2026-11-23 就踩了这个坑
-# （nativeForgetWorldObject 没生效，WorldObject3D 条目一直不释放）。
+# Why this check exists: if a native method is missing extern "C", C++ mangles it into
+# _Z66Java_..., and the Java-side call throws UnsatisfiedLinkError directly. If the Java side also swallows it with
+# try/catch, the symptom is "code changed, compiled fine, behaviour completely unchanged", and on a machine where
+# logcat is unreliable there is not even a trace to find. This exact pitfall was hit on 2026-11-23
+# (nativeForgetWorldObject had no effect, so WorldObject3D entries were never released).
 #
 #   bash tests/cef/jni_symbol_check.sh
 #
-# 退出码 0 = 全部有符号；1 = 有缺失（会逐条打印）。
+# Exit code 0 = all symbols present; 1 = some missing (printed one by one).
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,9 +18,9 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 JAVA="$ROOT/app/src/main/java/com/sampmobile/game/ui/cef/CefManager.java"
 PREFIX="Java_com_sampmobile_game_ui_cef_CefManager_"
 
-# llvm-nm 的宿主机目录名随平台变化：CI 是 linux-x86_64，本机 Windows 是
-# windows-x86_64。以前只写了 Windows 一条，在 Linux runner 上会静默 SKIP，
-# 表现为「CI 绿了但其实一条符号都没查」——假阴性，比红灯更危险。
+# The llvm-nm host directory name varies by platform: CI is linux-x86_64, this Windows machine is
+# windows-x86_64. It used to list Windows only, which silently SKIPPED on a Linux runner,
+# showing as "CI green but no symbol was actually checked" — a false negative, more dangerous than a red light.
 find_nm() {
     local sdk host
     for sdk in "${ANDROID_SDK_ROOT:-}" "${ANDROID_HOME:-}" /d/android-sdk "$HOME/android-sdk"; do
@@ -41,22 +41,22 @@ find_so() {
     local so
     so="$(ls -t "$ROOT"/app/build/intermediates/cxx/Debug/*/obj/arm64-v8a/libSAMPMOBILE.so 2>/dev/null | head -1)"
     if [ -z "$so" ]; then
-        # AGP 换过中间产物布局，兜底整目录找一次。
+        # AGP changed the intermediate-output layout; fall back to searching the whole directory once.
         so="$(find "$ROOT/app/build" -type f -name libSAMPMOBILE.so -path "*arm64-v8a*" 2>/dev/null | head -1)"
     fi
     printf '%s' "$so"
 }
 
-NM="$(find_nm)" || { echo "FAIL  找不到 llvm-nm（ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT 下没有 ndk）"; exit 1; }
+NM="$(find_nm)" || { echo "FAIL  llvm-nm not found (no ndk under ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT)"; exit 1; }
 SO="$(find_so)"
-[ -n "$SO" ] || { echo "FAIL  找不到 libSAMPMOBILE.so，先编译"; exit 1; }
-[ -f "$JAVA" ] || { echo "FAIL  找不到 $JAVA"; exit 1; }
+[ -n "$SO" ] || { echo "FAIL  libSAMPMOBILE.so not found; build first"; exit 1; }
+[ -f "$JAVA" ] || { echo "FAIL  $JAVA not found"; exit 1; }
 
-# native 方法名：`private static native void nativeFoo(int id);`
+# Native method names: `private static native void nativeFoo(int id);`
 NATIVES="$(grep -oE 'native +(void|int|long|boolean|String|byte\[\]|float|double) +native[A-Za-z0-9_]+ *\(' "$JAVA" \
     | sed -E 's/.* (native[A-Za-z0-9_]+) *\($/\1/' | sort -u)"
 COUNT=$(printf '%s\n' "$NATIVES" | grep -c . || true)
-[ "$COUNT" -gt 0 ] || { echo "FAIL  $JAVA 里没解析出任何 native 方法（解析规则失效？）"; exit 1; }
+[ "$COUNT" -gt 0 ] || { echo "FAIL  No native methods parsed from $JAVA (is the parsing rule broken?)"; exit 1; }
 
 SYMFILE="$ROOT/tests/cef/out/.jni-symbols.txt"
 mkdir -p "$(dirname "$SYMFILE")"
@@ -64,17 +64,17 @@ mkdir -p "$(dirname "$SYMFILE")"
 
 MISSING=0
 for n in $NATIVES; do
-    # 必须用文件而不是管道：`grep -q` 命中后立刻退出，管道另一端的 printf 会
-    # 收到 SIGPIPE，在 set -o pipefail 下整个管道被判为失败 —— 100% 假阳性。
+    # Must use a file, not a pipe: `grep -q` exits immediately on a hit, and the printf on the other end of the pipe then gets
+    # SIGPIPE, which under set -o pipefail fails the whole pipeline — a 100% false positive.
     if grep -qx "$PREFIX$n" "$SYMFILE"; then
         continue
     fi
     MISSING=$((MISSING + 1))
-    # 给出具体原因：是被 mangle 了，还是压根没实现。
+    # Give the specific reason: mangled, or not implemented at all.
     if grep -q "^_Z[0-9]*$PREFIX$n" "$SYMFILE"; then
-        echo "FAIL  $n: 符号被 C++ mangle（缺 extern \"C\"）"
+        echo "FAIL  $n: symbol mangled by C++ (missing extern \"C\")"
     else
-        echo "FAIL  $n: 没有任何实现"
+        echo "FAIL  $n: no implementation at all"
     fi
 done
 

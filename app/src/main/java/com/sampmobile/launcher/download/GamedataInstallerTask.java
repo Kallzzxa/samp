@@ -17,30 +17,30 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 数据包准备流程的总调度。
+ * Overall orchestration of the data-package preparation flow.
  *
- * 一次完整流程：
- *   1. 拉 manifest.json
- *   2. 比对本地已安装版本 → 相同则直接返回"已就绪"
- *   3. 逐包下载分片（支持断点续传）
- *   4. 拼接成整包并校验整包 SHA-256
- *   5. 解压到 staging
- *   6. staging 提升为正式目录
- *   7. 记录已安装版本
+ * One complete flow:
+ *   1. Fetch manifest.json
+ *   2. Compare with the locally installed version — if identical, return "ready" directly
+ *   3. Download each package's chunks (resumable)
+ *   4. Assemble into the whole package and verify its SHA-256
+ *   5. Extract to staging
+ *   6. Promote staging to the live directory
+ *   7. Record the installed version
  *
- * 每一步都可中断，重新进入时从上次的断点继续（分片级别的续传）。
+ * Every step can be interrupted; re-entering resumes from the last breakpoint (chunk-level resume).
  */
 public final class GamedataInstallerTask {
 
     private static final String TAG = "GamedataTask";
 
-    /** 最大单次读清单的字节数，防止被喂一个巨大的 JSON 撑爆内存。 */
+    /** Max bytes read for a manifest in one go, to prevent a huge JSON from blowing up memory. */
     private static final int MAX_MANIFEST_BYTES = 8 * 1024 * 1024;
 
     public interface Listener {
         void onStage(Stage stage);
 
-        /** @param bytesDone / bytesTotal 跨全部包的累计进度 */
+        /** @param bytesDone / bytesTotal Cumulative progress across all packages */
         void onProgress(long bytesDone, long bytesTotal);
 
         void onStatus(String message);
@@ -103,30 +103,30 @@ public final class GamedataInstallerTask {
     }
 
     /**
-     * 数据是否可用。判定规则集中在 {@link GamedataState}，这里只做转调，
-     * 避免和 Splash 的检查各写一份。
+     * Whether the data is usable. The rules live in {@link GamedataState}; this only forwards the call,
+     * so the check is not written twice (here and in Splash).
      */
     public boolean isReady() {
         return GamedataState.isReady(context);
     }
 
-    /** 已安装的版本号；没装过返回 null。 */
+    /** Installed version; null if never installed. */
     public String installedVersion() {
         return GamedataState.installedVersion(context);
     }
 
     /**
-     * 跑一遍完整流程。**必须在后台线程调用。**
+     * Run one complete flow. **Must be called on a background thread.**
      */
     public void run(Listener l) {
         this.listener = l;
         try {
             if (!installer.isInstalled()) {
                 l.onStage(Stage.FETCHING_MANIFEST);
-                l.onStatus("正在获取数据包信息…");
+                l.onStatus("Fetching data package info...");
             } else {
                 l.onStage(Stage.CHECKING);
-                l.onStatus("正在检查数据更新…");
+                l.onStatus("Checking for data updates...");
             }
 
             String json = fetchManifest();
@@ -139,24 +139,24 @@ public final class GamedataInstallerTask {
             }
 
             if (cancelled) {
-                fail(l, "已取消", null);
+                fail(l, "Cancelled", null);
                 return;
             }
 
-            // 非强制重下时：版本一致或本地数据已完整则跳过
+            // When not forcing a re-download: skip if the version matches or local data is already complete
             String installed = installedVersion();
             if (!forceRedownload && installed != null && installed.equals(manifest.version) && installer.isInstalled()) {
                 l.onStage(Stage.READY);
-                l.onStatus("数据已是最新（" + manifest.version + "）");
+                l.onStatus("Data is already up to date (" + manifest.version + ")");
                 l.onDone(false);
                 return;
             }
 
-            // 非强制重下且本地核心文件已齐全（例如玩家手动导入）：只补写版本记录，不重复下载
+            // When not forcing a re-download and local core files are already complete (e.g. the player imported manually): only write the version record, do not download again
             if (!forceRedownload && installed == null && installer.isInstalled()) {
                 writeState(manifest.version);
                 l.onStage(Stage.READY);
-                l.onStatus("已检测到本地数据，无需下载");
+                l.onStatus("Local data detected, no download needed");
                 l.onDone(false);
                 return;
             }
@@ -173,11 +173,11 @@ public final class GamedataInstallerTask {
 
             for (DataManifest.Package pkg : allPackages) {
                 if (cancelled) {
-                    fail(l, "已取消", null);
+                    fail(l, "Cancelled", null);
                     return;
                 }
                 final long base = doneBase;
-                l.onStatus("正在下载 " + pkg.label);
+                l.onStatus("Downloading " + pkg.label);
                 boolean ok = downloader.downloadPackage(
                         baseUrlOf(manifestUrl), pkg,
                         new ChunkDownloader.Listener() {
@@ -190,7 +190,7 @@ public final class GamedataInstallerTask {
 
                             @Override
                             public void onChunkDone(int chunkIndex, int chunkCount) {
-                                // 单片完成不单独播报，进度条已经反映
+                                // A finished chunk is not announced separately; the progress bar already reflects it
                             }
 
                             @Override
@@ -199,29 +199,29 @@ public final class GamedataInstallerTask {
                             }
                         });
                 if (!ok) {
-                    fail(l, "下载失败：" + pkg.label, null);
+                    fail(l, "Download failed: " + pkg.label, null);
                     return;
                 }
                 doneBase += pkg.bytes;
             }
 
             if (cancelled) {
-                fail(l, "已取消", null);
+                fail(l, "Cancelled", null);
                 return;
             }
 
-            // ---- 校验 + 解压 ----
+            // ---- Verify + extract ----
             l.onStage(Stage.VERIFYING);
             l.onProgress(total, total);
-            // 只在最早的包之前清一次 staging；后续包解压到同一目录，
-            // 从而 online 包能覆盖 game 包里同名的 SAMP/ 资源。
+            // Clear staging only once, before the earliest package; later packages extract into the same directory,
+            // so the online package can overwrite same-named SAMP/ resources from the game package.
             installer.discardStaging();
 
-            // 逐包处理：拼接 → 校验 → 解压 → 删除，不把所有 zip 攒在手上。
-            // 2GB 包在手机上必须这样，否则"分片 2G + zip 2G + 解压 2G"三份并存直接撑爆。
+            // Process package by package: assemble → verify → extract → delete, without holding all zips at once.
+            // A 2GB package must be handled this way on a phone, otherwise "2G of chunks + 2G zip + 2G extracted" existing side by side would blow up storage.
             for (int i = 0; i < allPackages.size(); i++) {
                 if (cancelled) {
-                    fail(l, "已取消", null);
+                    fail(l, "Cancelled", null);
                     return;
                 }
                 DataManifest.Package pkg = allPackages.get(i);
@@ -229,27 +229,27 @@ public final class GamedataInstallerTask {
                 File zip = new File(cacheDir(), pkg.id + ".zip");
 
                 l.onStage(Stage.VERIFYING);
-                l.onStatus("正在校验 " + pkg.label);
+                l.onStatus("Verifying " + pkg.label);
 
-                // 已有同尺寸成品 zip 就跳过拼接（上次已到这一步）
+                // If a finished zip of the same size already exists, skip assembly (a previous run already got this far)
                 if (!(zip.isFile() && zip.length() == pkg.bytes)) {
-                    // 拼接时边拼边删分片，峰值只比整包多一个分片
+                    // Assembly deletes chunks as it goes, so peak usage is only one chunk more than the whole package
                     ChunkDownloader.concatChunks(dir, pkg, zip, false);
                 }
                 if (!ChunkDownloader.verify(zip, pkg.sha256)) {
                     //noinspection ResultOfMethodCallIgnored
                     zip.delete();
-                    fail(l, "数据包校验失败（可能传输损坏），请重试：" + pkg.label, null);
+                    fail(l, "Data package verification failed (possibly damaged in transit), please retry: " + pkg.label, null);
                     return;
                 }
 
                 l.onStage(Stage.EXTRACTING);
-                l.onStatus("正在安装 " + (i + 1) + "/" + allPackages.size() + "：" + pkg.label);
-                // 第一个包清空 staging，后续包追加（覆盖同名资源）
+                l.onStatus("Installing " + (i + 1) + "/" + allPackages.size() + ":" + pkg.label);
+                // The first package clears staging; later packages append (overwriting same-named resources)
                 installer.extractToStaging(zip, zip.length(), new GamedataInstaller.Listener() {
                     @Override
                     public void onProgress(String entryName, long bytesWritten, long bytesTotal) {
-                        if (listener != null) listener.onStatus("正在解压 " + entryName);
+                        if (listener != null) listener.onStatus("Extracting " + entryName);
                     }
 
                     @Override
@@ -258,20 +258,20 @@ public final class GamedataInstallerTask {
                     }
                 }, i == 0);
 
-                // 解压完立刻删 zip，给下一个包腾空间
+                // Delete the zip right after extracting, to free space for the next package
                 //noinspection ResultOfMethodCallIgnored
                 zip.delete();
                 GamedataInstaller.deleteRecursively(dir);
             }
 
             l.onStage(Stage.ACTIVATING);
-            l.onStatus("正在启用数据…");
+            l.onStatus("Activating data...");
             installer.activateStaging();
 
-            // 记录已安装版本
+            // Record the installed version
             writeState(manifest.version);
 
-            // 成功后清理分片缓存（省几百 MB 空间）
+            // After success, clean up the chunk cache (saves hundreds of MB)
             for (DataManifest.Package pkg : allPackages) {
                 GamedataInstaller.deleteRecursively(new File(cacheDir(), pkg.id));
                 //noinspection ResultOfMethodCallIgnored
@@ -279,13 +279,13 @@ public final class GamedataInstallerTask {
             }
 
             l.onStage(Stage.READY);
-            l.onStatus("数据准备完成");
+            l.onStatus("Data preparation complete");
             l.onDone(true);
 
         } catch (InterruptedException e) {
-            fail(l, "已取消", e);
+            fail(l, "Cancelled", e);
         } catch (Exception e) {
-            Log.e(TAG, "准备数据失败", e);
+            Log.e(TAG, "Failed to prepare data", e);
             fail(l, e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(), e);
         }
     }
@@ -295,7 +295,7 @@ public final class GamedataInstallerTask {
         l.onError(msg, cause);
     }
 
-    // ------------------------------------------------------------------ 网络
+    // ------------------------------------------------------------------ Network
 
     private String fetchManifest() throws IOException {
         HttpURLConnection conn = null;
@@ -305,12 +305,12 @@ public final class GamedataInstallerTask {
             conn.setConnectTimeout(15000);
             conn.setReadTimeout(20000);
             conn.setInstanceFollowRedirects(true);
-            // 清单要最新，别让中间层缓存住
+            // The manifest must be fresh; do not let an intermediate layer cache it
             conn.setRequestProperty("Cache-Control", "no-cache");
 
             int code = conn.getResponseCode();
             if (code != HttpURLConnection.HTTP_OK) {
-                throw new IOException("获取清单失败：HTTP " + code);
+                throw new IOException("Failed to fetch manifest: HTTP " + code);
             }
 
             try (InputStream in = conn.getInputStream()) {
@@ -321,7 +321,7 @@ public final class GamedataInstallerTask {
                 while ((n = in.read(buf)) > 0) {
                     total += n;
                     if (total > MAX_MANIFEST_BYTES) {
-                        throw new IOException("清单异常大（>" + MAX_MANIFEST_BYTES + " 字节）");
+                        throw new IOException("Manifest is abnormally large (>" + MAX_MANIFEST_BYTES + " bytes)");
                     }
                     bos.write(buf, 0, n);
                 }
@@ -332,7 +332,7 @@ public final class GamedataInstallerTask {
         }
     }
 
-    /** 清单所在目录（去掉最后一段文件名）。 */
+    /** The manifest's directory (dropping the final filename segment). */
     static String baseUrlOf(String manifestUrl) {
         int idx = manifestUrl.lastIndexOf('/');
         return idx > 0 ? manifestUrl.substring(0, idx + 1) : manifestUrl;
@@ -347,7 +347,7 @@ public final class GamedataInstallerTask {
         }
     }
 
-    // ------------------------------------------------------------------ 状态
+    // ------------------------------------------------------------------ State
 
     private void writeState(String version) {
         JSONObject o = new JSONObject();
@@ -358,8 +358,8 @@ public final class GamedataInstallerTask {
                 fos.write(o.toString().getBytes(StandardCharsets.UTF_8));
             }
         } catch (JSONException | IOException e) {
-            // 状态写失败不影响数据可用，下次会当作"版本未知"重新检查一遍
-            Log.w(TAG, "写入安装状态失败: " + e.getMessage());
+            // A failed state write does not affect data usability; next time it is rechecked as "unknown version"
+            Log.w(TAG, "Failed to write install state: " + e.getMessage());
         }
     }
 }

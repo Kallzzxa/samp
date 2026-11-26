@@ -1,19 +1,19 @@
 package com.sampmobile.game.ui.cef;
 
 /**
- * CEF 输入路径纯逻辑的离线断言（不需要手机、不需要游戏、不需要 gradle）。
+ * Offline assertions for the pure logic of the CEF input path (no phone, no game, no gradle needed).
  *
- * 跑法：bash tests/cef/logic_tests/run_logic_tests.sh
+ * Run with: bash tests/cef/logic_tests/run_logic_tests.sh
  *
- * 为什么需要它：这台 ROM 的 logd 会反复重启，设备端只能靠"上行报文"证明某条
- * 路径被走到，证明不了每条分支都对。下面的期望值全部**独立硬编码**（不引用
- * CefKeys 里的表），所以能抓出产品侧的笔误；而 CefLogic 的判定直接对着 PC 源码
- * 的语义写。
+ * Why it exists: logd on this ROM keeps restarting, so on-device the only proof that a given
+ * path was taken is an "uplink packet" — which cannot prove every branch is right. All expected values below are **independently hardcoded** (they do not reference
+ * the tables in CefKeys), so they can catch typos on the product side; and the CefLogic checks are written
+ * directly against the semantics of the PC source.
  *
- * 断言里出现的 KeyEvent.KEYCODE_* / META_* 都是 static final 常量，javac 会内联，
- * 因此运行时 classpath **不含 android.jar**——如果以后有人往 CefKeys/CefLogic 里
- * import 了 android 的运行时类型，这个测试会当场 NoClassDefFoundError，正好当作
- * "纯逻辑被污染"的守门人。
+ * The KeyEvent.KEYCODE_* / META_* values in the assertions are all static final constants, so javac inlines them;
+ * therefore the runtime classpath **does not contain android.jar** — if someone later imports an Android runtime type into CefKeys/CefLogic,
+ * this test will fail on the spot with NoClassDefFoundError, acting as the guard for
+ * keeping "pure logic" uncontaminated.
  */
 public final class LogicTests {
 
@@ -56,10 +56,10 @@ public final class LogicTests {
     // ---------------------------------------------------------------- CefKeys
 
     /**
-     * Set-1 扫描码，按字母顺序独立写一遍（PC/AT 键盘规范：
+     * Set-1 scan codes, written out independently in alphabetical order (PC/AT keyboard spec:
      * Q=0x10 W=0x11 E=0x12 R=0x13 T=0x14 Y=0x15 U=0x16 I=0x17 O=0x18 P=0x19
      * A=0x1E S=0x1F D=0x20 F=0x21 G=0x22 H=0x23 J=0x24 K=0x25 L=0x26
-     * Z=0x2C X=0x2D C=0x2E V=0x2F B=0x30 N=0x31 M=0x32）。
+     * Z=0x2C X=0x2D C=0x2E V=0x2F B=0x30 N=0x31 M=0x32).
      */
     private static final int[] EXPECT_SCAN = {
             0x1E, 0x30, 0x2E, 0x20, 0x12, 0x21, 0x22, 0x23, 0x17, 0x24, 0x25, 0x26, 0x32,
@@ -74,7 +74,7 @@ public final class LogicTests {
             eq("KEYCODE_" + letter + " -> scan 0x" + hex(EXPECT_SCAN[i]), EXPECT_SCAN[i],
                     CefKeys.scanOf(keyCode));
         }
-        // 一个具体的"服务端会看到的"例子：设备上 input keyevent 29 落了 VK 0x41。
+        // A concrete example of what "the server will see": input keyevent 29 on the device lands as VK 0x41.
         eq("injected KEYCODE_A(29) becomes Windows VK 0x41", 0x41,
                 CefKeys.vkOf(android.view.KeyEvent.KEYCODE_A));
     }
@@ -87,7 +87,7 @@ public final class LogicTests {
             eq("KEYCODE_" + i + " -> scan 0x" + hex(digitScan[i]), digitScan[i],
                     CefKeys.scanOf(keyCode));
         }
-        // 标点的 VK 用的是 US 布局的 OEM 码，扫��码是 Set-1 物理位置。
+        // Punctuation VKs use US-layout OEM codes; scan codes are Set-1 physical positions.
         eq("GRAVE  -> VK_OEM_3 0xC0 / scan 0x29", 0xC0, CefKeys.vkOf(android.view.KeyEvent.KEYCODE_GRAVE));
         eq("GRAVE  -> scan 0x29", 0x29, CefKeys.scanOf(android.view.KeyEvent.KEYCODE_GRAVE));
         eq("MINUS  -> VK_OEM_MINUS 0xBD", 0xBD, CefKeys.vkOf(android.view.KeyEvent.KEYCODE_MINUS));
@@ -164,22 +164,22 @@ public final class LogicTests {
                 scanWithoutVk = true;
                 if (firstBad.isEmpty()) firstBad = "keyCode " + keyCode + " scan=" + scan;
             }
-            // 服务端 EnableKey 白名单是 256 项，超过 255 的 VK 永远发不出去。
+            // The server-side EnableKey whitelist has 256 entries; a VK above 255 can never be sent.
             if (vk > 255) vkOutOfByte = true;
         }
         check("every mapped key has both VK and scan", !vkWithoutScan, firstBad);
         check("no scan without VK", !scanWithoutVk, firstBad);
         check("all VKs fit the 256-entry EnableKey whitelist", !vkOutOfByte, null);
 
-        // 至少 90 个键被收录：少了说明哪段 put 循环被删了。
+        // At least 90 keys must be covered: fewer means some put loop was deleted.
         int mapped = 0;
         for (int k = 0; k < 300; k++) if (CefKeys.vkOf(k) != 0) mapped++;
         check("table covers at least 90 keys (got " + mapped + ")", mapped >= 90, null);
     }
 
     private static void unknowns() {
-        // 这几个是 Android 特有的键，Windows 上没有对应 VK，必须返回 0 而不是
-        // 挑一个"差不多"的码——服务端会拿它当真实按键处理。
+        // These are Android-only keys with no Windows VK equivalent, so they must return 0 rather than
+        // picking a "close enough" code — the server would treat it as a real key press.
         eq("KEYCODE_BACK  -> 0 (no VK equivalent, never faked)", 0,
                 CefKeys.vkOf(android.view.KeyEvent.KEYCODE_BACK));
         eq("KEYCODE_HOME  -> 0 (only MOVE_HOME is mapped)", 0,
@@ -213,7 +213,7 @@ public final class LogicTests {
                 !CefLogic.shouldSendKey(true, allowed, 0x5A, true, false), null);
         check("keydown auto-repeat -> dropped (PC: if (!(down && repeat)))",
                 !CefLogic.shouldSendKey(true, allowed, 0x41, true, true), null);
-        // 抬起即便带 repeat 也要发，否则服务端收到"按下没抬起"，页面里的 keyup 永远不来。
+        // Key-up must still be sent even with repeat set, otherwise the server sees "pressed, never released" and the page never gets keyup.
         check("keyup carrying repeat -> still sent",
                 CefLogic.shouldSendKey(true, allowed, 0x41, false, true), null);
         check("vk 0 (unmapped Android key) -> not sent",
@@ -227,20 +227,20 @@ public final class LogicTests {
         check("empty whitelist -> not sent",
                 !CefLogic.shouldSendKey(true, new boolean[256], 0x41, true, false), null);
 
-        // 实机脚本里打过 ENTER（0x0D）和 A（0x41），服务端两条都收到了。
+        // The on-device script has sent ENTER (0x0D) and A (0x41); the server received both.
         check("ENTER stays deliverable while capture is on",
                 CefLogic.shouldSendKey(true, allowed, 0x0D, true, false), null);
     }
 
     private static void imeInset() {
-        // 真机（V2312A, 1080 高）实测：键盘弹出时可见区 bottom = 372。
+        // Measured on a real device (V2312A, 1080 tall): with the keyboard up, the visible area bottom = 372.
         eq("1080px window, visible bottom 372 -> 708px keyboard", 708,
                 CefLogic.imeInsetOf(1080, 372));
         eq("keyboard hidden (visible bottom == window height) -> 0", 0,
                 CefLogic.imeInsetOf(1080, 1080));
         eq("48px navigation bar is not a keyboard -> 0", 0,
                 CefLogic.imeInsetOf(1080, 1032));
-        // 阈值正好落在 1/4 时的边界：270 不小于 270，按键盘处理。
+        // The threshold sits exactly on the 1/4 boundary: 270 is not less than 270, so it counts as a keyboard.
         eq("exactly 1/4 of the window is treated as keyboard", 270,
                 CefLogic.imeInsetOf(1080, 810));
         eq("one pixel below 1/4 is treated as chrome, not keyboard -> 0", 0,
@@ -253,20 +253,20 @@ public final class LogicTests {
         eq("small window keeps proportional behaviour", 40,
                 CefLogic.imeInsetOf(100, 60));
 
-        // ---- imeMarginOf：adjustResize 已经让出空间时不能再减 bottomMargin ----
-        // 键盘弹出、窗口没被 resize（adjustPan）：要自己退让
+        // ---- imeMarginOf: when adjustResize has already made room, do not reduce bottomMargin again ----
+        // Keyboard up, window not resized (adjustPan): give way yourself
         eq("pan mode, keyboard 708px -> margin 708", 708,
                 CefLogic.imeMarginOf(1080, 372, 1080));
-        // 键盘弹出、窗口已被 resize 到 372：空间系统已经让了，margin 必须为 0
+        // Keyboard up, window already resized to 372: the system has already made room, so margin must be 0
         eq("resize mode, window already shrunk to 372 -> margin 0 (no double give-back)", 0,
                 CefLogic.imeMarginOf(372, 372, 1080));
-        // 反馈回路的精确复现：窗口 372 高、可见 bottom 也是 372
+        // Exact reproduction of the feedback loop: window 372 tall, visible bottom also 372
         eq("feedback loop guard: decor 372 == visible 372 -> 0", 0,
                 CefLogic.imeMarginOf(372, 372, 1080));
-        // 键盘收起且窗口恢复全屏 -> 0
+        // Keyboard dismissed and window back to fullscreen -> 0
         eq("keyboard hidden, full-height window -> 0", 0,
                 CefLogic.imeMarginOf(1080, 1080, 1080));
-        // 量不到时按 0，等下一次布局，不要乱减
+        // When it cannot be measured, use 0 and wait for the next layout; do not subtract blindly
         eq("zero decor height -> 0 (wait for next layout)", 0,
                 CefLogic.imeMarginOf(0, 372, 1080));
         eq("unknown screen height -> 0 (fail safe)", 0,

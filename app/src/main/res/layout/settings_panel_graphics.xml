@@ -16,7 +16,7 @@
         android:orientation="vertical"
         android:padding="@dimen/_12sdp">
 
-        <!-- 卡片：一键画质预设 -->
+        <!-- Card: One-Tap Graphics Presets -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -27,7 +27,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="画质快捷预设"
+                android:text="Graphics Quick Presets"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_9ssp"
                 android:textStyle="bold" />
@@ -36,7 +36,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/_2sdp"
-                android:text="根据手机性能一键配置分辨率、视距、阴影与特效组合"
+                android:text="Configure resolution, draw distance, shadows, and effects in one tap based on your phone's performance"
                 android:textColor="@color/launcher_text_dim"
                 android:textSize="@dimen/_7ssp" />
 
@@ -54,7 +54,7 @@
                     android:layout_weight="1"
                     android:background="@drawable/launcher_btn_outline"
                     android:gravity="center"
-                    android:text="省电流畅"
+                    android:text="Battery Saver"
                     android:textColor="@color/launcher_text"
                     android:textSize="@dimen/_8ssp"
                     android:textStyle="bold" />
@@ -67,7 +67,7 @@
                     android:layout_weight="1"
                     android:background="@drawable/launcher_btn_outline"
                     android:gravity="center"
-                    android:text="均衡标准"
+                    android:text="Balanced"
                     android:textColor="@color/launcher_text"
                     android:textSize="@dimen/_8ssp"
                     android:textStyle="bold" />
@@ -80,7 +80,7 @@
                     android:layout_weight="1"
                     android:background="@drawable/launcher_btn_outline"
                     android:gravity="center"
-                    android:text="高清画质"
+                    android:text="HD Quality"
                     android:textColor="@color/launcher_text"
                     android:textSize="@dimen/_8ssp"
                     android:textStyle="bold" />
@@ -92,14 +92,14 @@
                     android:layout_weight="1"
                     android:background="@drawable/launcher_btn_outline"
                     android:gravity="center"
-                    android:text="极致画质"
+                    android:text="Ultra Quality"
                     android:textColor="@color/launcher_text"
                     android:textSize="@dimen/_8ssp"
                     android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 卡片：显示与清晰度 -->
+        <!-- Card: Display &amp; Clarity -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -111,7 +111,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="显示与清晰度"
+                android:text="Display &amp; Clarity"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_9ssp"
                 android:textStyle="bold" />
@@ -121,11 +121,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/_2sdp"
                 android:layout_marginBottom="@dimen/_6sdp"
-                android:text="调节帧率上限、画面分辨率、远景视距与屏幕显示范围"
+                android:text="Adjust FPS limit, render resolution, far draw distance, and screen display area"
                 android:textColor="@color/launcher_text_dim"
                 android:textSize="@dimen/_7ssp" />
 
-            <!-- 帧率上限 -->
+            <!-- FPS Limit -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -143,7 +143,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="帧率上限"
+                        android:text="FPS Limit"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -152,7 +152,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="限制游戏最高运行帧数，高刷新率屏幕可选 90 或 120"
+                        android:text="Limit the game's maximum frame rate; high-refresh screens can pick 90 or 120"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -168,7 +168,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 全屏沉浸显示 -->
+            <!-- Fullscreen Immersive Display -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -186,7 +186,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="全屏沉浸显示"
+                        android:text="Fullscreen Immersive Display"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -195,7 +195,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="将游戏画面延伸至全面屏挖孔区域，消除屏幕两侧黑边"
+                        android:text="Extend the game view into the full-screen cutout area and remove black bars on the sides"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -213,7 +213,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 画面宽高比 -->
+            <!-- Aspect Ratio -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -231,7 +231,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="画面宽高比"
+                        android:text="Aspect Ratio"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -240,7 +240,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="调整 3D 画面透视比例，可自动适配屏幕或指定 16:9 / 20:9 / 4:3"
+                        android:text="Adjust the 3D perspective ratio; auto-fit the screen or pick 16:9 / 20:9 / 4:3"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -256,7 +256,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 渲染分辨率 -->
+            <!-- Render Resolution -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -274,7 +274,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="渲染分辨率"
+                        android:text="Render Resolution"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -283,7 +283,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="调高画面更细腻，调低可显著减少发热与掉帧"
+                        android:text="Higher is sharper; lower greatly reduces heat and frame drops"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -314,7 +314,7 @@
                 android:layout_marginTop="@dimen/_4sdp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 视野渲染距离 -->
+            <!-- View Render Distance -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -332,7 +332,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="视野渲染距离"
+                        android:text="View Render Distance"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -341,7 +341,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="控制远处建筑物、道路与树木的加载距离"
+                        android:text="Controls how far away buildings, roads, and trees load"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -372,7 +372,7 @@
                 android:layout_marginTop="@dimen/_4sdp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 画面亮度 -->
+            <!-- Brightness -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -390,7 +390,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="画面亮度"
+                        android:text="Brightness"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -399,7 +399,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="调节游戏夜晚与室内场景的整体明暗对比"
+                        android:text="Adjust overall brightness/contrast for night and indoor scenes"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -425,7 +425,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 卡片：光影与特效细节 -->
+        <!-- Card: Lighting &amp; Effects -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -437,7 +437,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="光影与特效细节"
+                android:text="Lighting &amp; Effects"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_9ssp"
                 android:textStyle="bold" />
@@ -447,11 +447,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/_2sdp"
                 android:layout_marginBottom="@dimen/_6sdp"
-                android:text="继承原版引擎特效、动态阴影与车身反光档位"
+                android:text="Original engine effects, dynamic shadows, and vehicle reflection tiers"
                 android:textColor="@color/launcher_text_dim"
                 android:textSize="@dimen/_7ssp" />
 
-            <!-- 特效质量 -->
+            <!-- Effects Quality -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -469,7 +469,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="特效质量"
+                        android:text="Effects Quality"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -478,7 +478,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="影响火焰、烟雾、水面波纹、灯光光晕与植被细节"
+                        android:text="Affects flames, smoke, water ripples, light halos, and vegetation detail"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -494,7 +494,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 阴影效果 -->
+            <!-- Shadows -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -512,7 +512,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="阴影效果"
+                        android:text="Shadows"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -521,7 +521,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="调节角色、载具与场景建筑的阴影投射效果"
+                        android:text="Adjust shadow casting for characters, vehicles, and buildings"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -537,7 +537,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 载具表面反射 -->
+            <!-- Vehicle Surface Reflections -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -555,7 +555,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="载具表面反射"
+                        android:text="Vehicle Surface Reflections"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -564,7 +564,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="控制车身漆面光泽与周围环境反射细节"
+                        android:text="Controls paint gloss and surrounding environment reflections"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -581,7 +581,7 @@
                 android:layout_marginTop="@dimen/_4sdp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 街道交通与行人密度 (GTA:SA 单机选项 MOB_TRA) -->
+            <!-- Street Traffic &amp; Pedestrian Density (GTA:SA single-player option MOB_TRA) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -599,7 +599,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="交通与环境渲染密度"
+                        android:text="Traffic &amp; Environment Density"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -608,7 +608,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="原版单机环境与街道车辆密度档位（离线模式与远景灯光生效）"
+                        android:text="Original single-player environment and street vehicle density tier (applies in offline mode and distant lighting)"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -624,7 +624,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 原版 30 帧物理限制 (FEM_FRM) -->
+            <!-- Original 30 FPS Physics Limit (FEM_FRM) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -642,7 +642,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="原版物理帧率限制"
+                        android:text="Original Physics Frame-Rate Limit"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -651,7 +651,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="开启后锁定原版 30 帧物理步长（修复部分高帧率下游泳与倒车变慢问题）"
+                        android:text="When on, locks the original 30 FPS physics step (fixes swimming and reversing feeling slow at high frame rates)"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>

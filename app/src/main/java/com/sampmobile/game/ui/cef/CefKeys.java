@@ -3,18 +3,18 @@ package com.sampmobile.game.ui.cef;
 import android.view.KeyEvent;
 
 /**
- * Android KeyEvent -> omp-cef PressKey 参数。
+ * Android KeyEvent -> omp-cef PressKey arguments.
  *
- * omp-cef 的按键上行（见 PC manager.cpp OnWndProcMessage）发的是 Windows 语义：
+ * omp-cef key uplink (see PC manager.cpp OnWndProcMessage) uses Windows semantics:
  *
- *   args[0] key        Windows 虚拟键码 (VK)，例如 'A' = 0x41
- *   args[1] scancode   Set-1 硬件扫描码，例如 'A' = 0x1E
- *   args[2] modifiers  CEF EVENTFLAG_* 位掩码（见下）
- *   args[3] down       按下 / 抬起
- *   args[4] repeat     自动重复
+ *   args[0] key        Windows virtual key code (VK), e.g. 'A' = 0x41
+ *   args[1] scancode   Set-1 hardware scancode, e.g. 'A' = 0x1E
+ *   args[2] modifiers  CEF EVENTFLAG_* bit mask (see below)
+ *   args[3] down       key down / key up
+ *   args[4] repeat     auto-repeat
  *
- * Android 的 keyCode 与 VK 完全不同（KEYCODE_A = 29），扫描码也不是 PC 的 Set-1，
- * 所以必须查表。未收录的键返回 0（= 不上报），绝不臆造一个近似的 VK 骗服务端。
+ * Android keyCode is completely different from VK (KEYCODE_A = 29), and scancodes are not the PC Set-1 either,
+ * so a lookup table is required. Unlisted keys return 0 (= not reported); never invent an approximate VK to fool the server.
  */
 final class CefKeys {
 
@@ -29,14 +29,14 @@ final class CefKeys {
     private static final int[] VK = new int[MAX_KEYCODE];
     private static final int[] SCAN = new int[MAX_KEYCODE];
 
-    /** Set-1 扫描码，A..Z（按字母顺序，不是按 keycode 顺序）。 */
+    /** Set-1 scancodes, A..Z (in alphabetical order, not keycode order). */
     private static final int[] LETTER_SCAN = {
             0x1E, 0x30, 0x2E, 0x20, 0x12, 0x21, 0x22, 0x23, 0x17,
             0x24, 0x25, 0x26, 0x32, 0x31, 0x18, 0x19, 0x10, 0x13,
             0x1F, 0x14, 0x16, 0x2F, 0x11, 0x2D, 0x15, 0x2C
     };
 
-    /** Set-1 扫描码，0..9。 */
+    /** Set-1 scancodes, 0..9. */
     private static final int[] DIGIT_SCAN = {
             0x0B, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A
     };
@@ -50,7 +50,7 @@ final class CefKeys {
         }
 
         put(KeyEvent.KEYCODE_ESCAPE, 0x1B, 0x01);
-        put(KeyEvent.KEYCODE_DEL, 0x08, 0x0E);            // 退格
+        put(KeyEvent.KEYCODE_DEL, 0x08, 0x0E);            // Backspace
         put(KeyEvent.KEYCODE_TAB, 0x09, 0x0F);
         put(KeyEvent.KEYCODE_ENTER, 0x0D, 0x1C);
         put(KeyEvent.KEYCODE_SPACE, 0x20, 0x39);
@@ -88,12 +88,12 @@ final class CefKeys {
         put(KeyEvent.KEYCODE_SLASH, 0xBF, 0x35);
 
         for (int i = 0; i < 12; i++) {
-            // F1..F12：VK 0x70..0x7B，扫描码 F1..F10 = 0x3B..0x44，F11 = 0x57，F12 = 0x58
+            // F1..F12: VK 0x70..0x7B, scancodes F1..F10 = 0x3B..0x44, F11 = 0x57, F12 = 0x58
             final int scan = i < 10 ? 0x3B + i : (i == 10 ? 0x57 : 0x58);
             put(KeyEvent.KEYCODE_F1 + i, 0x70 + i, scan);
         }
 
-        // 小键盘：Set-1 与导航键共用扫描码，靠扩展位区分；这里与 PC 一样只发基础码。
+        // Numpad: Set-1 shares scancodes with navigation keys, distinguished by the extended bit; here, as on PC, only the base code is sent.
         final int[] numpadScan = {0x52, 0x4F, 0x50, 0x51, 0x4B, 0x4C, 0x4D, 0x47, 0x48, 0x49};
         for (int i = 0; i < 10; i++) {
             put(KeyEvent.KEYCODE_NUMPAD_0 + i, 0x60 + i, numpadScan[i]);
@@ -115,26 +115,26 @@ final class CefKeys {
         SCAN[keyCode] = scan;
     }
 
-    /** Windows 虚拟键码，未收录返回 0。 */
+    /** Windows virtual key code; 0 if unlisted. */
     static int vkOf(int keyCode) {
         return keyCode >= 0 && keyCode < MAX_KEYCODE ? VK[keyCode] : 0;
     }
 
-    /** Set-1 扫描码，未收录返回 0。 */
+    /** Set-1 scancode; 0 if unlisted. */
     static int scanOf(int keyCode) {
         return keyCode >= 0 && keyCode < MAX_KEYCODE ? SCAN[keyCode] : 0;
     }
 
-    /** Android metaState -> CEF EVENTFLAG 位掩码。 */
+    /** Android metaState -> CEF EVENTFLAG bit mask. */
     static int modifiersOf(KeyEvent event) {
         return modifiersOfMetaState(event.getMetaState());
     }
 
     /**
-     * 同 {@link #modifiersOf}，但只吃 metaState。
+     * Same as {@link #modifiersOf}, but only consumes metaState.
      *
-     * 抽成纯函数是为了能在 PC 上离线跑断言：本方法只用到 KeyEvent 的 static final
-     * 常量（javac 会内联），运行时不需要 android.jar。
+     * Extracted as a pure function so assertions can run offline on PC: this method only uses KeyEvent's static final
+     * constants (javac inlines them), so android.jar is not needed at runtime.
      */
     static int modifiersOfMetaState(int meta) {
         int flags = 0;

@@ -30,9 +30,9 @@ struct Entry
 inline constexpr size_t MAX_ENTRY_BYTES = 512ull * 1024 * 1024;
 inline constexpr size_t MAX_ENTRY_COUNT = 4096;
 
-// 累计解压体积上限。单条 512MB x 4096 条 = 2TB，只有单条限制等于没有限制：
-// 一个几百 KB 的包解出 2TB 就能把设备内存/存储吃干（ZIP 炸弹）。
-// 2GiB 对 CEF 资源包足够宽裕（实测 pak 在 100MiB 量级）。
+// Cumulative decompressed size cap. Per-entry 512 MB x 4096 entries = 2 TB; a per-entry limit alone is effectively no limit:
+// a package of a few hundred KB decompressing to 2 TB could exhaust device memory/storage (ZIP bomb).
+// 2 GiB is plenty for CEF resource packs (measured packs are around 100 MiB).
 inline constexpr uint64_t MAX_TOTAL_UNCOMPRESSED_BYTES = 2ull * 1024 * 1024 * 1024;
 inline constexpr size_t MAX_PATH_BYTES   = 512;
 

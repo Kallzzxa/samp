@@ -16,7 +16,7 @@
         android:orientation="vertical"
         android:padding="@dimen/_12sdp">
 
-        <!-- 卡片：音量与电台 -->
+        <!-- Card: Volume &amp; Radio -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -27,7 +27,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="游戏音量与车载电台"
+                android:text="Game Volume &amp; Car Radio"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_9ssp"
                 android:textStyle="bold" />
@@ -37,11 +37,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/_2sdp"
                 android:layout_marginBottom="@dimen/_6sdp"
-                android:text="调节环境音效、车载广播音乐音量与自动调频开关"
+                android:text="Adjust ambient sounds, car radio music volume, and auto-tune"
                 android:textColor="@color/launcher_text_dim"
                 android:textSize="@dimen/_7ssp" />
 
-            <!-- 游戏音效音量 -->
+            <!-- Game Sound Volume -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -59,7 +59,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="游戏音效音量"
+                        android:text="Game Sound Volume"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -68,7 +68,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="控制引擎轰鸣、枪械射击、脚步与环境声大小"
+                        android:text="Controls engine roar, gunfire, footsteps, and ambient sounds"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -99,7 +99,7 @@
                 android:layout_marginTop="@dimen/_4sdp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 音乐与电台音量 -->
+            <!-- Music &amp; Radio Volume -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -117,7 +117,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="音乐与电台音量"
+                        android:text="Music &amp; Radio Volume"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -126,7 +126,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="控制车载广播电台、室内背景音乐与提示配乐大小"
+                        android:text="Controls car radio, indoor background music, and cue music volume"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -157,7 +157,7 @@
                 android:layout_marginTop="@dimen/_4sdp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 默认车载电台 (FEA_RSS) -->
+            <!-- Default Car Radio Station (FEA_RSS) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -175,7 +175,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="默认车载广播电台"
+                        android:text="Default Car Radio Station"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -184,7 +184,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="原版单机车载电台偏好频道（需完整电台音频包支持）"
+                        android:text="Original single-player radio preference (requires the full radio audio pack)"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -201,7 +201,7 @@
                 android:layout_marginTop="@dimen/_4sdp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 车载电台自动调频 -->
+            <!-- Car Radio Auto-Tune -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -219,7 +219,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="车载电台自动调频"
+                        android:text="Car Radio Auto-Tune"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -228,7 +228,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="进入载具时自动调至该车型默认的广播电台频道"
+                        android:text="Automatically tunes to the vehicle's default radio station when entering a vehicle"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -242,7 +242,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 卡片：联机语音 -->
+        <!-- Card: Multiplayer Voice -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -254,7 +254,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="多人语音通信"
+                android:text="Multiplayer Voice Chat"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_9ssp"
                 android:textStyle="bold" />
@@ -276,7 +276,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="游戏内语音聊天"
+                        android:text="In-Game Voice Chat"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -285,7 +285,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="在安装了语音插件的服务器中启用实时语音收发功能"
+                        android:text="Enable live voice send/receive on servers with a voice plugin installed"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -304,7 +304,7 @@
                 android:layout_marginTop="@dimen/_4sdp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 语音接收音量 -->
+            <!-- Voice Receive Volume -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -322,7 +322,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="玩家语音接收音量"
+                        android:text="Player Voice Receive Volume"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -331,7 +331,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="调节其他玩家说话时的语音播放响度"
+                        android:text="Adjust how loud other players' voices sound"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -362,7 +362,7 @@
                 android:layout_marginTop="@dimen/_4sdp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 启用麦克风发言 -->
+            <!-- Enable Microphone Voice -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -380,7 +380,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="启用麦克风发言与屏幕按钮"
+                        android:text="Enable Microphone &amp; On-Screen Button"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -389,7 +389,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="开启后在游戏右侧显示麦克风按钮，关闭则仅听别人说话不发声"
+                        android:text="When on, shows a mic button on the right side of the game; when off, you only hear others without speaking"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -407,7 +407,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 麦克风输入增益 -->
+            <!-- Microphone Input Gain -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -425,7 +425,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="麦克风录音音量与增益"
+                        android:text="Microphone Input Volume &amp; Gain"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -434,7 +434,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="调节自己说话发送给其他玩家的麦克风灵敏度与响度"
+                        android:text="Adjust your mic sensitivity and loudness for other players"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -465,7 +465,7 @@
                 android:layout_marginTop="@dimen/_4sdp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 麦克风操作触发方式 -->
+            <!-- Microphone Trigger Mode -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -483,7 +483,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="麦克风操作触发方式"
+                        android:text="Microphone Trigger Mode"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -492,7 +492,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="选择长按麦克风图标说话（松手即停）或点击切换自由麦"
+                        android:text="Choose hold-to-talk (release to stop) or tap to toggle open mic"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -508,7 +508,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 麦克风按钮大小 -->
+            <!-- Microphone Button Size -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -526,7 +526,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="屏幕麦克风按钮大小"
+                        android:text="On-Screen Microphone Button Size"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -535,7 +535,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="缩放游戏画面右侧的语音麦克风悬浮图标尺寸"
+                        android:text="Resize the floating voice mic icon on the right side of the game"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -566,7 +566,7 @@
                 android:layout_marginTop="@dimen/_4sdp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 显示正在说话玩家列表 -->
+            <!-- Show Speaking Players List -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -584,7 +584,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="显示正在说话玩家提示"
+                        android:text="Show Speaking Players"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -593,7 +593,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="当附近有其他玩家开麦说话时在画面中显示喇叭图标与提示"
+                        android:text="Show a speaker icon and hint when a nearby player is speaking"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -611,7 +611,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 语音自动音量均衡 -->
+            <!-- Voice Auto Volume Leveling -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -629,7 +629,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="语音自动音量均衡"
+                        android:text="Voice Auto Volume Leveling"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -638,7 +638,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="自动压制过大的爆麦杂音并放大微弱人声，使不同玩家声音均衡"
+                        android:text="Automatically suppresses loud mic clipping and boosts quiet voices so all players sound even"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -656,7 +656,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 环境噪音过滤 -->
+            <!-- Ambient Noise Filtering -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -674,7 +674,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="人声环境降噪过滤"
+                        android:text="Voice Noise Reduction"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -683,7 +683,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="启用高通音频滤波器削弱风声与低频电流底噪，让人声更清晰"
+                        android:text="Enable a high-pass audio filter to reduce wind and low-frequency hum so voices are clearer"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>

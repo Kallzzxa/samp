@@ -6,40 +6,40 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 /**
- * window.cef 页面侧实现的注入源。
+ * Injection source for the page-side window.cef implementation.
  *
- * 对应 omp-cef src/client/renderer/main.cpp 中的 renderer 侧 JS API：
+ * Corresponds to the renderer-side JS API in omp-cef src/client/renderer/main.cpp:
  *
- *   cef.emit(eventName, ...args)   页面 -> 服务端
- *   cef.on(eventName, callback)    服务端 -> 页面（回调）
+ *   cef.emit(eventName, ...args)   page -> server
+ *   cef.on(eventName, callback)    server -> page (callback)
  *   cef.off([eventName[, callback]])
  *   cef.set_focus(hasFocus)
  *
- * 语义差异只在参数类型：原版走 CefListValue（bool/int/double/string/null），
- * 这里用 JSON.stringify 把标量送过 JNI，CefJson 再按字面量还原类型
- * （"1" -> Integer，"1.5" -> Float，"true" -> Bool），阶段4 的设备端测试会
- * 逐类型校验字节级一致。
+ * The semantic difference is only in argument types: the original uses CefListValue (bool/int/double/string/null),
+ * here JSON.stringify sends scalars across JNI, and CefJson restores the types from the literals
+ * ("1" -> Integer, "1.5" -> Float, "true" -> Bool); the stage 4 device test
+ * verifies byte-level consistency type by type.
  *
- * 注入方式（关键）：
- *   1. 我们对 http://cef/ 下的 HTML 拥有完整控制权，CefResourceProvider 在
- *      返回字节流时直接插入 <script>，页面自身脚本执行前 window.cef 已存在，
- *      没有竞态 —— 这等价于 CEF 在 V8 context 创建时就挂好对象。
- *   2. 远程 URL（服务端 LoadUrl 到外站）无法改字节流，退化为 onPageStarted /
- *      onPageFinished 两次 evaluateJavascript 补注入。这种情况下页面自己的内联
- *      脚本若在补注入之前调用 cef.on，会因 window.cef 还不存在而抛错 —— 这是
- *      WebView 侧无法在文档解析前执行脚本的固有限制，测试页（走 1）不受影响。
+ * Injection method (key):
+ *   1. We have full control over HTML under http://cef/, so CefResourceProvider inserts a <script> directly when
+ *      returning the byte stream; window.cef already exists before the page's own scripts run,
+ *      with no race — equivalent to CEF attaching the object when the V8 context is created.
+ *   2. Remote URLs (server LoadUrl to an external site) cannot have their byte stream modified, so it falls back to injecting via onPageStarted /
+ *      onPageFinished with two evaluateJavascript calls. In that case, if the page's own inline
+ *      script calls cef.on before the late injection, it throws because window.cef does not exist yet — this is
+ *      an inherent WebView limitation: scripts cannot run before document parsing, but the test page (path 1) is unaffected.
  *
- * 脚本必须是纯 ASCII：它可能出现在 <meta charset> 之前，非 ASCII 字节会被
- * 当成页面声明的编码解析而乱码。
+ * The script must be pure ASCII: it may appear before <meta charset>, and non-ASCII bytes would be
+ * parsed as the encoding the page declares, producing garbled text.
  */
 final class CefJs {
 
     private static final String TAG = "CefJs";
 
-    /** 桥对象名：window.cefNative（由 CefWebView.addJavascriptInterface 提供）。 */
+    /** Bridge object name: window.cefNative (provided by CefWebView.addJavascriptInterface). */
     static final String BRIDGE_NAME = "cefNative";
 
-    /** 已注入标记，避免重复注入覆盖页面已经注册的回调。 */
+    /** Already-injected flag, to avoid re-injection overwriting callbacks the page already registered. */
     private static final String MARKER = "__ompcef_v1";
 
     static final String BOOTSTRAP =
@@ -87,8 +87,8 @@ final class CefJs {
             + "      for (var i = 1; i < arguments.length; i++) {\n"
             + "        var v = arguments[i];\n"
             + "        var t = typeof v;\n"
-            + "        // 与原版一致：只有 bool / number / string 过线，其余传 null\n"
-            + "        // 并在 browser 进程侧被丢弃。\n"
+            + "        // Same as the original: only bool / number / string cross the line; everything else is passed as null\n"
+            + "        // and dropped on the browser-process side.\n"
             + "        if (t === 'boolean' || t === 'number' || t === 'string') out.push(v);\n"
             + "        else out.push(null);\n"
             + "      }\n"
@@ -132,8 +132,8 @@ final class CefJs {
             + "  window.__cefDispatch = dispatch;\n"
             + "  try { Object.defineProperty(window, 'cef', { value: api, writable: false, configurable: true }); }\n"
             + "  catch (e) { window.cef = api; }\n"
-            // 输入框焦点跟踪：原版在 OnAfterCreated 里注入同一段逻辑（client.cpp），
-            // 用于让客户端区分"页面拿到了键盘"和"浏览器有焦点"两件事。
+            // Input-focus tracking: the original injects the same logic in OnAfterCreated (client.cpp),
+            // so the client can tell apart "the page has the keyboard" and "the browser has focus".
             + "  try {\n"
             + "    var isFocused = false;\n"
             + "    var checkFocus = function (target) {\n"
@@ -156,7 +156,7 @@ final class CefJs {
     private CefJs() {
     }
 
-    /** 服务端事件 -> JS 分发调用。name 用 JSON 转义，argsJson 已是数组字面量。 */
+    /** Server event -> JS dispatch call. name is JSON-escaped; argsJson is already an array literal. */
     static String dispatchScript(String name, String argsJson) {
         String safeArgs = (argsJson == null || argsJson.length() == 0) ? "[]" : argsJson;
         return "if(typeof window.__cefDispatch==='function'){window.__cefDispatch("
@@ -164,17 +164,17 @@ final class CefJs {
     }
 
     /**
-     * 把 bootstrap 插进 HTML 字节流的 <head> 之后。
+     * Inserts the bootstrap into the HTML byte stream after <head>.
      *
-     * 全程按字节处理：既避免 UTF-8 解码/重编码破坏非 UTF-8 页面，也避免
-     * charset 声明前后顺序带来的编码歧义（脚本本身是 ASCII）。
+     * Handled as bytes throughout: avoids UTF-8 decode/re-encode corrupting non-UTF-8 pages, and avoids
+     * encoding ambiguity from the charset declaration's position (the script itself is ASCII).
      */
     static byte[] inject(byte[] html) {
         if (html == null || html.length == 0)
             return html;
 
         if (indexOf(html, MARKER.getBytes(StandardCharsets.US_ASCII), 0) >= 0) {
-            return html; // 页面自带 bootstrap
+            return html; // Page already carries its own bootstrap
         }
 
         byte[] script = ("<script>" + BOOTSTRAP + "</script>")
@@ -192,7 +192,7 @@ final class CefJs {
         return out;
     }
 
-    /** 返回 "<head ...>" 之后的下标；找不到返回 -1。ASCII 大小写不敏感。 */
+    /** Returns the index after "<head ...>"; -1 if not found. ASCII case-insensitive. */
     private static int afterTag(byte[] data, String tag) {
         int i = 0;
         while (i < data.length) {
@@ -207,7 +207,7 @@ final class CefJs {
                     k++;
                 }
                 if (k == tag.length()) {
-                    // 必须是 <head 而不是 <header ...
+                    // Must be <head, not <header ...
                     int after = j + k;
                     if (after >= data.length) return data.length;
                     int c = data[after] & 0xFF;

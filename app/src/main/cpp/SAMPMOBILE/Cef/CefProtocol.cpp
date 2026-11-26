@@ -29,8 +29,8 @@ public:
 
     void PutString(const std::string& s)
     {
-        // 先按 size_t 截断再转 uint16_t：原来先 static_cast<uint16_t> 再比较，
-        // 长度 65536 会被截成 0（写出"空串"），65537 会变成 1，全是错的线上数据。
+        // Truncate as size_t first, then convert to uint16_t: previously it static_cast<uint16_t> first and then compared,
+        // so length 65536 was truncated to 0 (writing an "empty string") and 65537 became 1 -- all wrong live data.
         const size_t len = s.length() > MAX_STRING_BYTES ? MAX_STRING_BYTES : s.length();
         PutU16(static_cast<uint16_t>(len));
         if (len > 0)
@@ -80,8 +80,8 @@ public:
         uint16_t len = 0;
         if (!GetU16(len)) return false;
         if (len == 0) { out.clear(); return true; }
-        // 用减法判断剩余量：pos_ + len 在 32 位目标上可能回绕，
-        // 从而让一个超大 len 绕过边界检查（越界读）。
+        // Use subtraction to judge remaining amount: pos_ + len can wrap around on a 32-bit target,
+        // letting an oversized len bypass the bounds check (out-of-bounds read).
         if (len > size_ - pos_) return false;
         out.assign(reinterpret_cast<const char*>(data_ + pos_), len);
         pos_ += len;
@@ -93,7 +93,7 @@ public:
         uint32_t len = 0;
         if (!GetU32(len)) return false;
         if (len == 0) { out.clear(); return true; }
-        // 同上：减法形式对 32 位安全
+        // Same as above: the subtraction form is safe for 32-bit
         if (len > size_ - pos_) return false;
         out.assign(data_ + pos_, data_ + pos_ + len);
         pos_ += len;
@@ -224,8 +224,8 @@ bool SerializePacket(const NetworkPacket& packet, std::vector<uint8_t>& out)
 
         case PacketType::RequestFiles: {
             const RequestFilesPacket& p = packet.requestFiles;
-            // 先过滤再计数：原来先写 files.size() 再在循环里 continue 跳过空项，
-            // 线上"声明 N 条、实际 N-k 条"，对端按 count 读会错位甚至读越界。
+            // Filter first, then count: previously it wrote files.size() first and then continue-skipped empty items in the loop,
+            // live data said "declares N entries, actually N-k entries", so the peer reading by count would misalign or even read out of bounds.
             std::vector<const std::pair<std::string, std::string>*> valid;
             valid.reserve(p.files.size());
             for (const auto& entry : p.files)
@@ -393,10 +393,10 @@ bool DeserializePacket(const uint8_t* data, size_t size, NetworkPacket& out)
             break;
 
         default:
-            // 未知类型：原来会掉出 switch 直接 return true，上层拿到一个
-            // 只有 type 被赋值、载荷全空的 packet，行为不可预期。明确拒绝。
-            // 刻意不调 android_log_print：本文件必须保持"纯逻辑"，
-            // 能被 tools/cef_kat 离线编译运行（与 CefLogic.java 同一约束）。
+            // Unknown type: previously it would fall out of the switch and return true directly, leaving the upper layer with a
+            // packet with only type assigned and an empty payload, with unpredictable behaviour. Reject it explicitly.
+            // Deliberately do not call android_log_print: this file must stay "pure logic",
+            // so it can be compiled and run offline by tools/cef_kat (same constraint as CefLogic.java).
             return false;
     }
 

@@ -7,7 +7,7 @@
     android:padding="@dimen/_12sdp"
     android:visibility="gone">
 
-    <!-- 上方卡片：资源概览、版本档位与操作按钮（纯手动触发，绝不自动下载） -->
+    <!-- Top card: resource overview, version tier, and action buttons (manual only, never auto-downloads) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -31,7 +31,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="游戏资源与文件验证"
+                    android:text="Game Resources &amp; File Verification"
                     android:textColor="@color/launcher_accent"
                     android:textSize="@dimen/_9ssp"
                     android:textStyle="bold" />
@@ -41,7 +41,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/_2sdp"
-                    android:text="正在检查本地游戏文件…"
+                    android:text="Checking local game files…"
                     android:textColor="@color/launcher_text"
                     android:textSize="@dimen/_8ssp" />
 
@@ -50,12 +50,12 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/_1sdp"
-                    android:text="支持本地导入 .zip 或通过启动器手动下载精简版资源（完整版 2.10 GiB 暂仅支持本地校验）"
+                    android:text="Supports local .zip import or manual lite-resource download via the launcher (the full 2.10 GiB edition currently supports local verification only)"
                     android:textColor="@color/launcher_text_dim"
                     android:textSize="@dimen/_7ssp" />
             </LinearLayout>
 
-            <!-- 资源版本档位选择：精简版（当前统一版） / 完整版（2.10 GiB 校验视图） -->
+            <!-- Resource version tier: Lite (current unified edition) / Full (2.10 GiB verification view) -->
             <com.sampmobile.launcher.ui.widget.GtaOptionView
                 android:id="@+id/option_gd_edition"
                 android:layout_width="@dimen/_132sdp"
@@ -70,7 +70,7 @@
                 android:background="@drawable/launcher_btn_outline"
                 android:gravity="center"
                 android:paddingHorizontal="@dimen/_10sdp"
-                android:text="本地导入"
+                android:text="Local Import"
                 android:textColor="@color/launcher_text"
                 android:textSize="@dimen/_8ssp"
                 android:textStyle="bold" />
@@ -83,13 +83,13 @@
                 android:background="@drawable/launcher_btn_primary"
                 android:gravity="center"
                 android:paddingHorizontal="@dimen/_10sdp"
-                android:text="启动器下载"
+                android:text="Launcher Download"
                 android:textColor="@color/launcher_on_accent"
                 android:textSize="@dimen/_8ssp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- 内联下载进度区（仅用户点击「启动器下载」后展开） -->
+        <!-- Inline download progress area (expands only after tapping "Launcher Download") -->
         <LinearLayout
             android:id="@+id/layout_gd_download_progress"
             android:layout_width="match_parent"
@@ -113,7 +113,7 @@
                     android:layout_weight="1"
                     android:ellipsize="middle"
                     android:singleLine="true"
-                    android:text="正在连接下载服务…"
+                    android:text="Connecting to download service…"
                     android:textColor="@color/launcher_text"
                     android:textSize="@dimen/_8ssp" />
 
@@ -140,7 +140,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- 下方卡片：游戏文件清单与逐项状态显示 -->
+    <!-- Bottom card: game file list with per-file status -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -161,7 +161,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="文件检查清单"
+                android:text="File Checklist"
                 android:textColor="@color/launcher_text_dim"
                 android:textSize="@dimen/_8ssp" />
 
@@ -173,7 +173,7 @@
                 android:background="@drawable/launcher_btn_primary"
                 android:gravity="center"
                 android:paddingHorizontal="@dimen/_8sdp"
-                android:text="全部"
+                android:text="All"
                 android:textColor="@color/launcher_on_accent"
                 android:textSize="@dimen/_7ssp"
                 android:textStyle="bold" />
@@ -186,7 +186,7 @@
                 android:background="@drawable/launcher_btn_outline"
                 android:gravity="center"
                 android:paddingHorizontal="@dimen/_8sdp"
-                android:text="仅异常"
+                android:text="Errors Only"
                 android:textColor="@color/launcher_text"
                 android:textSize="@dimen/_7ssp"
                 android:textStyle="bold" />
@@ -198,7 +198,7 @@
                 android:background="@drawable/launcher_btn_outline"
                 android:gravity="center"
                 android:paddingHorizontal="@dimen/_8sdp"
-                android:text="重新验证"
+                android:text="Re-verify"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_7ssp"
                 android:textStyle="bold" />
@@ -217,7 +217,7 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="当前筛选下无异常文件"
+            android:text="No files with errors under the current filter"
             android:textColor="@color/launcher_text_dim"
             android:textSize="@dimen/_8ssp"
             android:visibility="gone" />

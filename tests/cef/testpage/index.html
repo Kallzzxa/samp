@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
@@ -8,7 +8,7 @@
   :root { color-scheme: dark; }
   html, body {
     margin: 0; height: 100%;
-    /* 关键：全屏透明背景，游戏画面必须透出来 */
+    /* Key point: fullscreen transparent background — the game scene must show through */
     background: transparent;
     font: 15px/1.5 -apple-system, "Noto Sans SC", Roboto, sans-serif;
     -webkit-user-select: none; user-select: none;
@@ -41,7 +41,7 @@
   }
   button:active { background: #1f3c56; }
   button.on { background: #0ea5e9; border-color: #38bdf8; color: #04121f; font-weight: 600; }
-  /* 阶段6：IME 输入框。高度做大，方便真机盲点位（点中即弹键盘）。 */
+  /* Stage 6: IME input box. Made tall so it is easy to hit blind on a real device (a hit pops the keyboard). */
   .imebox { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
   .imebox label { color: #7c93a8; font-size: 12px; white-space: nowrap; }
   #tin {
@@ -66,31 +66,31 @@
 </head>
 <body>
 <div class="panel" id="panel">
-  <h1>omp-cef · Android · 阶段6 输入</h1>
-  <div class="sub">触摸放行/接管 → IME 中文输入 → 硬件键上行 PressKey → 聊天状态 ChatInputState</div>
+  <h1>omp-cef · Android · Stage 6 Input</h1>
+  <div class="sub">Touch pass-through/takeover → IME Chinese input → hardware key uplink PressKey → chat state ChatInputState</div>
 
   <div class="stats">
     <div class="stat" id="st-cef">window.cef: <b id="v-cef">?</b></div>
-    <div class="stat" id="st-down">下行事件: <b id="v-down">0</b></div>
-    <div class="stat" id="st-up">上行事件: <b id="v-up">0</b></div>
-    <div class="stat" id="st-early">首帧前排队: <b id="v-early">未收到</b></div>
-    <div class="stat" id="st-chat">游戏聊天: <b id="v-chat">关闭</b></div>
-    <div class="stat" id="st-vp">视口: <b id="v-vp">?</b></div>
-    <div class="stat" id="st-url">来源: <b id="v-url">?</b></div>
+    <div class="stat" id="st-down">Downlink events: <b id="v-down">0</b></div>
+    <div class="stat" id="st-up">Uplink events: <b id="v-up">0</b></div>
+    <div class="stat" id="st-early">Queued before first frame: <b id="v-early">Not received</b></div>
+    <div class="stat" id="st-chat">Game chat: <b id="v-chat">Closed</b></div>
+    <div class="stat" id="st-vp">Viewport: <b id="v-vp">?</b></div>
+    <div class="stat" id="st-url">Source: <b id="v-url">?</b></div>
   </div>
 
   <div class="imebox">
-    <label>IME 输入 →</label>
-    <input id="tin" type="text" placeholder="点这里弹出输入法，输入后上行 test:input" autocomplete="off" spellcheck="false">
+    <label>IME input →</label>
+    <input id="tin" type="text" placeholder="Tap here to pop the keyboard; typing uplinks test:input" autocomplete="off" spellcheck="false">
   </div>
 
   <div class="row">
-    <button onclick="pick(this,'甲',1)">甲</button>
-    <button onclick="pick(this,'乙',2)">乙</button>
-    <button onclick="pick(this,'丙',3)">丙</button>
-    <button onclick="cef.emit('test:noargs')">空参数</button>
-    <button onclick="cef.emit('test:nonScalar',{a:1},[1,2])">非标量</button>
-    <button onclick="blurInput()">收起键盘</button>
+    <button onclick="pick(this,'A',1)">A</button>
+    <button onclick="pick(this,'B',2)">B</button>
+    <button onclick="pick(this,'C',3)">C</button>
+    <button onclick="cef.emit('test:noargs')">No args</button>
+    <button onclick="cef.emit('test:nonScalar',{a:1},[1,2])">Non-scalar</button>
+    <button onclick="blurInput()">Hide keyboard</button>
   </div>
 
   <div class="log" id="log"></div>
@@ -109,14 +109,14 @@
   }
   function el(id) { return document.getElementById(id); }
 
-  // ---- 阶段4 核心：window.cef 由 CefResourceProvider 内联注入（文档解析前就绪）
+  // ---- Stage 4 core: window.cef is injected inline by CefResourceProvider (ready before the document is parsed)
   if (window.cef) {
     el('v-cef').textContent = 'ready (' + (window.cef.__mark || '?') + ')';
-    log('window.cef 已注入，页面脚本可直接注册回调', 'up');
+    log('window.cef injected; page scripts can register callbacks directly', 'up');
   } else {
     el('v-cef').textContent = 'MISSING';
     el('st-cef').className = 'stat bad';
-    log('window.cef 未注入 —— 阶段4 失败');
+    log('window.cef not injected — Stage 4 failed');
   }
 
   function onServerEvent(name) {
@@ -126,23 +126,23 @@
   }
 
   if (window.cef) {
-    // 1) 服务端在 CreateBrowser 后立刻发送，通常在页面加载完成之前到达，
-    //    用来验证 native/WebView 侧的排队补发。
+    // 1) The server sends this right after CreateBrowser, usually arriving before the page finishes loading,
+    //    to verify the native/WebView-side queue-and-replay.
     cef.on('test:early', function (tag, n) {
       onServerEvent('test:early');
       el('v-early').textContent = String(tag);
-      log('收到首帧前事件 test:early: ' + tag + ' / ' + n + ' (' + typeof n + ')', 'srv');
+      log('Received pre-first-frame event test:early: ' + tag + ' / ' + n + ' (' + typeof n + ')', 'srv');
       cef.emit('test:earlyAck', tag, n, true, 2.25);
       up++; el('v-up').textContent = up;
     });
 
-    // 2) 四类型参数：string / int / float / bool
-    //    注意积分值：JS 里 7.0 与 7 是同一个数，原版 CEF 的 CefV8Value::IsInt()
-    //    对整数值返回 true，所以整数值一律走 Integer；只有真正带小数的值才是
-    //    Float。这里故意用 frac*2+0.5 保证小数部分非零。
+    // 2) Four argument types: string / int / float / bool
+    //    Note on integral values: in JS, 7.0 and 7 are the same number, and stock CEF's CefV8Value::IsInt()
+    //    returns true for integral values, so integral values always go as Integer; only values that are genuinely fractional are
+    //    Float. frac*2+0.5 is used here deliberately so the fractional part is non-zero.
     cef.on('test:hello', function (who, num, frac, flag) {
       onServerEvent('test:hello');
-      log('收到 test:hello: ' + who + ' int=' + num + '(' + typeof num + ')'
+      log('Received test:hello: ' + who + ' int=' + num + '(' + typeof num + ')'
           + ' float=' + frac + '(' + typeof frac + ')'
           + ' bool=' + flag + '(' + typeof flag + ')', 'srv');
       cef.emit('test:ack',
@@ -153,10 +153,10 @@
       up++; el('v-up').textContent = up;
     });
 
-    // 3) 命令式事件：服务端要求高亮，等 1.2s 自动恢复
+    // 3) Command event: the server asks for a highlight, auto-restoring after 1.2s
     cef.on('test:command', function (cmd, ms) {
       onServerEvent('test:command');
-      log('收到 test:command: ' + cmd + ' (' + ms + 'ms)', 'srv');
+      log('Received test:command: ' + cmd + ' (' + ms + 'ms)', 'srv');
       var p = el('panel');
       p.classList.add('flash');
       setTimeout(function () { p.classList.remove('flash'); }, ms || 1200);
@@ -164,24 +164,24 @@
       up++; el('v-up').textContent = up;
     });
 
-    // 4) cef.off 语义：注册后立即取消，服务端后续发来的 ping 不应触发
+    // 4) cef.off semantics: registered then immediately removed, so later pings from the server must not fire it
     var pingCount = 0;
     function onPing() { pingCount++; }
     cef.on('test:ping', onPing);
     cef.off('test:ping', onPing);
     cef.on('test:ping', function () {
       onServerEvent('test:ping');
-      log('test:ping 到达（旧回调已通过 cef.off 移除，pingCount=' + pingCount + '）', 'srv');
+      log('test:ping arrived (old callback was removed via cef.off, pingCount=' + pingCount + ')', 'srv');
       cef.emit('test:pingAck', pingCount);
       up++; el('v-up').textContent = up;
     });
 
-    // 5) 阶段6：客户端内部事件（PC ChatHook::SetChatInputState 的本地分支）。
-    //    这是"客户端 -> 页面"的单向事件，页面只读不回报。
+    // 5) Stage 6: client-internal event (the local branch of PC ChatHook::SetChatInputState).
+    //    This is a one-way "client -> page" event; the page only reads it and never reports back.
     cef.on('omp:cef:internal:chatInputState', function (open) {
-      el('v-chat').textContent = open ? '打开' : '关闭';
+      el('v-chat').textContent = open ? 'Open' : 'Closed';
       el('st-chat').className = 'stat' + (open ? ' bad' : '');
-      log('内部事件 chatInputState open=' + open, 'srv');
+      log('Internal event chatInputState open=' + open, 'srv');
     });
   }
 
@@ -189,15 +189,15 @@
     var all = document.querySelectorAll('button');
     for (var i = 0; i < all.length; i++) all[i].classList.remove('on');
     btn.classList.add('on');
-    if (!window.cef) { log('cef 不可用，点击无法上行'); return; }
-    // 一次上行验证四种标量类型
+    if (!window.cef) { log('cef unavailable, taps cannot uplink'); return; }
+    // One uplink verifies all four scalar types
     cef.emit('test:click', name, index, true, 1.5 + index / 10);
     up++; el('v-up').textContent = up;
     log('cef.emit test:click("' + name + '", ' + index + ', true, ' + (1.5 + index / 10) + ')', 'up');
   }
 
-  // ---- 阶段6：IME。input 事件由系统输入法提交，中文/emoji 都经由同一条路径，
-  //      上行后由服务端逐字节校验 UTF-8。
+  // ---- Stage 6: IME. input events are submitted by the system IME; Chinese/emoji all go through the same path,
+  //      and the server verifies the UTF-8 byte by byte after uplink.
   var tin = el('tin');
   var imeSeq = 0;
   tin.addEventListener('input', function () {
@@ -205,21 +205,21 @@
     imeSeq++;
     cef.emit('test:input', tin.value, tin.value.length);
     up++; el('v-up').textContent = up;
-    log('IME 输入 #' + imeSeq + ': "' + tin.value + '" (' + tin.value.length + ' chars)', 'ime');
+    log('IME input #' + imeSeq + ': "' + tin.value + '" (' + tin.value.length + ' chars)', 'ime');
   });
-  tin.addEventListener('focus', function () { log('输入框获得焦点（Chromium 请求输入法）', 'ime'); });
-  tin.addEventListener('blur', function () { log('输入框失焦', 'ime'); });
+  tin.addEventListener('focus', function () { log('Input focused (Chromium requested the IME)', 'ime'); });
+  tin.addEventListener('blur', function () { log('Input lost focus', 'ime'); });
 
-  // ---- 阶段7：任意落点探针。
-  //     World2D 页面被投影到屏幕上的某个矩形里，用它证明"落在投影矩形内的触摸真的
-  //     到达了页面"、"矩形外的触摸回到了游戏"。不依赖页面布局，因此页面被压扁也有效。
+  // ---- Stage 7: arbitrary landing-point probe.
+  //     A World2D page is projected into a rectangle on screen; this proves that "a touch landing inside the projected rectangle really
+  //     reaches the page" and "a touch outside the rectangle goes back to the game". It does not depend on the page layout, so it still works if the page is squashed.
   document.addEventListener('pointerdown', function (e) {
     if (!window.cef) return;
     var target = e.target && e.target.id ? e.target.id
         : (e.target && e.target.tagName ? e.target.tagName : '?');
     cef.emit('test:tap', String(target), Math.round(e.clientX), Math.round(e.clientY));
     up++; el('v-up').textContent = up;
-    log('落点 ' + target + ' @' + Math.round(e.clientX) + ',' + Math.round(e.clientY), 'ime');
+    log('Landing point ' + target + ' @' + Math.round(e.clientX) + ',' + Math.round(e.clientY), 'ime');
   }, true);
 
   function blurInput() {
@@ -227,11 +227,11 @@
     if (window.cef) cef.emit('test:blur');
   }
 
-  // ---- 阶段6：视口探针。
-  //     键盘弹出时 WebView 的*可视高度*必须真的变小，Chromium 才会把聚焦元素滚进
-  //     可视区。若客户端只是把整窗平移（adjustPan），innerHeight 不变、页面下半部分
-  //     照样被盖住。这里把 innerHeight / visualViewport.height 上行，服务端据此判断
-  //     客户端到底做了哪一种 —— 不依赖客户端日志。
+  // ---- Stage 6: viewport probe.
+  //     When the keyboard pops up, the WebView's *visible height* must really shrink, otherwise Chromium will not scroll the focused element into
+  //     the visible area. If the client merely shifts the whole window (adjustPan), innerHeight stays the same and the lower half of the page
+  //     is still covered. So innerHeight / visualViewport.height are uplinked here, and the server uses them to tell
+  //     which one the client actually did — without relying on client logs.
   function reportViewport(tag) {
     var ih = Math.round(innerHeight);
     var vv = window.visualViewport ? Math.round(window.visualViewport.height) : 0;
@@ -239,7 +239,7 @@
     if (!window.cef) return;
     cef.emit('test:viewport', String(tag), ih, vv, Math.round(screen.height));
     up++; el('v-up').textContent = up;
-    log('视口 ' + tag + ': innerHeight=' + ih + ' vv=' + vv, 'ime');
+    log('Viewport ' + tag + ': innerHeight=' + ih + ' vv=' + vv, 'ime');
   }
   window.addEventListener('resize', function () { reportViewport('resize'); });
   if (window.visualViewport) {
@@ -248,14 +248,14 @@
   tin.addEventListener('focus', function () { setTimeout(function () { reportViewport('focus'); }, 350); });
   tin.addEventListener('blur', function () { setTimeout(function () { reportViewport('blur'); }, 350); });
 
-  log('页面已加载 · ' + innerWidth + 'x' + innerHeight + ' · dpr ' + (window.devicePixelRatio || 1));
+  log('Page loaded · ' + innerWidth + 'x' + innerHeight + ' · dpr ' + (window.devicePixelRatio || 1));
   var origin = document.getElementById('v-url');
   if (origin) origin.textContent = location.pathname;
   if (window.cef) {
-    // WebView 刚 attach 时布局可能还没完成，innerWidth / innerHeight 会短暂为 0。
-    // 那个时刻上报"就绪"没有意义（服务端会把 0x0 当成视口尺寸，World2D 的
-    // 尺寸断言就会误报失败）。每 50ms 重试到尺寸有效，最多等 1s；兜底仍然发
-    // 一次，保证 probe:ready 永远不会缺席。
+    // Layout may not be finished right after the WebView attaches, so innerWidth / innerHeight are briefly 0.
+    // Reporting "ready" at that moment is meaningless (the server would take 0x0 as the viewport size, and the World2D
+    // size assertion would then fail spuriously). Retry every 50ms until the size is valid, up to 1s; as a fallback still send
+    // once, so probe:ready is never missing.
     var readyTries = 0;
     var emitReady = function () {
       var w = Math.round(innerWidth), h = Math.round(innerHeight);
@@ -271,7 +271,7 @@
         window.devicePixelRatio || 1,
         navigator.userAgent.indexOf('; wv') >= 0);
       up++; el('v-up').textContent = up;
-      log('已发送 probe:ready ' + w + 'x' + h, 'up');
+      log('Sent probe:ready ' + w + 'x' + h, 'up');
     };
     emitReady();
   }

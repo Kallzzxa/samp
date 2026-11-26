@@ -139,16 +139,16 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
         if (isFinishing() || isDestroyed()) {
             return false;
         }
-        StringBuilder msg = new StringBuilder("未检测到完整游戏数据包（缺少 ");
-        msg.append(String.join("、", missing));
-        msg.append("）。\n\n可前往「设置 → 文件验证」查看详细文件状态并选择本地导入或启动器下载精简版资源。");
+        StringBuilder msg = new StringBuilder("No complete game data package detected (missing ");
+        msg.append(String.join(", ", missing));
+        msg.append(").\n\nGo to "Settings → File Verification" to see detailed file status and choose local import or download the lite resources from the launcher.");
         new AlertDialog.Builder(this)
-                .setTitle("缺少游戏数据包")
+                .setTitle("Missing game data package")
                 .setMessage(msg.toString())
-                .setPositiveButton("前往文件验证", (d, w) -> openSettingsGameDataTab())
-                .setNeutralButton("一键导入 .zip", (d, w) ->
+                .setPositiveButton("Go to File Verification", (d, w) -> openSettingsGameDataTab())
+                .setNeutralButton("One-tap import .zip", (d, w) ->
                         gameDataZipPicker.launch(new String[]{"application/zip", "application/octet-stream", "*/*"}))
-                .setNegativeButton("取消", null)
+                .setNegativeButton("Cancel", null)
                 .show();
         return false;
     }

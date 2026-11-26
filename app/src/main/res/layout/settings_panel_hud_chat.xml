@@ -16,7 +16,7 @@
         android:orientation="vertical"
         android:padding="@dimen/_12sdp">
 
-        <!-- 卡片：界面显示开关 -->
+        <!-- Card: Interface Display Switches -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -27,7 +27,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="屏幕界面元素"
+                android:text="On-Screen Interface Elements"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_9ssp"
                 android:textStyle="bold" />
@@ -37,11 +37,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/_2sdp"
                 android:layout_marginBottom="@dimen/_6sdp"
-                android:text="自定义 HUD、雷达小地图、准星样式、快捷按键与玩家头顶信息显示"
+                android:text="Customize the HUD, radar minimap, crosshair style, shortcut keys, and player overhead info"
                 android:textColor="@color/launcher_text_dim"
                 android:textSize="@dimen/_7ssp" />
 
-            <!-- 显示 GTA 原版 HUD -->
+            <!-- Show GTA Original HUD -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -59,7 +59,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="显示 GTA 原版 HUD（血量/武器/金钱）"
+                        android:text="Show GTA Original HUD (Health/Weapon/Money)"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -68,7 +68,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="显示右上角生命值、防弹衣、武器图标、通缉星级与现金"
+                        android:text="Show health, armor, weapon icon, wanted stars, and cash at the top right"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -86,7 +86,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 显示左下角雷达小地图 -->
+            <!-- Show Bottom-Left Radar Minimap -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -104,7 +104,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="显示左下角雷达小地图"
+                        android:text="Show Bottom-Left Radar Minimap"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -113,7 +113,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="显示圆形雷达小地图与地图标记点"
+                        android:text="Show the circular radar minimap and map markers"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -131,7 +131,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 点击雷达打开大地图/暂停菜单 -->
+            <!-- Tap radar to open the big map/pause menu -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -149,7 +149,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="点击雷达打开大地图"
+                        android:text="Tap Radar to Open Big Map"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -158,7 +158,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="允许轻触左下角雷达进入全屏地图，关闭可防止战斗时摇杆误触弹出地图"
+                        android:text="Tap the bottom-left radar to open the fullscreen map; turning it off prevents accidental map pop-ups from joystick touches during combat"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -176,7 +176,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 准星样式选择 -->
+            <!-- Crosshair Style Selection -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -194,7 +194,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="武器准星样式"
+                        android:text="Weapon Crosshair Style"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -203,7 +203,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="切换原版准星、竞技精简十字、中心高亮圆点或隐藏准星"
+                        android:text="Switch between the original crosshair, competitive minimal cross, highlighted center dot, or hidden crosshair"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -219,7 +219,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 帧率状态显示 -->
+            <!-- FPS Status Display -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -237,7 +237,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="实时帧率显示"
+                        android:text="Live FPS Display"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -246,7 +246,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="在屏幕边缘显示当前游戏运行帧数"
+                        android:text="Show the current game frame rate at the screen edge"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -264,7 +264,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 右侧击杀信息框 -->
+            <!-- Right-Side Kill Feed -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -282,7 +282,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="右侧击杀通报窗口"
+                        android:text="Right-Side Kill Feed"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -291,7 +291,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="显示服务器玩家之间的击杀与死亡图标列表"
+                        android:text="Show the kill and death icon list between server players"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -309,7 +309,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 玩家头顶昵称与血条 -->
+            <!-- Player Overhead Names &amp; Health Bars -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -327,7 +327,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="玩家头顶昵称与血条"
+                        android:text="Player Overhead Names &amp; Health Bars"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -336,7 +336,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="渲染视野内其他玩家与机器人的名字、生命值与护甲条"
+                        android:text="Render the names, health, and armor bars of other players and bots in view"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -354,7 +354,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 玩家名字上方显示持有武器图标 -->
+            <!-- Show held weapon icon above player names -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -372,7 +372,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="玩家名字上方显示持有武器"
+                        android:text="Show Held Weapon Above Player Names"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -381,7 +381,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="在其他玩家头顶昵称正上方显示其当前手持的武器图标徽章"
+                        android:text="Show the weapon icon badge for the weapon another player is currently holding, just above their name"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -399,7 +399,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 底部快捷功能键盘 -->
+            <!-- Bottom Quick Function Keyboard -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -417,7 +417,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="底部快捷功能键盘"
+                        android:text="Bottom Quick Function Keyboard"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -426,7 +426,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="在左下角提供可展开的 TAB、ALT、Y、N、H、G、F 快捷按键栏"
+                        android:text="Provides an expandable TAB, ALT, Y, N, H, G, F shortcut key bar at the bottom left"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -444,7 +444,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 快捷键盘显示 F8 截图键 -->
+            <!-- Quick Keyboard Shows F8 Screenshot Key -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -462,7 +462,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="快捷键盘包含 F8 截图键"
+                        android:text="Quick Keyboard Includes F8 Screenshot Key"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -471,7 +471,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="在底部快捷功能键盘末尾显示 F8 一键截图按钮"
+                        android:text="Show a one-tap F8 screenshot button at the end of the bottom quick keyboard"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -489,7 +489,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 剧情与提示字幕 -->
+            <!-- Story &amp; Hint Subtitles -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -507,7 +507,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="底部提示与剧情字幕"
+                        android:text="Bottom Hints &amp; Story Subtitles"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -516,7 +516,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="显示游戏画面底部的任务字幕与提示文本"
+                        android:text="Show mission subtitles and hint text at the bottom of the game screen"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -530,7 +530,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 卡片：聊天与输入法设置 -->
+        <!-- Card: Chat &amp; Input Method Settings -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -543,12 +543,12 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:tag="theme_accent_text"
-                android:text="字体、3D 文本与聊天设置"
+                android:text="Fonts, 3D Text &amp; Chat Settings"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_9ssp"
                 android:textStyle="bold" />
 
-            <!-- 游戏字体选择 -->
+            <!-- Game font selection -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -567,7 +567,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="游戏字体样式"
+                        android:text="Game Font Style"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -576,7 +576,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="选择聊天、头顶名字与 3D 文本字体（自定义字体请放入 SAMP/fonts/custom.ttf）"
+                        android:text="Choose the font for chat, overhead names, and 3D text (for a custom font, put it in SAMP/fonts/custom.ttf)"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -592,7 +592,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 玩家名字与血条缩放 -->
+            <!-- Player name &amp; health bar scaling -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -610,7 +610,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="玩家头顶名字与血条大小"
+                        android:text="Player Overhead Name &amp; Health Bar Size"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -619,7 +619,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="独立缩放玩家头顶昵称、生命护甲条与武器图标尺寸"
+                        android:text="Scale overhead nicknames, health/armor bars, and weapon icons independently"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -650,7 +650,7 @@
                 android:layout_marginTop="@dimen/_4sdp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 3DText 场景文字大小 -->
+            <!-- 3DText scene text size -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -668,7 +668,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="3D 场景文本 (3DText) 大小"
+                        android:text="3D Scene Text (3DText) Size"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -677,7 +677,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="独立缩放服务器在建筑物、NPC 与车牌处创建的 3D 悬浮文字大小"
+                        android:text="Scale the 3D floating text the server creates on buildings, NPCs, and license plates independently"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -708,7 +708,7 @@
                 android:layout_marginTop="@dimen/_4sdp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 使用系统输入法键盘 -->
+            <!-- Use system input method keyboard -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -727,7 +727,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="使用手机系统输入法"
+                        android:text="Use Phone System Keyboard"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -736,7 +736,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="聊天打字时直接唤起手机输入法，方便输入中文与表情"
+                        android:text="When typing in chat, open the phone keyboard directly, making it easy to type Chinese characters and emoji"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -754,7 +754,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 聊天消息时间前缀 -->
+            <!-- Chat message time prefix -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -772,7 +772,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="显示聊天消息时间"
+                        android:text="Show Chat Message Time"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -781,7 +781,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="在每条聊天消息前方显示时分秒时间标记"
+                        android:text="Show an HH:MM:SS time stamp before each chat message"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -799,7 +799,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 聊天文字描边阴影 -->
+            <!-- Chat Text Outline Shadow -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -817,7 +817,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="聊天文字描边阴影"
+                        android:text="Chat Text Outline Shadow"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -826,7 +826,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="为聊天文字添加黑色外描边，在明亮天空背景下依然清晰易读"
+                        android:text="Add a black outline to chat text so it stays readable against bright skies"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -844,7 +844,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 聊天显示行数 -->
+            <!-- Chat Display Lines -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -862,7 +862,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="聊天窗口显示行数"
+                        android:text="Chat Window Lines"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -871,7 +871,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="单页同时展示的聊天消息行数（5 至 20 行）"
+                        android:text="Number of chat messages shown per page (5 to 20 lines)"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -921,7 +921,7 @@
                 android:layout_height="1dp"
                 android:background="@color/launcher_stroke" />
 
-            <!-- 聊天与界面字号 -->
+            <!-- Chat &amp; interface font size -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -939,7 +939,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="聊天与界面字体大小"
+                        android:text="Chat &amp; Interface Font Size"
                         android:textColor="@color/launcher_text"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -948,7 +948,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="调节聊天消息与服务器弹窗文字字号（默认 25）"
+                        android:text="Adjust chat message and server popup font size (default 25)"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -974,7 +974,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 卡片：聊天窗口位置与尺寸 -->
+        <!-- Card: Chat Window Position &amp; Size -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -999,7 +999,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:tag="theme_accent_text"
-                        android:text="聊天窗口位置与尺寸"
+                        android:text="Chat Window Position &amp; Size"
                         android:textColor="@color/launcher_accent"
                         android:textSize="@dimen/_9ssp"
                         android:textStyle="bold" />
@@ -1008,7 +1008,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/_1sdp"
-                        android:text="微调聊天框在屏幕上的坐标与宽高区域"
+                        android:text="Fine-tune the chat box's on-screen coordinates and width/height"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp" />
                 </LinearLayout>
@@ -1021,13 +1021,13 @@
                     android:gravity="center"
                     android:paddingHorizontal="@dimen/_8sdp"
                     android:tag="theme_accent_text"
-                    android:text="重置聊天框布局"
+                    android:text="Reset Chat Box Layout"
                     android:textColor="@color/launcher_accent"
                     android:textSize="@dimen/_7ssp"
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- 水平位置偏移 -->
+            <!-- Horizontal Position Offset -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -1039,7 +1039,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="水平位置偏移"
+                    android:text="Horizontal Position Offset"
                     android:textColor="@color/launcher_text"
                     android:textSize="@dimen/_8ssp"
                     android:textStyle="bold" />
@@ -1064,7 +1064,7 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- 垂直位置偏移 -->
+            <!-- Vertical Position Offset -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -1075,7 +1075,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="垂直位置偏移"
+                    android:text="Vertical Position Offset"
                     android:textColor="@color/launcher_text"
                     android:textSize="@dimen/_8ssp"
                     android:textStyle="bold" />
@@ -1100,7 +1100,7 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- 窗口宽度 -->
+            <!-- Window Width -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -1111,7 +1111,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="聊天窗口宽度"
+                    android:text="Chat Window Width"
                     android:textColor="@color/launcher_text"
                     android:textSize="@dimen/_8ssp"
                     android:textStyle="bold" />
@@ -1136,7 +1136,7 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- 窗口高度 -->
+            <!-- Window Height -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -1147,7 +1147,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="聊天窗口高度"
+                    android:text="Chat Window Height"
                     android:textColor="@color/launcher_text"
                     android:textSize="@dimen/_8ssp"
                     android:textStyle="bold" />

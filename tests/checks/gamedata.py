@@ -74,7 +74,7 @@ def run_gamedata_check(r: Runner) -> None:
         src = tmp / "data"
         out = tmp / "cdn"
         (src / "SAMP" / "fonts").mkdir(parents=True)
-        (src / "a.txt").write_text("hello 数据包\n", encoding="utf-8")
+        (src / "a.txt").write_text("hello game data package\n", encoding="utf-8")
         (src / "SAMP" / "big.bin").write_bytes(os.urandom(1_300_000))
         (src / "SAMP" / "fonts" / "chinese.ttf").write_bytes(os.urandom(2048))
         (src / ".hidden").write_text("should be skipped", encoding="utf-8")

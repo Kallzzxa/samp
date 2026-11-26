@@ -9,26 +9,26 @@ import android.webkit.WebView;
 import android.widget.FrameLayout;
 
 /**
- * 承载一个 omp-cef WebView 的触摸闸门。
+ * Touch gate hosting one omp-cef WebView.
  *
- * 为什么需要它：
- *   WebView 一旦可见就吃掉所有触摸，游戏的虚拟摇杆、视角拖动全部失效。而 omp-cef
- *   的语义是"浏览器有焦点时游戏让出输入"（PC: FocusManager::Update 把鼠标锁进 CEF，
- *   IsAnyBrowserFocused 为假时又把输入还给游戏）。所以触摸是否交给页面，必须由焦点
- *   决定，不能由"有没有可见页面"决定。
+ * Why it is needed:
+ *   Once visible, a WebView eats all touches, breaking the game's virtual joystick and camera drag. But omp-cef's
+ *   semantics are "when a browser has focus, the game yields input" (PC: FocusManager::Update locks the mouse into CEF,
+ *   and returns input to the game when IsAnyBrowserFocused is false). So whether touches go to the page must be decided by focus,
+ *   not by "whether a page is visible".
  *
- * 实现方式：
- *   本类是 DecorView 的一个子 View，WebView 是它唯一的子 View。
- *   passThrough = true 时 dispatchTouchEvent 直接返回 false —— 没有子 View 消费这次
- *   ACTION_DOWN，ViewGroup 的派发循环会继续到下一个兄弟（游戏画面），事件原样落到
- *   Activity.onTouchEvent -> multiTouchEvent4Ex，与没有覆盖层时完全一样。
- *   注意不能在 onInterceptTouchEvent 里做这件事：拦截只影响"给不给子 View"，
- *   返回 false 仍然会把事件交给 WebView。
+ * Implementation:
+ *   This class is a child View of DecorView, and the WebView is its only child View.
+ *   When passThrough = true, dispatchTouchEvent returns false directly — no child View consumes this
+ *   ACTION_DOWN, so the ViewGroup dispatch loop continues to the next sibling (the game screen), and the event lands unchanged on
+ *   Activity.onTouchEvent -> multiTouchEvent4Ex, exactly as with no overlay.
+ *   Note this must not be done in onInterceptTouchEvent: interception only affects "whether the child View gets it",
+ *   and returning false would still hand the event to the WebView.
  *
- * 手势一致性：
- *   闸门在手指按下之后改变了方向（例如服务端在这期间 FocusBrowser），会让一侧收到
- *   "半截手势"。所以切换方向时对失去事件的一侧补 ACTION_CANCEL，见
- *   {@link #setPassThrough(boolean)} 与 {@link #cancelChildGesture()}。
+ * Gesture consistency:
+ *   If the gate changes direction after a finger is down (e.g. the server calls FocusBrowser mid-gesture), one side receives a
+ *   "half gesture". So when switching direction, send ACTION_CANCEL to the side losing the events; see
+ *   {@link #setPassThrough(boolean)} and {@link #cancelChildGesture()}.
  */
 final class CefOverlayView extends FrameLayout {
 
@@ -37,7 +37,7 @@ final class CefOverlayView extends FrameLayout {
     private final int browserId;
     private final WebView content;
 
-    /** true = 放行给游戏；false = 页面自己消费。 */
+    /** true = pass through to the game; false = the page consumes it. */
     private boolean passThrough = false;
 
     CefOverlayView(Context context, int browserId, WebView content) {
@@ -54,7 +54,7 @@ final class CefOverlayView extends FrameLayout {
         if (this.passThrough == passThrough) return;
         this.passThrough = passThrough;
         if (passThrough) {
-            // 页面正拿着这次手势：先取消，否则 WebView 会一直以为手指没抬起。
+            // The page is holding this gesture: cancel it first, or the WebView will keep thinking the finger is still down.
             cancelChildGesture();
         }
         Log.i(TAG, "browser " + browserId + " touch " + (passThrough ? "-> game" : "-> page"));
@@ -67,13 +67,13 @@ final class CefOverlayView extends FrameLayout {
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         if (passThrough) {
-            // 不消费：让 DecorView 继续派发给游戏画面。
+            // Not consuming: let DecorView keep dispatching to the game screen.
             return false;
         }
         return super.dispatchTouchEvent(ev);
     }
 
-    /** 给 WebView 补一个 ACTION_CANCEL，结束它正在处理的手势。 */
+    /** Sends an ACTION_CANCEL to the WebView to end the gesture it is handling. */
     void cancelChildGesture() {
         if (content == null) return;
         final long now = SystemClock.uptimeMillis();

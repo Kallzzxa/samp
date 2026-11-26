@@ -1,79 +1,79 @@
 package com.sampmobile.game.ui.cef;
 
 /**
- * CEF 输入路径上"有判断、无副作用"的纯逻辑。
+ * Pure logic on the CEF input path: "decisions only, no side effects".
  *
- * 单独成类的唯一目的是**可在 PC 上离线验证**：这里不 import 任何 android 类，
- * 因此可以被 javac 编译后在桌面 JVM 上直接跑断言（见 tools/cef_kat/logic_tests）。
+ * The sole reason for a separate class is **offline verification on PC**: no android classes are imported here,
+ * so it can be compiled with javac and run assertions directly on a desktop JVM (see tools/cef_kat/logic_tests).
  *
- * 设备上 logcat 在这台 ROM 上极不可靠（logd 反复重启），端到端只能靠上行报文
- * 证明"某条路径被走到"，证明不了"每一条分支都对"。这两段语义恰恰是最容易在
- * 后续改动里被悄悄改坏的（键门控决定服务端能不能收到键、IME inset 决定页面
- * 会不会被键盘盖住），所以把它们抽成纯函数 + 离线断言。
+ * On-device logcat is extremely unreliable on this ROM (logd keeps restarting); end-to-end, only uplink packets can
+ * prove "a path was taken", not "every branch is correct". These two pieces of semantics are exactly the easiest to
+ * silently break in later changes (key gating decides whether the server receives keys; the IME inset decides whether the page
+ * gets covered by the keyboard), so they are extracted as pure functions + offline assertions.
  *
- * 公式与阈值全部照抄自原有的内联实现，行为不变。
+ * Formulas and thresholds are copied verbatim from the original inline implementation; behavior is unchanged.
  */
 final class CefLogic {
 
-    /** 软键盘至少占屏高的 1/4，低于此值的差额视为导航条/手势条。 */
+    /** The soft keyboard takes at least 1/4 of the screen height; a smaller gap is treated as the nav bar / gesture bar. */
     private static final int IME_MIN_RATIO_DIVISOR = 4;
 
     private CefLogic() {
     }
 
     /**
-     * 软键盘占掉的高度（px）。0 = 键盘没弹出。
+     * Height (px) taken by the soft keyboard. 0 = keyboard not shown.
      *
-     * @param decorHeight   窗口根 View 的高度
-     * @param visibleBottom getWindowVisibleDisplayFrame() 的 bottom
+     * @param decorHeight   Height of the window root View
+     * @param visibleBottom bottom of getWindowVisibleDisplayFrame()
      */
     static int imeInsetOf(int decorHeight, int visibleBottom) {
         if (decorHeight <= 0) return 0;
         int inset = decorHeight - visibleBottom;
         if (inset < 0) inset = 0;
-        // 导航条/手势条这类常驻遮挡只有几十 px，键盘至少占屏高四分之一。
-        // 用比例阈值区分，避免页面底部永远挂着一条空白。
+        // Permanent obstructions like the nav bar / gesture bar are only a few dozen px; the keyboard takes at least a quarter of the screen height.
+        // A proportional threshold separates them, so the page bottom never carries a permanent blank strip.
         if (inset < decorHeight / IME_MIN_RATIO_DIVISOR) inset = 0;
         return inset;
     }
 
     /**
-     * 应该转成 bottomMargin 的键盘高度（px）。
+     * Keyboard height (px) that should become bottomMargin.
      *
-     * {@link #imeInsetOf} 只回答"屏幕上被键盘占了多少"，但在 ADJUST_RESIZE 窗口下
-     * 这部分空间**已经被窗口让出来了**，再转成 margin 就是二次退让 —— 页面会被压到
-     * 只剩键盘上沿那一点高度，而且因为窗口本身变矮，下一帧算出的 inset 依旧是同一个
-     * 值，形成自我维持的反馈回路（真机现象：键盘收起后 viewport 变成 2298x372）。
+     * {@link #imeInsetOf} only answers "how much of the screen the keyboard occupies", but in an ADJUST_RESIZE window
+     * that space **has already been yielded by the window**; turning it into a margin again would be a double inset — the page would be squeezed to
+     * only the sliver above the keyboard, and because the window itself got shorter, the next frame computes the same inset again,
+     * forming a self-sustaining feedback loop (real-device symptom: after the keyboard hides, the viewport becomes 2298x372).
      *
-     * 判据是窗口有没有被系统 resize：
-     *   - decorHeight <= 0            -> 量不到，按 0 处理（等下一次布局）
-     *   - decorHeight < screenHeight  -> 窗口已被 resize，空间已让出，返回 0
-     *   - 否则                        -> 仍按 deltas 退让
+     * The criterion is whether the window was resized by the system:
+     *   - decorHeight <= 0            -> cannot measure; treat as 0 (wait for the next layout)
+     *   - decorHeight < screenHeight  -> window already resized, space already yielded, return 0
+     *   - otherwise                        -> still inset by deltas
      *
-     * @param decorHeight    窗口根 View 的高度
-     * @param visibleBottom  getWindowVisibleDisplayFrame() 的 bottom
-     * @param screenHeight   整块屏幕的高度（WindowManager 当前显示尺寸）
+     * @param decorHeight    Height of the window root View
+     * @param visibleBottom  bottom of getWindowVisibleDisplayFrame()
+     * @param screenHeight   Height of the whole screen (WindowManager current display size)
      */
     static int imeMarginOf(int decorHeight, int visibleBottom, int screenHeight) {
         if (decorHeight <= 0 || screenHeight <= 0) return 0;
-        // 窗口比屏幕矮：系统已经在替他让位（adjustResize 生效），不要再减一次。
+        // Window shorter than the screen: the system is already yielding space for it (adjustResize in effect); do not subtract again.
         if (decorHeight < screenHeight) return 0;
         return imeInsetOf(decorHeight, visibleBottom);
     }
 
     /**
-     * PressKey 是否上行。逐条对齐 PC manager.cpp OnWndProcMessage：
+     * Whether PressKey goes upstream. Aligned item by item with PC manager.cpp OnWndProcMessage:
      *
      *   if (!key_capture_enabled_) return;
      *   if (!key_allowed_[key]) return;
      *   if (!(down && repeat)) SendClientEmit(PressKey, ...)
      *
-     * 即：捕获关闭不发、白名单外不发、按下时的自动重复不发；抬起（down=false）
-     * 即使带 repeat 也要发，否则服务端会收到"按下没有对应抬起"。
+     * That is: no send when capture is off, no send outside the allowlist, no send for auto-repeat on key-down; on key-up (down=false)
+     * send even with repeat, or the server would receive a "key down with no matching key up".
      *
-     * @param captureEnabled 服务端 SetKeyCapture 的当前状态
-     * @param allowed        EnableKey 白名单，按 Windows VK 索引
-     * @param vk             Windows 虚拟键码（{@link CefKeys#vkOf} 的结果）
+     * @param captureEnabled Current state of server-side SetKeyCapture
+     * @param allowed        EnableKey allowlist, indexed by Windows VK
+     * @param vk             Windows virtual key code (result of {@link CefKeys#vkOf})
      */
     static boolean shouldSendKey(boolean captureEnabled, boolean[] allowed, int vk,
                                  boolean down, boolean repeat) {
@@ -85,16 +85,16 @@ final class CefLogic {
     }
 
     /**
-     * 游戏聊天框是否要让位给页面（PC FocusManager::ShouldBlockChat）。
+     * Whether the game chat box should yield to the page (PC FocusManager::ShouldBlockChat).
      *
-     * PC 原文：
+     * PC original:
      *   if (!chat_input_enabled_) return true;
      *   if (input_focused_browser_id_ == -1) return false;
      *   return browser(input_focused_browser_id_)->controls_chat_input;
      *
-     * @param chatInputEnabled   服务端 ToggleChatInput 的状态，默认 true
-     * @param inputFocusedId     页面内输入框所在浏览器，-1 = 没有
-     * @param controlsChatInput  该浏览器创建时声明的 controls_chat_input
+     * @param chatInputEnabled   State of server-side ToggleChatInput, default true
+     * @param inputFocusedId     Browser holding a page text input, -1 = none
+     * @param controlsChatInput  controls_chat_input declared when this browser was created
      */
     static boolean shouldBlockChat(boolean chatInputEnabled, int inputFocusedId,
                                    boolean controlsChatInput) {

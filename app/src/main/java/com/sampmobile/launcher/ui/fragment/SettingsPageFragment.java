@@ -95,21 +95,21 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private static final int CAT_HELP_ABOUT  = 9;
 
     private static final String[] CATEGORY_TITLES = {
-            "联机",
-            "文件验证",
-            "画面",
-            "镜头",
-            "操作",
-            "音频",
-            "界面与聊天",
-            "截图库",
-            "问题反馈",
-            "帮助与关于"
+            "Online",
+            "File verification",
+            "Graphics",
+            "Camera",
+            "Controls",
+            "Audio",
+            "UI & chat",
+            "Screenshots",
+            "Report an issue",
+            "Help & about"
     };
 
     private static final String[] GAMEDATA_EDITION_ITEMS = {
-            "精简版（推荐）",
-            "完整版（2.10 GiB）"
+            "Lite (Recommended)",
+            "Full (2.10 GiB)"
     };
 
     private int currentCategory = CAT_MULTIPLAYER;
@@ -185,10 +185,10 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private GtaSaSliderView slider_nametag_size, slider_textlabel_size;
     private TextView tv_nametag_size_val, tv_textlabel_size_val;
 
-    // 截图模式按钮
+    // Screenshot mode button
     private TextView btn_ss_mode_hud, btn_ss_mode_game;
 
-    // 帮助与关于
+    // Help & about
     private TextView tv_help_mods_body, tv_help_faq_body, tv_help_commands;
     private TextView tv_about_version_line, tv_about_summary;
 
@@ -284,7 +284,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         }
     }
 
-    /** 供 MainActivity 在缺少游戏数据时一键切到「文件验证」选项卡。 */
+    /** Lets MainActivity jump straight to the "File verification" tab when game data is missing. */
     public void openGameDataTab() {
         if (categoryPanels == null) return;
         if (settingsTabs != null) {
@@ -457,25 +457,25 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         slider_textlabel_size = view.findViewById(R.id.slider_textlabel_size);
         tv_textlabel_size_val = view.findViewById(R.id.tv_textlabel_size_val);
 
-        // 截图库
+        // Screenshots
         btn_ss_mode_hud = view.findViewById(R.id.btn_ss_mode_hud);
         btn_ss_mode_game = view.findViewById(R.id.btn_ss_mode_game);
         screenshotController.bindViews(view);
 
-        // 问题反馈
+        // Report an issue
         diagnosticsController.bindViews(view);
 
-        // 帮助与关于
+        // Help & about
         tv_help_mods_body = view.findViewById(R.id.tv_help_mods_body);
         tv_help_faq_body = view.findViewById(R.id.tv_help_faq_body);
         tv_help_commands = view.findViewById(R.id.tv_help_commands);
         tv_about_version_line = view.findViewById(R.id.tv_about_version_line);
         tv_about_summary = view.findViewById(R.id.tv_about_summary);
 
-        // 文件验证与游戏资源选项卡
+        // File verification & game data tab
         gameDataController.bindViews(view);
 
-        // 0.3.DL 自定义模型缓存管理
+        // 0.3.DL custom model cache management
         artworkCacheController.bindViews(view);
     }
 
@@ -551,7 +551,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
             }
         });
 
-        // 启动器主题配色预设与自定义滑条
+        // Launcher theme color presets and custom sliders
         int[][] themePresets = {
                 {R.id.btn_theme_gold, 38},
                 {R.id.btn_theme_cyan, 186},
@@ -608,41 +608,41 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         bindStringOptionDropdown(dropdown_crosshair_style, ClientSettings.CROSSHAIR_STYLES, "crosshair_style");
         bindStringOptionDropdown(dropdown_font_family, ClientSettings.FONT_FAMILIES, "font_family");
 
-        // 四档画质预设
-        btn_gfx_preset_low.setOnClickListener(v -> applyGraphicsPreset(0, 0, 0, 60, 40, "省电流畅"));
-        btn_gfx_preset_med.setOnClickListener(v -> applyGraphicsPreset(1, 1, 1, 80, 60, "均衡标准"));
-        btn_gfx_preset_high.setOnClickListener(v -> applyGraphicsPreset(2, 1, 2, 100, 75, "高清画质"));
-        btn_gfx_preset_ultra.setOnClickListener(v -> applyGraphicsPreset(3, 2, 3, 100, 100, "极致画质"));
+        // Four graphics presets
+        btn_gfx_preset_low.setOnClickListener(v -> applyGraphicsPreset(0, 0, 0, 60, 40, "Battery saver"));
+        btn_gfx_preset_med.setOnClickListener(v -> applyGraphicsPreset(1, 1, 1, 80, 60, "Balanced"));
+        btn_gfx_preset_high.setOnClickListener(v -> applyGraphicsPreset(2, 1, 2, 100, 75, "HD"));
+        btn_gfx_preset_ultra.setOnClickListener(v -> applyGraphicsPreset(3, 2, 3, 100, 100, "Ultra"));
 
-        // 自定义游戏按键位置 (Change Button Position)
+        // Custom game button positions (Change Button Position)
         if (btn_open_hud_editor != null) {
             btn_open_hud_editor.setOnClickListener(v -> {
                 boolean next = !settings.getBoolean("open_hud_edit_on_start");
                 savePreference("open_hud_edit_on_start", next);
                 updateHudEditorButtonUI();
                 if (next) {
-                    Toast.makeText(requireContext(), "已开启：下次进入游戏将自动打开按键位置调整界面（游戏内也可随时点击底部 HUD 键或输入 /hudedit 打开）", Toast.LENGTH_LONG).show();
+                    Toast.makeText(requireContext(), "Enabled: the button position editor will open automatically next time you enter the game (you can also tap the HUD key at the bottom in game or type /hudedit anytime)", Toast.LENGTH_LONG).show();
                 } else {
-                    Toast.makeText(requireContext(), "已取消进服自动打开按键位置调整", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), "Auto-open button position editor disabled", Toast.LENGTH_SHORT).show();
                 }
             });
         }
         if (btn_reset_hud_editor != null) {
             btn_reset_hud_editor.setOnClickListener(v -> {
-                showAlertDialog("确定要删除自定义按键布局文件 (Adjustable.cfg)，恢复 GTA:SA 原版默认按键位置吗？", (d, w) -> {
+                showAlertDialog("Delete the custom button layout file (Adjustable.cfg) and restore the default GTA:SA button positions?", (d, w) -> {
                     File adjFile = new File(requireContext().getExternalFilesDir(null), "Adjustable.cfg");
                     if (adjFile.exists()) {
                         adjFile.delete();
                     }
                     savePreference("open_hud_edit_on_start", false);
                     updateHudEditorButtonUI();
-                    Toast.makeText(requireContext(), "已恢复默认游戏按键位置", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), "Default game button positions restored", Toast.LENGTH_SHORT).show();
                     d.dismiss();
                 }, (d, w) -> d.dismiss());
             });
         }
 
-        // 重置聊天框布局
+        // Reset chat box layout
         view.findViewById(R.id.btn_reset_chat_layout).setOnClickListener(v -> {
             Map<String, Object> batch = new HashMap<>();
             batch.put("font_size", 25.0f);
@@ -654,27 +654,27 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
             ClientSettings.updateBatchSync(requireContext(), batch);
             settings = ClientSettings.loadLauncher(requireContext());
             setWidgetsForSettings();
-            Toast.makeText(requireContext(), "聊天窗口布局与字号已恢复默认", Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), "Chat window layout and font size restored to defaults", Toast.LENGTH_SHORT).show();
         });
 
-        // 截图模式切换
+        // Screenshot mode toggle
         btn_ss_mode_hud.setOnClickListener(v -> {
             savePreference("screenshot_mode", ClientSettings.SCREENSHOT_MODE_HUD);
             updateScreenshotModeUI();
-            Toast.makeText(requireContext(), "已设为：含界面与聊天", Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), "Set to: With UI & chat", Toast.LENGTH_SHORT).show();
         });
         btn_ss_mode_game.setOnClickListener(v -> {
             savePreference("screenshot_mode", ClientSettings.SCREENSHOT_MODE_GAME);
             updateScreenshotModeUI();
-            Toast.makeText(requireContext(), "已设为：仅游戏画面", Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), "Set to: Game view only", Toast.LENGTH_SHORT).show();
         });
         view.findViewById(R.id.btn_ss_refresh).setOnClickListener(v -> screenshotController.refresh());
         view.findViewById(R.id.btn_ss_clear_all).setOnClickListener(v -> screenshotController.confirmClear());
 
-        // 问题反馈操作按钮
+        // Report-an-issue action buttons
         view.findViewById(R.id.btn_log_refresh).setOnClickListener(v -> {
             diagnosticsController.refresh();
-            Toast.makeText(requireContext(), "运行状态检测已刷新", Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), "Run status check refreshed", Toast.LENGTH_SHORT).show();
         });
         view.findViewById(R.id.btn_log_copy_report).setOnClickListener(v -> diagnosticsController.copyReport());
         view.findViewById(R.id.btn_log_share).setOnClickListener(v -> diagnosticsController.shareLogFile());
@@ -757,7 +757,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         ClientSettings.updateBatchSync(requireContext(), batch);
         settings = ClientSettings.loadLauncher(requireContext());
         setWidgetsForSettings();
-        Toast.makeText(requireContext(), "已应用画质预设：" + label, Toast.LENGTH_SHORT).show();
+        Toast.makeText(requireContext(), "Graphics preset applied: " + label, Toast.LENGTH_SHORT).show();
     }
 
     private void updateGraphicsPresetUI() {
@@ -793,8 +793,8 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         int accentColor = LauncherThemeManager.getAccentColor(requireContext());
         btn_open_hud_editor.setBackgroundTintList(ColorStateList.valueOf(accentColor));
         btn_open_hud_editor.setText(scheduled
-                ? "✓ 已预约：下次进入游戏将自动打开按键调整"
-                : "进入游戏时自动打开按键位置调整");
+                ? "✓ Scheduled: the button editor will open automatically next time you enter the game"
+                : "Open button position editor automatically when entering the game");
     }
 
     private void setupSliders() {
@@ -923,7 +923,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
         switchButton.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (updatingWidgets) return;
             if (isChecked && buttonView.isPressed()) {
-                showAlertDialog("开启此选项后，启动器将跳过原始文件完整性检查。若因手工替换数据包导致游戏异常，请关闭此选项。",
+                showAlertDialog("With this on, the launcher skips the original-file integrity check. If the game breaks after manually replacing data files, turn this off.",
                         (dialog, which) -> dialog.dismiss(), (dialog, which) -> {
                             switchButton.setChecked(false);
                             dialog.dismiss();
@@ -934,11 +934,11 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     }
 
     private void setupRestoreButton() {
-        restore_button.setOnClickListener(v -> showAlertDialog("确定要将所有联机、画面、镜头、操作、音频与界面设置恢复为默认值吗？", (dialog, which) -> {
+        restore_button.setOnClickListener(v -> showAlertDialog("Reset all online, graphics, camera, controls, audio, and UI settings to defaults?", (dialog, which) -> {
             settings = ClientSettings.resetDefaults(requireContext());
             LauncherThemeManager.setHue(requireContext(), LauncherThemeManager.DEFAULT_HUE);
             setWidgetsForSettings();
-            Toast.makeText(requireContext(), "已恢复全部默认设置", Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), "All settings restored to defaults", Toast.LENGTH_SHORT).show();
             dialog.dismiss();
         }, (dialog, which) -> dialog.dismiss()));
     }
@@ -1060,66 +1060,66 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    //  帮助与关于
+    //  Help & about
     // ════════════════════════════════════════════════════════════════════════
 
     private void populateHelpAndAbout() {
         tv_help_mods_body.setText(
-                "1. 在哪里开启和管理模组？\n"
-                + "请返回启动器主界面，点击最左侧导航栏的「模组」板块。您可以在模组板块中统一开启或关闭各类加载器，并单独管理每一个模组包与脚本。\n\n"
-                + "2. 如何安装车包、人物皮肤、武器与贴图音效模组？\n"
-                + "客户端支持免打包文件替换。只需将下载好的模组文件夹（内含 .dff 模型、.txd 贴图或音效文件）放入游戏数据目录的 modloader/ 文件夹下，随后在主界面「模组」板块开启资源加载器即可自动生效，不会破坏原始数据包。\n\n"
-                + "3. 如何使用 Lua 辅助脚本与原生扩展插件？\n"
-                + "• Lua 脚本：将 .lua 脚本文件放入 monetloader/ 目录，并在主界面「模组」板块中启用脚本加载器；\n"
-                + "• 原生插件与画质补丁：在主界面「模组」板块中可一键开启扩展插件与引擎修复补丁，点击「画质补丁配置」还可按需开关各项渲染优化。\n\n"
-                + "4. 安装新模组后进游戏闪退怎么办？\n"
-                + "不同模组之间可能存在模型 ID 冲突或旧版脚本不兼容。只需在主界面「模组」板块中暂时关闭最近新增的模组开关，即可立即恢复正常进服；也可在本页「问题反馈」中一键复制故障信息交由开发者排查。");
+                "1. Where do I enable and manage mods?\n"
+                + "Go back to the launcher home screen and tap the "Mods" section in the leftmost navigation bar. There you can turn each loader on or off, and manage every mod pack and script individually.\n\n"
+                + "2. How do I install vehicle packs, character skins, weapons, and texture/sound mods?\n"
+                + "The client supports loose-file replacement with no packing needed. Just put the downloaded mod folder (with .dff models, .txd textures, or sound files) under the modloader/ folder in the game data directory, then enable the asset loader in the "Mods" section on the home screen — it takes effect automatically without touching the original data pack.\n\n"
+                + "3. How do I use Lua helper scripts and native extension plugins?\n"
+                + "• Lua scripts: put .lua script files in the monetloader/ directory and enable the script loader in the "Mods" section on the home screen;\n"
+                + "• Native plugins and graphics patches: turn extension plugins and engine fix patches on with one tap in the "Mods" section on the home screen, and tap "Graphics patch settings" to toggle individual rendering optimizations.\n\n"
+                + "4. What do I do if the game crashes after installing a new mod?\n"
+                + "Different mods can conflict over model IDs or use outdated scripts. Just turn off the most recently added mod in the "Mods" section on the home screen to get back in game right away; you can also copy the bug report from "Report an issue" on this page and send it to a developer.");
 
         tv_help_faq_body.setText(
-                "1. 如何使用自由镜头、调整摇杆大小或自定义游戏按键位置？\n"
-                + "• 自由镜头：在「镜头设置」中开启「自由镜头（镜头不自动回正）」，行走或驾车时镜头将始终停留在您旋转到的方向；\n"
-                + "• 分段灵敏度：在「镜头设置」中可分别调节步行、载具与开镜瞄准时的独立镜头灵敏度；\n"
-                + "• 自定义按键位置：在「操作设置」中点击「进入游戏时自动打开按键位置调整」（或在游戏内展开底部快捷栏点击 HUD 键 / 输入 /hudedit），即可像单机版一样自由拖拽和缩放屏幕按键。\n\n"
-                + "2. 步战时如何切换视角远近、开镜瞄准、格挡或乘坐副驾驶？\n"
-                + "• 切换视角：点击游戏画面右上角的镜头图标即可在近距、标准、远距视角间切换，也可在「镜头设置」中设定默认距离；\n"
-                + "• 瞄准与射击：持枪时点击右侧独立准星按钮进入瞄准状态，轻点开火键单发点射、按住连续射击；\n"
-                + "• 近战格挡：徒手或持近战武器时按住格挡键即可保持防御姿态；\n"
-                + "• 乘坐副驾驶：靠近载具时点击屏幕右侧出现的 G 键图标，或展开底部功能键盘点击 G。\n\n"
-                + "3. 进入服务器后中文显示为乱码怎么解决？\n"
-                + "在「联机设置」中修改「服务器文字编码」：国内大多数服务器使用 GBK 编码，部分新版服务器使用 UTF-8，港台服务器常使用 BIG5。\n\n"
-                + "4. 如何拍摄不含聊天框和界面按钮的纯净游戏截图？\n"
-                + "在「截图库」中将截图范围设为「仅游戏画面」，或在游戏聊天框直接输入 /ss game，即可拍摄隐藏所有界面与按键的纯净游戏画面。");
+                "1. How do I use free camera, adjust the joystick size, or customize game button positions?\n"
+                + "• Free camera: turn on "Free camera (camera won't auto-center)" in "Camera settings" — while walking or driving, the camera stays where you rotated it;\n"
+                + "• Per-mode sensitivity: adjust separate camera sensitivity for walking, driving, and aiming in "Camera settings";\n"
+                + "• Custom button positions: in "Controls settings", tap "Open button position editor automatically when entering the game" (or expand the bottom quick bar in game and tap the HUD key, or type /hudedit) to drag and resize the on-screen buttons like in single-player.\n\n"
+                + "2. On foot, how do I switch camera distance, aim, block, or ride as a passenger?\n"
+                + "• Switch camera distance: tap the camera icon at the top-right of the game screen to cycle near, standard, and far views; you can also set the default distance in "Camera settings";\n"
+                + "• Aim and shoot: while holding a gun, tap the separate crosshair button on the right to aim; tap the fire button for single shots, hold it for continuous fire;\n"
+                + "• Melee block: while unarmed or holding a melee weapon, hold the block button to stay in a defensive stance;\n"
+                + "• Ride as passenger: near a vehicle, tap the G key icon that appears on the right of the screen, or expand the bottom function keyboard and tap G.\n\n"
+                + "3. How do I fix garbled Chinese text after joining a server?\n"
+                + "In "Online settings", change "Server text encoding": most Chinese servers use GBK, some newer servers use UTF-8, and Hong Kong/Taiwan servers often use BIG5.\n\n"
+                + "4. How do I take a clean game screenshot with no chat box or UI buttons?\n"
+                + "In "Screenshots", set the screenshot range to "Game view only", or type /ss game in the in-game chat to capture a clean shot with all UI and buttons hidden.");
 
         tv_help_commands.setText(
-                "/ss 或 /screenshot      立即截图（也可点击底部快捷键盘 F8）\n"
-                + "/ss game               强制拍摄一张不含界面与聊天的纯净画面\n"
-                + "/hudedit               打开游戏内触控按键位置与大小编辑器\n"
-                + "/freecam               实时开关自由镜头（镜头不自动回正）\n"
-                + "/headmove              开关角色头部随视角方向转动\n"
-                + "/pagesize [5-20]       修改聊天窗口同时显示的消息行数\n"
-                + "/timestamp             开关聊天消息前方的接收时间显示\n"
-                + "/clearmychat           清空当前聊天窗口的历史消息\n"
-                + "/save [备注]           记录当前人物或车辆坐标\n"
-                + "/dl                    开关周围载具编号与距离坐标显示\n"
-                + "/dw                    开关右侧击杀通报列表\n"
-                + "/q 或 /quit            断开服务器连接并退出游戏");
+                "/ss or /screenshot      Take a screenshot now (or tap F8 on the bottom quick keyboard)\n"
+                + "/ss game               Force a clean screenshot with no UI or chat\n"
+                + "/hudedit               Open the in-game touch button position & size editor\n"
+                + "/freecam               Toggle free camera live (camera won't auto-center)\n"
+                + "/headmove              Toggle head turning with the camera\n"
+                + "/pagesize [5-20]       Change how many chat lines show at once\n"
+                + "/timestamp             Toggle receive-time display before chat messages\n"
+                + "/clearmychat           Clear the current chat window's history\n"
+                + "/save [note]           Save the current player or vehicle coordinates\n"
+                + "/dl                    Toggle nearby vehicle IDs and distance display\n"
+                + "/dw                    Toggle the kill feed on the right\n"
+                + "/q or /quit            Disconnect and quit the game");
 
         tv_about_version_line.setText(String.format(Locale.US,
-                "SA-MP Mobile 移动端联机客户端  ·  版本 v%s",
+                "SA-MP Mobile mobile multiplayer client  ·  Version v%s",
                 BuildConfig.VERSION_NAME));
 
         tv_about_summary.setText(
-                "专为移动端打造的圣安地列斯多人联机启动器与游戏客户端，全面支持 0.3.7 与 0.3.DL 服务器协议，集成原生画质调节、纯净截图库与模块化扩展支持。\n\n"
-                + "开源致谢：基于 Alyn SA-MP Mobile 二次开发，致谢 AML / MonetLoader / CLEO 等社区开源项目。");
+                "A San Andreas multiplayer launcher and game client built for mobile, with full support for the 0.3.7 and 0.3.DL server protocols, native graphics controls, a clean screenshot library, and modular extension support.\n\n"
+                + "Open-source credits: based on Alyn SA-MP Mobile, with thanks to AML / MonetLoader / CLEO and other community open-source projects.");
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    //  通用工具方法
+    //  Common helper methods
     // ════════════════════════════════════════════════════════════════════════
 
     void shareFile(File file, String mimeType, String chooserTitle) {
         if (file == null || !file.exists()) {
-            Toast.makeText(requireContext(), "文件不存在", Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), "File not found", Toast.LENGTH_SHORT).show();
             return;
         }
         try {
@@ -1131,7 +1131,7 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(Intent.createChooser(intent, chooserTitle));
         } catch (Exception e) {
-            Toast.makeText(requireContext(), "分享失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), "Share failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -1149,10 +1149,10 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
 
     void showAlertDialog(String message, DialogInterface.OnClickListener positiveListener, DialogInterface.OnClickListener negativeListener) {
         new AlertDialog.Builder(requireActivity())
-                .setTitle("提示")
+                .setTitle("Notice")
                 .setMessage(message)
-                .setPositiveButton("确定", positiveListener)
-                .setNegativeButton("取消", negativeListener)
+                .setPositiveButton("OK", positiveListener)
+                .setNegativeButton("Cancel", negativeListener)
                 .show();
     }
 }

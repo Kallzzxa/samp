@@ -199,9 +199,9 @@ std::vector<uint8_t> AesCbcDecrypt(const std::vector<uint8_t>& encrypted,
                                    const std::vector<uint8_t>& key,
                                    const std::array<uint8_t, AES_IV_BYTES>& iv)
 {
-    // 密钥长度必须正好是 AES_KEYLEN：AES_init_ctx_iv 按 AES_KEYLEN 读 key.data()，
-    // 只检查 empty() 时，恶意服下发一个短 master_resource_key 会让它读到缓冲区之外
-    // （堆越界读，读到什么就当密钥扩展材料）。
+    // Key length must be exactly AES_KEYLEN: AES_init_ctx_iv reads key.data() for AES_KEYLEN bytes,
+    // if only empty() is checked, a malicious server issuing a short master_resource_key would make it read past the buffer
+    // (heap out-of-bounds read; whatever it reads is used as key-expansion material).
     if (key.size() != AES_KEYLEN || encrypted.empty() || encrypted.size() % AES_BLOCKLEN != 0)
         return {};
     AES_ctx ctx;
@@ -228,9 +228,9 @@ bool DecodeLegacy(const std::vector<uint8_t>& input,
     std::copy_n(input.begin(), AES_IV_BYTES, iv.begin());
     std::vector<uint8_t> ciphertext(input.begin() + AES_IV_BYTES, input.end());
     output = AesCbcDecrypt(ciphertext, masterKey, iv);
-    // 只有解出非空明文才算成功。原来还允许「密文恰好一个 block 且解出空」，
-    // 那是把 padding 校验失败（AesCbcDecrypt 返回 {}）误判成"空文件，成功"，
-    // 上层会拿着空 vector 继续走解包流程。
+    // Only a non-empty decrypted plaintext counts as success. Previously it also allowed "ciphertext exactly one block and decrypts to empty",
+    // which mistook a padding validation failure (AesCbcDecrypt returns {}) for "empty file, success",
+    // and the upper layer would continue the unpacking flow with an empty vector.
     return !output.empty();
 }
 
@@ -264,9 +264,9 @@ bool DecodeResourceEntry(const std::vector<uint8_t>& input,
     std::vector<uint8_t> ciphertext(input.begin() + kHeaderBytes + AES_IV_BYTES, input.end());
 
     output = AesCbcDecrypt(ciphertext, masterKey, iv);
-    // 只有解出非空明文才算成功。原来还允许「密文恰好一个 block 且解出空」，
-    // 那是把 padding 校验失败（AesCbcDecrypt 返回 {}）误判成"空文件，成功"，
-    // 上层会拿着空 vector 继续走解包流程。
+    // Only a non-empty decrypted plaintext counts as success. Previously it also allowed "ciphertext exactly one block and decrypts to empty",
+    // which mistook a padding validation failure (AesCbcDecrypt returns {}) for "empty file, success",
+    // and the upper layer would continue the unpacking flow with an empty vector.
     return !output.empty();
 }
 
@@ -280,9 +280,9 @@ std::string Sha256FileHex(const char* path, size_t maxBytes)
     if (!f)
         return {};
 
-    // 流式哈希：1MB 缓冲，内存峰值与文件大小无关。
-    // 原来的路径是 ReadFile 整块读入 + Sha256Hex，几十 MB 的包在游戏主线程
-    // 上会造成明显掉帧，且同时占用两份内存（文件 + 哈希拷贝）。
+    // Streaming hash: 1 MB buffer, peak memory independent of file size.
+    // The old path was ReadFile reading the whole file + Sha256Hex; a package of tens of MB on the game main thread
+    // would cause noticeable frame drops and occupy two copies of memory at once (file + hash copy).
     picosha2::hash256_one_by_one hasher;
     std::vector<uint8_t> buf(1024 * 1024);
     size_t total = 0;

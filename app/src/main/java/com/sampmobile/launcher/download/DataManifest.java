@@ -9,16 +9,16 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 游戏数据清单（manifest.json）的解析结果。
+ * Parsed result of the game data manifest (manifest.json).
  *
- * 与 docs/GAMEDATA_DISTRIBUTION.md 的格式一一对应。解析是**严格**的：
- * 缺必填字段、类型不对、schema 不认识，一律抛 {@link ManifestException}，
- * 不做"猜一个默认值继续跑"——数据包下载失败的成本是玩家等半小时后报错，
- * 早失败比晚失败好。
+ * Matches the format in docs/GAMEDATA_DISTRIBUTION.md exactly. Parsing is **strict**:
+ * Missing required fields, wrong types, or an unrecognized schema all throw {@link ManifestException},
+ * no "guess a default and carry on" — the cost of a bad data package is a player waiting half an hour before hitting an error,
+ * failing early is better than failing late.
  */
 public final class DataManifest {
 
-    /** 当前客户端认识的清单 schema。不匹配直接拒绝。 */
+    /** The manifest schema this client understands. A mismatch is rejected outright. */
     public static final int SCHEMA = 1;
 
     public static final class Chunk {
@@ -34,7 +34,7 @@ public final class DataManifest {
             this.sha256 = sha256;
         }
 
-        /** 分片在本地缓存里的文件名（固定 4 位序号，便于排序与人工排查）。 */
+        /** The chunk's filename in the local cache (fixed 4-digit index, for easy sorting and manual inspection). */
         public String fileName() {
             return String.format(java.util.Locale.US, "%04d", index);
         }
@@ -90,7 +90,7 @@ public final class DataManifest {
         return total;
     }
 
-    /** 找不到对应分组时返回 null（清单可能只含 game，不含 online）。 */
+    /** Returns null when the group is not found (a manifest may contain only game, not online). */
     public Group group(String key) {
         for (Group g : groups) {
             if (g.key.equals(key)) return g;
@@ -98,35 +98,35 @@ public final class DataManifest {
         return null;
     }
 
-    // ------------------------------------------------------------------ 解析
+    // ------------------------------------------------------------------ Parsing
 
     public static DataManifest parse(String json, int clientVersionCode) throws ManifestException {
         final JSONObject root;
         try {
             root = new JSONObject(json);
         } catch (JSONException e) {
-            throw new ManifestException("清单不是合法 JSON：" + e.getMessage());
+            throw new ManifestException("Manifest is not valid JSON: " + e.getMessage());
         }
 
         int schema = root.optInt("schema", -1);
         if (schema != SCHEMA) {
-            throw new ManifestException("清单 schema=" + schema + "，客户端只支持 " + SCHEMA
-                    + "（请升级客户端）");
+            throw new ManifestException("Manifest schema=" + schema + ", this client only supports " + SCHEMA
+                    + "(please update the client)");
         }
 
         String version = root.optString("version", "");
         if (version.isEmpty()) {
-            throw new ManifestException("清单缺少 version");
+            throw new ManifestException("Manifest is missing version");
         }
 
         int minClient = root.optInt("minClientVersionCode", 0);
         if (minClient > 0 && clientVersionCode < minClient) {
-            throw new ManifestException("该数据包要求客户端 versionCode >= " + minClient
-                    + "，当前为 " + clientVersionCode);
+            throw new ManifestException("This data package requires client versionCode >= " + minClient
+                    + ", current is " + clientVersionCode);
         }
 
         List<Group> groups = new ArrayList<>();
-        // 顺序固定：先游戏本体，再联机包。玩家看到的是"先装大的"。
+        // Fixed order: the base game first, then the online package. Players see the "big one installed first".
         for (String key : new String[]{"game", "online"}) {
             JSONObject g = root.optJSONObject(key);
             if (g == null) continue;
@@ -134,7 +134,7 @@ public final class DataManifest {
         }
 
         if (groups.isEmpty()) {
-            throw new ManifestException("清单里既没有 game 也没有 online 分组");
+            throw new ManifestException("Manifest contains neither a game nor an online group");
         }
 
         return new DataManifest(schema, version, minClient, groups);
@@ -146,17 +146,17 @@ public final class DataManifest {
 
         JSONArray pkgArray = g.optJSONArray("packages");
         if (pkgArray == null || pkgArray.length() == 0) {
-            throw new ManifestException("分组 " + key + " 没有 packages");
+            throw new ManifestException("Group " + key + " has no packages");
         }
 
         List<Package> packages = new ArrayList<>();
         for (int i = 0; i < pkgArray.length(); i++) {
             JSONObject p = pkgArray.optJSONObject(i);
-            if (p == null) throw new ManifestException("分组 " + key + " 的 packages[" + i + "] 不是对象");
+            if (p == null) throw new ManifestException("Group " + key + "'s packages[" + i + "] is not an object");
             packages.add(parsePackage(key, p, i));
         }
 
-        // 分组总大小优先用清单声明值；缺失或不合理时按各包求和兜底。
+        // A group's total size prefers the manifest's declared value; if missing or unreasonable, it falls back to summing the packages.
         long declared = g.optLong("totalBytes", 0);
         long sum = 0;
         for (Package p : packages) sum += p.bytes;
@@ -170,37 +170,37 @@ public final class DataManifest {
         String where = groupKey + ".packages[" + pos + "]";
 
         String id = p.optString("id", "");
-        if (id.isEmpty()) throw new ManifestException(where + " 缺少 id");
-        // id 会拼进本地路径，必须挡住穿越。
+        if (id.isEmpty()) throw new ManifestException(where + " is missing id");
+        // id is joined into a local path, so traversal must be blocked.
         if (id.contains("/") || id.contains("\\") || id.contains("..")) {
-            throw new ManifestException(where + " 的 id 含非法字符：" + id);
+            throw new ManifestException(where + " 's id contains illegal characters: " + id);
         }
 
         long bytes = p.optLong("bytes", -1);
-        if (bytes <= 0) throw new ManifestException(where + " 的 bytes 非法：" + bytes);
+        if (bytes <= 0) throw new ManifestException(where + " 's bytes is invalid: " + bytes);
 
         String sha = p.optString("sha256", "").toLowerCase(java.util.Locale.US);
-        if (!isHex64(sha)) throw new ManifestException(where + " 的 sha256 不是 64 位 hex");
+        if (!isHex64(sha)) throw new ManifestException(where + " 's sha256 is not 64-bit hex");
 
         JSONArray chunkArray = p.optJSONArray("chunks");
         if (chunkArray == null || chunkArray.length() == 0) {
-            throw new ManifestException(where + " 没有 chunks");
+            throw new ManifestException(where + " has no chunks");
         }
 
         List<Chunk> chunks = new ArrayList<>();
         long chunkSum = 0;
         for (int i = 0; i < chunkArray.length(); i++) {
             JSONObject c = chunkArray.optJSONObject(i);
-            if (c == null) throw new ManifestException(where + ".chunks[" + i + "] 不是对象");
+            if (c == null) throw new ManifestException(where + ".chunks[" + i + "] is not an object");
             Chunk chunk = parseChunk(where, c, i);
             chunks.add(chunk);
             chunkSum += chunk.bytes;
         }
 
-        // 分片大小之和必须等于整包大小，否则拼出来的文件一定不对，早点报错。
+        // Chunk sizes must sum to the package size, otherwise the assembled file is guaranteed wrong — fail early.
         if (chunkSum != bytes) {
-            throw new ManifestException(where + " 的分片总大小 " + chunkSum
-                    + " 与 bytes " + bytes + " 不一致");
+            throw new ManifestException(where + "'s total chunk size " + chunkSum
+                    + " does not match bytes " + bytes);
         }
 
         String label = p.optString("label", id);
@@ -210,18 +210,18 @@ public final class DataManifest {
     private static Chunk parseChunk(String where, JSONObject c, int pos) throws ManifestException {
         String w = where + ".chunks[" + pos + "]";
         int index = c.optInt("index", -1);
-        if (index < 0) throw new ManifestException(w + " 的 index 非法：" + index);
+        if (index < 0) throw new ManifestException(w + " 's index is invalid: " + index);
 
         String url = c.optString("url", "");
-        if (url.isEmpty()) throw new ManifestException(w + " 缺少 url");
+        if (url.isEmpty()) throw new ManifestException(w + " is missing url");
 
         long bytes = c.optLong("bytes", -1);
-        if (bytes <= 0) throw new ManifestException(w + " 的 bytes 非法：" + bytes);
+        if (bytes <= 0) throw new ManifestException(w + " 's bytes is invalid: " + bytes);
 
-        // 分片 sha256 可选：缺失时跳过单片校验，整包仍会校验。
+        // Chunk sha256 is optional: when missing, per-chunk verification is skipped, but the whole package is still verified.
         String sha = c.optString("sha256", "").toLowerCase(java.util.Locale.US);
         if (!sha.isEmpty() && !isHex64(sha)) {
-            throw new ManifestException(w + " 的 sha256 不是 64 位 hex");
+            throw new ManifestException(w + " 's sha256 is not 64-bit hex");
         }
 
         return new Chunk(index, url, bytes, sha);

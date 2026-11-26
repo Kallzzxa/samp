@@ -13,7 +13,7 @@ import java.util.Locale;
 
 /**
  * Verifies local GTA:SA + SA-MP game files under external files/ and produces a
- * structured per-file status report for the Settings -> 文件验证 tab.
+ * structured per-file status report for the Settings -> File Verification tab.
  *
  * Supports Lite (unified default, ~1.04 GiB without .osw audio streams) and
  * Full (~2.10 GiB with complete GTA:SA SFX/radio streams) verification profiles.
@@ -122,36 +122,36 @@ public final class GameDataVerifier {
     }
 
     private static final EntrySpec[] SPECS = {
-            // SA-MP 联机核心
-            new EntrySpec("SAMP/main.scm", "SA-MP 主脚本", "SA-MP 联机", false, false, 64),
-            new EntrySpec("SAMP/SAMP.ide", "联机模型定义", "SA-MP 联机", false, false, 128),
-            new EntrySpec(new String[]{"texdb/SAMPCOL.img", "SAMP/SAMPCOL.img"}, "联机碰撞库", "SA-MP 联机", false, false, 1024),
-            new EntrySpec("SAMP/gta.dat", "世界资源索引", "SA-MP 联机", false, false, 128),
-            new EntrySpec("SAMP/peds.ide", "角色皮肤定义表", "SA-MP 联机", false, false, 128),
-            new EntrySpec("SAMP/vehicles.ide", "载具属性定义表", "SA-MP 联机", false, false, 128),
-            new EntrySpec("texdb/samp.img", "SA-MP 模型档案", "SA-MP 联机", false, false, 4096),
-            new EntrySpec("texdb/samp/samp.txt", "SA-MP 贴图索引", "SA-MP 联机", false, false, 64),
-            new EntrySpec("texdb/samp_extra/samp_extra.txt", "TextDraw 扩展贴图索引", "SA-MP 联机", false, false, 64),
+            // SA-MP online core
+            new EntrySpec("SAMP/main.scm", "SA-MP main script", "SA-MP Online", false, false, 64),
+            new EntrySpec("SAMP/SAMP.ide", "Online model definitions", "SA-MP Online", false, false, 128),
+            new EntrySpec(new String[]{"texdb/SAMPCOL.img", "SAMP/SAMPCOL.img"}, "Online collision library", "SA-MP Online", false, false, 1024),
+            new EntrySpec("SAMP/gta.dat", "World resource index", "SA-MP Online", false, false, 128),
+            new EntrySpec("SAMP/peds.ide", "Character skin definition table", "SA-MP Online", false, false, 128),
+            new EntrySpec("SAMP/vehicles.ide", "Vehicle property definition table", "SA-MP Online", false, false, 128),
+            new EntrySpec("texdb/samp.img", "SA-MP model archive", "SA-MP Online", false, false, 4096),
+            new EntrySpec("texdb/samp/samp.txt", "SA-MP texture index", "SA-MP Online", false, false, 64),
+            new EntrySpec("texdb/samp_extra/samp_extra.txt", "TextDraw extension texture index", "SA-MP Online", false, false, 64),
 
-            // GTA:SA 核心地图、模型与贴图
-            new EntrySpec("texdb/gta3.img", "主世界模型档案", "GTA:SA 核心", false, false, 1024 * 1024),
-            new EntrySpec("texdb/gta_int.img", "室内场景模型档案", "GTA:SA 核心", false, false, 1024 * 1024),
-            new EntrySpec("texdb/player.img", "主角模型与服装档案", "GTA:SA 核心", false, false, 1024 * 1024),
-            new EntrySpec("texdb/gta3/gta3.txt", "主世界贴图索引", "GTA:SA 核心", false, false, 64),
-            new EntrySpec("texdb/gta_int/gta_int.txt", "室内贴图索引", "GTA:SA 核心", false, false, 64),
-            new EntrySpec("texdb/txd/txd.txt", "通用贴图索引", "GTA:SA 核心", false, false, 64),
-            new EntrySpec("texdb/mobile/mobile.txt", "移动端贴图索引", "GTA:SA 核心", false, false, 64),
-            new EntrySpec("texdb/player/player.txt", "主角贴图索引", "GTA:SA 核心", false, false, 64),
-            new EntrySpec("models/coll/peds.col", "人物骨骼碰撞数据", "GTA:SA 核心", false, false, 512),
-            new EntrySpec("anim/anim.img", "角色动作动画库", "GTA:SA 核心", false, false, 1024 * 1024),
-            new EntrySpec("data/handling.cfg", "载具物理参数表", "GTA:SA 核心", false, false, 1024),
-            new EntrySpec("data/weapon.dat", "武器数据配置表", "GTA:SA 核心", false, false, 1024),
+            // GTA:SA core maps, models and textures
+            new EntrySpec("texdb/gta3.img", "Main world model archive", "GTA:SA Core", false, false, 1024 * 1024),
+            new EntrySpec("texdb/gta_int.img", "Interior scene model archive", "GTA:SA Core", false, false, 1024 * 1024),
+            new EntrySpec("texdb/player.img", "Protagonist model and clothing archive", "GTA:SA Core", false, false, 1024 * 1024),
+            new EntrySpec("texdb/gta3/gta3.txt", "Main world texture index", "GTA:SA Core", false, false, 64),
+            new EntrySpec("texdb/gta_int/gta_int.txt", "Interior texture index", "GTA:SA Core", false, false, 64),
+            new EntrySpec("texdb/txd/txd.txt", "General texture index", "GTA:SA Core", false, false, 64),
+            new EntrySpec("texdb/mobile/mobile.txt", "Mobile texture index", "GTA:SA Core", false, false, 64),
+            new EntrySpec("texdb/player/player.txt", "Protagonist texture index", "GTA:SA Core", false, false, 64),
+            new EntrySpec("models/coll/peds.col", "Character skeleton collision data", "GTA:SA Core", false, false, 512),
+            new EntrySpec("anim/anim.img", "Character animation library", "GTA:SA Core", false, false, 1024 * 1024),
+            new EntrySpec("data/handling.cfg", "Vehicle physics parameter table", "GTA:SA Core", false, false, 1024),
+            new EntrySpec("data/weapon.dat", "Weapon data config table", "GTA:SA Core", false, false, 1024),
 
-            // 音频配置与完整版音频流（按 GTA:SA 引擎规则忽略大小写解析）
-            new EntrySpec("audio/CONFIG/TrkHead.dat", "音频引擎核心配置", "音频资源", false, false, 16),
-            new EntrySpec("audio/CONFIG/BankLkup.dat", "音频库映射表", "音频资源", false, false, 16),
-            new EntrySpec("audio/sfx", "完整版音效流目录（2.10 GiB）", "音频资源", true, true, 1024 * 1024),
-            new EntrySpec("audio/streams", "完整版电台与语音流（2.10 GiB）", "音频资源", true, true, 1024 * 1024),
+            // Audio config and full audio streams (parsed case-insensitively per GTA:SA engine rules)
+            new EntrySpec("audio/CONFIG/TrkHead.dat", "Audio engine core config", "Audio Resources", false, false, 16),
+            new EntrySpec("audio/CONFIG/BankLkup.dat", "Audio library mapping table", "Audio Resources", false, false, 16),
+            new EntrySpec("audio/sfx", "Full sound-effects stream directory (2.10 GiB)", "Audio Resources", true, true, 1024 * 1024),
+            new EntrySpec("audio/streams", "Full radio and voice streams (2.10 GiB)", "Audio Resources", true, true, 1024 * 1024),
     };
 
     private GameDataVerifier() {}
@@ -359,7 +359,7 @@ public final class GameDataVerifier {
     }
 
     public static String formatBytes(long bytes) {
-        if (bytes < 0) return "未知";
+        if (bytes < 0) return "Unknown";
         if (bytes < 1024) return bytes + " B";
         double kib = bytes / 1024.0;
         if (kib < 1024) return String.format(Locale.US, "%.1f KiB", kib);

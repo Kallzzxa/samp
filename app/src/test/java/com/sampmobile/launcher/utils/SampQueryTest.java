@@ -108,7 +108,7 @@ public class SampQueryTest {
         Charset gbk = Charset.forName("GBK");
         try (LoopbackMockServer server = new LoopbackMockServer(req -> {
             if (req.length >= 11 && req[10] == 'i') {
-                return buildInfoReply(req, true, 42, 200, "中文测试服", "自由模式", "中文", gbk);
+                return buildInfoReply(req, true, 42, 200, "Chinese test server", "Free mode", "Chinese", gbk);
             }
             return null;
         })) {
@@ -119,9 +119,9 @@ public class SampQueryTest {
                 assertEquals("1", info[0]);
                 assertEquals("42", info[1]);
                 assertEquals("200", info[2]);
-                assertEquals("中文测试服", info[3]);
-                assertEquals("自由模式", info[4]);
-                assertEquals("中文", info[5]);
+                assertEquals("Chinese test server", info[3]);
+                assertEquals("Free mode", info[4]);
+                assertEquals("Chinese", info[5]);
             } finally {
                 q.close();
             }

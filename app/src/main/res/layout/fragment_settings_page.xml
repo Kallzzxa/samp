@@ -56,7 +56,7 @@
         android:layout_height="1dp"
         android:background="@color/ui_hairline" />
 
-    <!-- 设置面板区 -->
+    <!-- Settings panel area -->
     <FrameLayout
         android:id="@+id/settings_panels"
         android:layout_width="match_parent"

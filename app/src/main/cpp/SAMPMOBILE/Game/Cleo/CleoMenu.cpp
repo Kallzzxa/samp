@@ -103,9 +103,9 @@ void CleoEngine::renderMenu(ImGuiRenderer* renderer, float displayW, float displ
 			if (!s.invokable && s.thread.m_bActive) ++runningAuto;
 		}
 		char hdr[128];
-		snprintf(hdr, sizeof(hdr), "CLEO 菜单  (%zu .csi | %zu .csa 运行中)", inv.size(), runningAuto);
+		snprintf(hdr, sizeof(hdr), "CLEO Menu  (%zu .csi | %zu .csa running)", inv.size(), runningAuto);
 		title = hdr;
-		closeText = "关闭";
+		closeText = "Close";
 		page = g_builtinMenu.page;
 		totalItems = static_cast<int>(inv.size());
 		int start = page * kMenuItemsPerPage;
@@ -113,7 +113,7 @@ void CleoEngine::renderMenu(ImGuiRenderer* renderer, float displayW, float displ
 		for (int i = start; i < end; ++i) {
 			const CleoScript& sc = g_scripts[inv[i]];
 			std::string label = sc.displayName;
-			if (sc.thread.m_bActive) label += "  [运行中]";
+			if (sc.thread.m_bActive) label += "  [Running]";
 			rows.emplace_back(inv[i], label);
 		}
 	}
@@ -152,7 +152,7 @@ void CleoEngine::renderMenu(ImGuiRenderer* renderer, float displayW, float displ
 	float curY = y1 + headerH + pad * 0.5f;
 	if (rows.empty()) {
 		renderer->drawText(ImVec2(x1 + pad, curY + (rowH - itemFont) * 0.5f), dimText,
-		                   "未发现 .csi 交互脚本（.csa 脚本自动在后台运行）", true, itemFont * 0.9f);
+		                   "No .csi interactive scripts found (.csa scripts run automatically in the background)", true, itemFont * 0.9f);
 		curY += rowH;
 	} else {
 		for (size_t i = 0; i < rows.size(); ++i) {
@@ -190,9 +190,9 @@ void CleoEngine::renderMenu(ImGuiRenderer* renderer, float displayW, float displ
 	};
 
 	const int totalPages = std::max(1, (totalItems + kMenuItemsPerPage - 1) / kMenuItemsPerPage);
-	drawBtn(g_menuPrevRect, "< 上一页", btnBg, page > 0 ? whiteText : dimText);
+	drawBtn(g_menuPrevRect, "< Previous Page", btnBg, page > 0 ? whiteText : dimText);
 	char nextLbl[48];
-	snprintf(nextLbl, sizeof(nextLbl), "下一页 (%d/%d) >", page + 1, totalPages);
+	snprintf(nextLbl, sizeof(nextLbl), "Next Page (%d/%d) >", page + 1, totalPages);
 	drawBtn(g_menuNextRect, nextLbl, btnBg, (page + 1 < totalPages) ? whiteText : dimText);
 	drawBtn(g_menuCloseRect, closeText, ImColor(135, 34, 34, 235), whiteText);
 }

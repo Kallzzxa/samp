@@ -64,7 +64,7 @@ target_include_directories(ncapreplay PRIVATE "${CLIENT}")
 target_link_libraries(ncapreplay PRIVATE rakbits)
 
 # ---- open.mp server oracle interop tests (optional local reference) ----
-set(OMP_DIR "${REPO}/reference/open.mp 上游源码" CACHE PATH "open.mp server source tree")
+set(OMP_DIR "${REPO}/reference/open.mp upstream source" CACHE PATH "open.mp server source tree")
 if (EXISTS "${OMP_DIR}/Shared/NetCode/netcode.hpp")
     file(GLOB OMP_ENCODING "${OMP_DIR}/Shared/Network/Encoding/*.cpp")
     add_library(omp_oracle STATIC "${OMP_DIR}/Shared/Network/bitstream.cpp" ${OMP_ENCODING})

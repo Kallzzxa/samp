@@ -63,10 +63,10 @@ void CefNetwork::Connect(int32_t playerId)
         return;
     }
 
-    // 上一轮 ThreadMain 可能自行退出（DNS 解析失败 / udp connect 失败 / 被服务端断开），
-    // 那种情况下 state_ 已回 Disconnected 但 networkThread_ 仍然 joinable。
-    // 直接给它赋新线程会触发 std::terminate() 闪退（断网、坏域名、纯 IPv6 环境必现）。
-    // 所以先回收旧线程。
+    // The previous round of ThreadMain may have exited on its own (DNS resolution failure / udp connect failure / disconnected by server),
+    // in that case state_ is already back to Disconnected but networkThread_ is still joinable.
+    // Assigning a new thread to it directly would trigger std::terminate() and crash (reliably reproduced on network loss, bad domains, and pure-IPv6 environments).
+    // So reclaim the old thread first.
     if (networkThread_.joinable())
     {
         stopRequested_.store(true, std::memory_order_release);
@@ -222,8 +222,8 @@ void CefNetwork::ThreadMain()
             break;
     }
 
-    // 线程正常退出（被 Disconnect 或被服务端断开）：收尾自己的资源。
-    // 早退路径（DNS/connect 失败）在 return 前也走这里，避免 socket 泄漏。
+    // Thread exiting normally (via Disconnect or disconnected by the server): clean up its own resources.
+    // Early-exit paths (DNS/connect failure) also go through here before returning, to avoid socket leaks.
     CleanupTransport();
 }
 
@@ -268,16 +268,16 @@ void CefNetwork::HandleRawMessage(const uint8_t* data, size_t size)
             if (ikcp_input(kcp_, reinterpret_cast<const char*>(data), static_cast<long>(size)) < 0)
                 LOGW("[CefNet] ikcp_input error");
 
-            // 按 ikcp_peeksize 先问这条消息多大，再决定缓冲大小。
-            // 原来固定 64KB 栈缓冲，服务端发一条更大的消息时 ikcp_recv 返回 -3
-            // （缓冲区不够），循环退出但消息仍留在队列头部 —— 之后每次进来都
-            // 撞同一条，接收流永久卡死。这里显式检测 -3 并按需扩容。
+            // Ask ikcp_peeksize first how large this message is, then decide the buffer size.
+            // Previously a fixed 64 KB stack buffer; when the server sent a larger message, ikcp_recv returned -3
+            // (buffer too small), the loop exited but the message stayed at the head of the queue -- every subsequent entry then
+            // hit the same one, permanently deadlocking the receive stream. Explicitly detect -3 here and grow as needed.
             std::vector<char> kcpBuf;
             for (;;)
             {
                 const int peek = ikcp_peeksize(kcp_);
                 if (peek < 0)
-                    break;   // 没有完整消息
+                    break;   // No complete message
 
                 if (static_cast<size_t>(peek) > kcpBuf.size())
                     kcpBuf.resize(static_cast<size_t>(peek));
@@ -286,8 +286,8 @@ void CefNetwork::HandleRawMessage(const uint8_t* data, size_t size)
                                               static_cast<int>(kcpBuf.size()));
                 if (msgSize == -3)
                 {
-                    // 理论上前面的 resize 已经覆盖，走到这里说明 peeksize 与实际不符：
-                    // 丢弃这条超限消息，否则会永远卡在队头。
+                    // In theory the earlier resize already covered this; reaching here means peeksize does not match reality:
+                    // Drop this oversized message, otherwise it would stay stuck at the head of the queue forever.
                     LOGW("[CefNet] KCP message rejected (peeksize %d)", peek);
                     break;
                 }

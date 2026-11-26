@@ -149,13 +149,13 @@ shot 1-created
 snap_log
 
 # ---------------------------------------------------------------- stage 6: input
-# (a) the page must be the one receiving touches: a tap on the 甲 button has to
+# (a) the page must be the one receiving touches: a tap on the A button has to
 #     show up as test:click on the wire.
 C0=$(clicks)
 adbq shell input tap "$TAP_BTN_X" "$TAP_BTN_Y" >/dev/null 2>&1 || true
 sleep 2
 C1=$(clicks)
-echo "   clicks: $C0 -> $C1 (tap on 甲 while the page has focus)"
+echo "   clicks: $C0 -> $C1 (tap on A while the page has focus)"
 snap_log
 
 # (b) real Android key events: KEYCODE_A (29) is whitelisted by EnableKey so it

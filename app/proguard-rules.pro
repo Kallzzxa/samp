@@ -6,7 +6,7 @@
 -keep class com.sampmobile.game.ui.* { *; }
 -keep class com.sampmobile.game.ui.widgets.* { *; }
 -keep class com.sampmobile.game.ui.widgets.adapter.* { *; }
-# omp-cef 浏览器层：CefManager 的类名/方法名被 JNI 直接按字符串查找
+# omp-cef browser layer: CefManager's class/method names are looked up by JNI directly by string
 -keep class com.sampmobile.game.ui.cef.* { *; }
 
 # for minify

@@ -425,7 +425,7 @@ void CefBrowser::OnJsEmit(int32_t browserId, const std::string& name, const std:
         if (env && javaClass_)
         {
             // PC: client.cpp -> FocusManager::SetInputFocus (NOT FocusBrowser).
-            // 浏览器焦点与"页面输入框焦点"是两套状态，混用会让 ShouldBlockChat 判错。
+            // Browser focus and "page input focus" are two separate states; mixing them makes ShouldBlockChat judge wrong.
             env->CallStaticVoidMethod(javaClass_, midSetInputFocus_,
                                       static_cast<jint>(browserId),
                                       focus ? JNI_TRUE : JNI_FALSE);
@@ -435,9 +435,9 @@ void CefBrowser::OnJsEmit(int32_t browserId, const std::string& name, const std:
         return;
     }
 
-    // omp:cef:internal:chatInputState 是客户端 -> 页面的单向事件（见
-    // ChatHook::SetChatInputState）。页面若主动 emit 同名事件，PC 端 client.cpp 并不
-    // 拦截，会原样转发到服务端；这里保持一致，不做特殊处理。
+    // omp:cef:internal:chatInputState is a one-way client -> page event (see
+    // ChatHook::SetChatInputState). If the page emits an event of the same name itself, the PC client.cpp does not
+    // intercept it and forwards it to the server as-is; keep the same behaviour here, no special handling.
 
     if (name == "game:data:pollPlayerStats")
     {
@@ -948,9 +948,9 @@ void CefBrowser::TickWorld2D()
                     probeArgs.push_back(cefproto::Argument::FromInt(static_cast<int32_t>(py)));
                     probeArgs.push_back(cefproto::Argument::FromInt(static_cast<int32_t>(entry.width)));
                     probeArgs.push_back(cefproto::Argument::FromInt(static_cast<int32_t>(entry.height)));
-                    // onScreen 走 int 而不是 bool：原版插件把 bool 参数交给 Pawn 时
-                    // 会少传一个槽（实测 6 个参数到 Pawn 只剩 5 个，后一个整体左移），
-                    // 这条只是验收诊断，没必要为它跟组件的类型推断较劲。
+                    // onScreen goes as int rather than bool: the original plugin hands a bool parameter to Pawn
+                    // one slot short (measured: 6 params arriving in Pawn become only 5, the following ones all shift left),
+                    // this is only an acceptance diagnostic, no need to fight the component's type inference over it.
                     probeArgs.push_back(cefproto::Argument::FromInt(onScreen ? 1 : 0));
                     probeNet.SendClientEmit(entry.id, "debug:world2d", probeArgs);
                 }
@@ -1075,15 +1075,15 @@ void CefBrowser::DebugCreateWorld2D(int32_t id, float heightAbovePed, float widt
 
 // ============================================================ WorldObject3D
 //
-// PC 语义（app.cpp:416 / manager.cpp:587,1093）：
-//   CreateWorldBrowser  [id, url, textureName, w, h]  建离屏浏览器 + 纹理
-//   AttachBrowserToObject [browserId, objectId]       把纹理贴到实体上
-//   DetachBrowserFromObject [browserId, objectId]     恢复原材质
+// PC semantics (app.cpp:416 / manager.cpp:587,1093):
+//   CreateWorldBrowser  [id, url, textureName, w, h]  Create offscreen browser + texture
+//   AttachBrowserToObject [browserId, objectId]       Paste texture onto entity
+//   DetachBrowserFromObject [browserId, objectId]     Restore original material
 //
-// Android 的差异：WebView 没有 GPU 纹理出口，所以页面帧由 Java 侧
-// draw(Canvas) 抓成 RGBA，再 memcpy 进 RenderWare 的 raster。纹理替换本身
-// 复用 SA-MP SetObjectMaterial 的现成机制（CObject::ChangeCustomMaterialObjectCB
-// 直接把 m_Material[i].pMaterialTexture 赋给 materials[i]->texture）。
+// Android difference: WebView has no GPU texture export, so page frames are captured by Java-side
+// draw(Canvas) as RGBA, then memcpy'd into RenderWare's raster. Texture replacement itself
+// reuses SA-MP SetObjectMaterial's existing mechanism (CObject::ChangeCustomMaterialObjectCB
+// directly assigns m_Material[i].pMaterialTexture to materials[i]->texture).
 
 CefBrowser::WorldObjectEntry* CefBrowser::FindWorldObject(int32_t id)
 {
@@ -1095,17 +1095,17 @@ CefBrowser::WorldObjectEntry* CefBrowser::FindWorldObject(int32_t id)
 
 bool CefBrowser::worldObjectDebugEnabled()
 {
-    // 默认关闭。这些是排查用的自检事件（stage 1..8 + 每 3 秒心跳），
-    // 正式服上每 3 秒往服务端刷一条日志没有任何好处，还可能被反作弊
-    // 当成异常行为。
+    // Off by default. These are diagnostic self-check events (stages 1..8 + heartbeat every 3 s),
+    // on a production server, sending one log line to the server every 3 s does no good and may be treated by anti-cheat
+    // as anomalous behaviour.
     //
-    // 打开方式：
-    //   adb shell setprop debug.samp.cef.worldobj 1   <- 真机 / 自动化验收走这条
-    //   进程环境变量 SAMP_CEF_DEBUG_WORLDOBJ=1        <- 桌面 / CI 走这条
+    // How to enable:
+    //   adb shell setprop debug.samp.cef.worldobj 1   <- real device / automated acceptance uses this
+    //   process env var SAMP_CEF_DEBUG_WORLDOBJ=1        <- desktop / CI uses this
     //
-    // 不能用 static 缓存：adb setprop 是随时下发的，缓存了就得重启进程才生效，
-    // 而 E2E 脚本恰恰是「装好 APK 之后再打开开关」。读 prop 是一次共享内存读，
-    // 每条调试事件读一次的代价可以忽略。
+    // Cannot cache with static: adb setprop can be issued at any time; a cached value would only take effect after a process restart,
+    // while E2E scripts are exactly "enable the switch after installing the APK". Reading a prop is a single shared-memory read,
+    // so the cost of reading it once per debug event is negligible.
     char prop[PROP_VALUE_MAX] = {0};
     if (__system_property_get("debug.samp.cef.worldobj", prop) > 0 && prop[0] == '1')
         return true;
@@ -1156,7 +1156,7 @@ uint64_t NowMs()
         std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 
-/** objectId -> CObject（SA-MP 物体池；单机模式下池是空的）。 */
+/** objectId -> CObject(SA-MP object pool; pool is empty in single-player mode). */
 CObject* FindPooledObject(int32_t objectId)
 {
     if (!pNetGame || objectId < 0 || objectId >= MAX_OBJECTS)
@@ -1165,8 +1165,8 @@ CObject* FindPooledObject(int32_t objectId)
     return pool ? pool->GetAt(static_cast<OBJECTID>(objectId)) : nullptr;
 }
 
-/** 用纯色填满 raster。纹理必须先有确定的像素内容，否则第一次被渲染采样时
- *  驱动可能读到未初始化的显存（实测会直接把游戏带崩）。 */
+/** Fill raster with a solid colour. Texture must first have definite pixel content, otherwise when first sampled by rendering
+ *  the driver may read uninitialised VRAM (measured: crashes the game outright). */
 void FillSolid(RwRaster* raster, uint32_t rgba)
 {
     if (!raster)
@@ -1183,7 +1183,7 @@ void FillSolid(RwRaster* raster, uint32_t rgba)
     RwRasterUnlock(raster);
 }
 
-/** 建一块可写的 32 位纹理；解锁时 RenderWare 自己上传到 GL。 */
+/** Create a writable 32-bit texture; RenderWare uploads it to GL itself on unlock. */
 RwTexture* CreateFrameTexture(int32_t w, int32_t h, RwRaster** outRaster)
 {
     RwRaster* raster = RwRasterCreate(w, h, 32, rwRASTERFORMAT8888 | rwRASTERTYPETEXTURE);
@@ -1199,9 +1199,9 @@ RwTexture* CreateFrameTexture(int32_t w, int32_t h, RwRaster** outRaster)
         RwRasterDestroy(raster);
         return nullptr;
     }
-    // 512x256 这类非 2 的幂尺寸在 GLES2 上不能用 WRAP 寻址（会触发
-    // GL_INVALID_OPERATION，采样结果未定义）。纹理只用来贴物体的 UV [0,1]，
-    // CLAMP 就够。
+    // 512x256 sizes like this, which are not powers of two, cannot use WRAP addressing on GLES2 (triggers
+    // GL_INVALID_OPERATION, sampling result undefined). Texture is only used to paste the object's UV [0,1],
+    // CLAMP is enough.
     RwTextureSetAddressingMacro(tex, rwTEXTUREADDRESSCLAMP);
     // 0xAABBGGRR (little endian): opaque teal placeholder.
     FillSolid(raster, 0xFF806040u);
@@ -1290,11 +1290,11 @@ void CefBrowser::AttachBrowserToObject(int32_t browserId, int32_t objectId)
     if (ApplyWorldObjectAttach(browserId, objectId))
         return;
 
-    // 不在池里不代表失败：物体走 RakNet、attach 走 KCP，两者之间没有顺序保证。
-    // 实测原版 open.mp 服务端同一 tick 里 CreateObject + Attach，attach 先到，
-    // 这里以前直接 return，板子上永远是模型原纹理。改成排队重试。
+    // Not in the pool does not mean failure: objects go via RakNet, attach goes via KCP, with no ordering guarantee between them.
+    // Measured on the original open.mp server: CreateObject + Attach in the same tick, attach arrives first,
+    // previously this returned directly here, so the board forever kept the model's original texture. Changed to queue and retry.
     if (FindPooledObject(objectId))
-        return;   // 池里有但别的原因失败（例如纹理创建失败），不重试
+        return;   // In the pool but failed for another reason (e.g. texture creation failed), do not retry
 
     pendingAttaches_.push_back(PendingAttach{ browserId, objectId, NowMs() + 8000 });
     LOGI("[CefBrowser] attach: object %d not in the pool yet, queued (browser %d)",
@@ -1321,14 +1321,14 @@ bool CefBrowser::ApplyWorldObjectAttach(int32_t browserId, int32_t objectId)
         entry->rwRaster = raster;
     }
 
-    // 复用 SA-MP 的自定义材质通道：ChangeCustomMaterialObjectCB 会把这个
-    // 纹理赋给 atomic 的第 i 个 material，render 结束后再恢复。
+    // Reuse SA-MP's custom material channel: ChangeCustomMaterialObjectCB assigns this
+    // texture to the atomic's i-th material, restoring it after render ends.
     //
-    // 引用计数是这里的关键：CObject::~CObject() 对每个非空材质槽都会
-    // RwTextureDestroy(pMaterialTexture)。如果不抬 refCount，服务端 DestroyObject
-    // 或流送卸载一旦先销毁物体，我们的 rwTexture/rwRaster 就被连带释放，
-    // 下一帧上传会锁已释放的 raster（堆破坏），Detach 时还会二次销毁。
-    // 抬高之后物体析构只把计数减回 1，由我们自己在 RemoveWorldObject 里销毁。
+    // Reference counting is the key here: CObject::~CObject() calls
+    // RwTextureDestroy(pMaterialTexture) for each non-empty material slot. If refCount is not raised, a server DestroyObject
+    // or streaming unload that destroys the object first also releases our rwTexture/rwRaster,
+    // the next frame's upload would lock an already-freed raster (heap corruption), and Detach would double-destroy.
+    // After raising it, object destruction only decrements the count back to 1, and we destroy it ourselves in RemoveWorldObject.
     auto* texture = static_cast<RwTexture*>(entry->rwTexture);
     if (texture->refCount < 2)
         texture->refCount = 2;
@@ -1353,17 +1353,17 @@ void CefBrowser::DetachBrowserFromObject(int32_t browserId, int32_t objectId)
         return;
 
     auto* obj = static_cast<CObject*>(entry->target);
-    // 只有目标物体仍在池里、且确实是同一个对象时才去动它的材质。
-    // 物体可能已经被 DestroyObject 回收，此时 obj 是悬空指针，碰一下就崩。
+    // Only touch its material if the target object is still in the pool and is indeed the same object.
+    // The object may already have been recycled by DestroyObject; obj is then a dangling pointer, and touching it crashes.
     if (obj && FindPooledObject(objectId) == obj)
     {
-        // 顺序很重要：ChangeToOriginalObjectMaterial 只在标志为真时才恢复，
-        // 所以先恢复、再摘掉我们的纹理、最后清标志。
+        // Order matters: ChangeToOriginalObjectMaterial only restores when the flag is true,
+        // so restore first, then remove our texture, finally clear the flag.
         obj->ChangeToOriginalObjectMaterial();
         if (obj->m_Material[0].pMaterialTexture == entry->rwTexture)
         {
             obj->m_Material[0].pMaterialTexture = nullptr;
-            // 把挂载时抬高的引用还回去，之后由 RemoveWorldObject 统一销毁。
+            // Return the reference raised at attach; RemoveWorldObject then destroys it uniformly.
             auto* texture = static_cast<RwTexture*>(entry->rwTexture);
             if (texture && texture->refCount > 1)
                 texture->refCount = 1;
@@ -1379,8 +1379,8 @@ void CefBrowser::DetachBrowserFromObject(int32_t browserId, int32_t objectId)
 void CefBrowser::RemoveWorldObject(int32_t browserId)
 {
     std::lock_guard<std::recursive_mutex> lock(worldObjectMutex_);
-    // 还没解析出物体的 attach 请求也要一起丢掉，否则会在物体出现后去贴一张
-    // 已经被销毁的纹理。
+    // Attach requests for not-yet-parsed objects must also be dropped, otherwise they would paste a
+    // texture that has already been destroyed once the object appears.
     for (auto it = pendingAttaches_.begin(); it != pendingAttaches_.end();)
         it = (it->browserId == browserId) ? pendingAttaches_.erase(it) : ++it;
 
@@ -1394,7 +1394,7 @@ void CefBrowser::RemoveWorldObject(int32_t browserId)
 
         if (it->rwTexture)
         {
-            // RwTextureCreate 初始化 refCount=1，这里销毁即可同时释放 raster。
+            // RwTextureCreate initialises refCount=1, so destroying here releases the raster at the same time.
             RwTextureDestroy(static_cast<RwTexture*>(it->rwTexture));
             it->rwTexture = nullptr;
             it->rwRaster = nullptr;
@@ -1501,10 +1501,10 @@ void CefBrowser::TickWorldObject3D()
             if (!e.attached || !e.rwTexture || e.nextDueMs > nowMs)
                 continue;
 
-            // 目标物体可能已被服务端 DestroyObject、流送卸载或因断线回收。
-            // 池里已经不是同一个指针了，就说明我们挂的那个对象没了：
-            // 此时 entry->rwRaster 可能已失效，绝不能再 RwRasterLock 它。
-            // 直接摘掉挂载，等 Java 侧下一轮重新发起 attach。
+            // Target object may have been DestroyObject'd by the server, streaming-unloaded, or recycled on disconnect.
+            // If the pool no longer holds the same pointer, the object we attached to is gone:
+            // entry->rwRaster may already be invalid at this point; it must never be RwRasterLock'd again.
+            // Drop the attachment directly and wait for the Java side to re-initiate attach next round.
             if (e.target && FindPooledObject(e.objectId) != e.target)
             {
                 e.target = nullptr;
@@ -1697,8 +1697,8 @@ void CefBrowser::CreateWorldObjectNow(int32_t browserId, int32_t model, float di
 
     const sa::CMatrix& mat = ped->GetMatrix();
     const sa::CVector pos = mat.m_pos;
-    // 用**相机朝向**而不是 ped 矩阵：GTA 的 ped m_up 是"上"方向，不是朝向，
-    // 早先按它算会把物体放到玩家侧后方（截图里根本看不见）。
+    // Use **camera facing** rather than the ped matrix: GTA's ped m_up is the "up" direction, not the facing direction,
+    // calculating from it earlier placed the object behind the player's side (invisible in the screenshot at all).
     float fx = 1.0f;
     float fy = 0.0f;
     {

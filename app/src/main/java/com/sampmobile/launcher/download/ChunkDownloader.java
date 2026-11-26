@@ -16,39 +16,39 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 分片下载器：断点续传 + 有限并发 + 逐片校验。
+ * Chunk downloader: resumable downloads + limited concurrency + per-chunk verification.
  *
- * 选 HttpURLConnection 而不是 OkHttp：本项目历史上零第三方网络依赖，
- * 为了一个下载器引入 800KB 的 OkHttp（还带 Okio）不值得。HttpURLConnection
- * 支持 Range、能设超时、能中断，够用。
+ * We chose HttpURLConnection over OkHttp: this project has historically had zero third-party network dependencies,
+ * pulling in 800KB of OkHttp (plus Okio) for one downloader is not worth it. HttpURLConnection
+ * supports Range, timeouts, and cancellation — good enough.
  *
- * 状态机（每片独立）：
- *   不存在 -> .part(下载中) -> 校验通过 -> .chunk(完成)
- *                          └ 校验失败 -> 删除 .part，下一轮重下
+ * State machine (per chunk, independent):
+ *   Missing -> .part (downloading) -> verified -> .chunk (done)
+ *                          └ Verification failed -> delete .part, re-download next round
  *
- * 断点续传靠 HTTP Range：.part 已存在时从它的长度往后请求；服务器若不支持
- * Range（返回 200 而非 206），回退成整片重下，不静默拼错。
+ * Resuming relies on HTTP Range: if a .part already exists, request from its length onward; if the server does not support
+ * Range (returns 200 instead of 206), fall back to re-downloading the whole chunk instead of silently assembling a corrupt file.
  */
 public final class ChunkDownloader {
 
     private static final String TAG = "ChunkDownloader";
 
-    /** 单片下载的超时。跨境线路慢，给足时间但别无限等。 */
+    /** Timeout for a single chunk. Cross-border links are slow, so allow plenty of time, but do not wait forever. */
     private static final int CONNECT_TIMEOUT_MS = 15000;
     private static final int READ_TIMEOUT_MS = 30000;
 
-    /** 单片最多重试次数（含首次）。超过就整体失败，不无限重试。 */
+    /** Max retries per chunk (including the first attempt). Exceeding it fails the whole download; no endless retries. */
     private static final int MAX_ATTEMPTS = 3;
 
-    /** 回调（在下载线程上调用，调用方自己切主线程）。 */
+    /** Callback (invoked on the download thread; the caller switches to the main thread itself). */
     public interface Listener {
-        /** @param bytesDone 已完成的字节数（跨所有片累计） */
+        /** @param bytesDone Bytes completed (accumulated across all chunks) */
         void onProgress(long bytesDone, long bytesTotal);
 
-        /** 单片完成。 */
+        /** A chunk finished. */
         void onChunkDone(int chunkIndex, int chunkCount);
 
-        /** 正在下载某片时的小提示，如"重试 2/3"。 */
+        /** Short status hint while a chunk downloads, e.g. "Retry 2/3". */
         void onStatus(String message);
     }
 
@@ -68,39 +68,39 @@ public final class ChunkDownloader {
     }
 
     /**
-     * 下载一个包的全部分片。
+     * Download all chunks of a package.
      *
-     * @param baseUrl 清单所在目录的绝对前缀（如 https://cdn.example.com/），
-     *                分片的相对 url 会拼在它后面
-     * @return 所有分片都已就位且校验通过
+     * @param baseUrl Absolute prefix of the directory containing the manifest (e.g. https://cdn.example.com/),
+     *                chunk relative URLs are appended to it
+     * @return true if all chunks are in place and verified
      */
     public boolean downloadPackage(String baseUrl, DataManifest.Package pkg, Listener listener)
             throws IOException, InterruptedException {
 
         File dir = new File(cacheDir, pkg.id);
         if (!dir.isDirectory() && !dir.mkdirs()) {
-            throw new IOException("无法创建缓存目录：" + dir);
+            throw new IOException("Cannot create cache directory: " + dir);
         }
 
         final int count = pkg.chunks.size();
 
-        // 清掉长度不符的 .chunk（把半个文件当成品会让拼装直接失败），
-        // 然后按磁盘现状报一次初始进度，避免进度条从 0 跳。
+        // Drop .chunk files with the wrong length (treating a half-file as finished would make assembly fail outright),
+        // then report initial progress from the actual disk state so the progress bar does not jump from 0.
         for (DataManifest.Chunk c : pkg.chunks) {
             File finalized = chunkFile(dir, c, true);
             if (finalized.isFile() && finalized.length() != c.bytes) {
                 if (!finalized.delete()) {
-                    Log.w(TAG, "无法删除长度不符的分片 " + finalized);
+                    Log.w(TAG, "Cannot delete the chunk with the wrong length " + finalized);
                 }
             }
         }
         final AtomicLong done = new AtomicLong(completedBytes(dir, pkg));
         listener.onProgress(done.get(), pkg.bytes);
 
-        // 逐片顺序下载。并发留给上层多个包并行（game 与 online 可同时下），
-        // 单包内部串行更好排查问题，也不会把带宽切得太碎。
+        // Download chunks sequentially. Concurrency is left to the upper layer running multiple packages in parallel (game and online can download at the same time),
+        // serial within one package is easier to debug and does not slice bandwidth too thin.
         for (DataManifest.Chunk c : pkg.chunks) {
-            if (cancelled.get()) throw new InterruptedException("已取消");
+            if (cancelled.get()) throw new InterruptedException("Cancelled");
 
             File finalized = chunkFile(dir, c, true);
             if (finalized.isFile() && finalized.length() == c.bytes) {
@@ -110,26 +110,26 @@ public final class ChunkDownloader {
 
             boolean ok = downloadChunk(baseUrl, dir, c, listener, done, pkg.bytes);
             if (!ok) {
-                throw new IOException("分片 " + c.index + " 下载失败（已重试 " + MAX_ATTEMPTS + " 次）");
+                throw new IOException("Chunk " + c.index + " download failed (retried " + MAX_ATTEMPTS + " times)");
             }
-            // 一片落定后按磁盘现状重算，作为下一片的进度基数。
-            // 只增不减也无法出错：completedBytes 只统计真正到位的字节。
+            // After a chunk lands, recompute from the disk state as the progress baseline for the next chunk.
+            // It can only grow, so it cannot go wrong: completedBytes only counts bytes that are actually in place.
             done.set(completedBytes(dir, pkg));
             listener.onProgress(done.get(), pkg.bytes);
             listener.onChunkDone(c.index, count);
         }
 
-        if (cancelled.get()) throw new InterruptedException("已取消");
+        if (cancelled.get()) throw new InterruptedException("Cancelled");
         return true;
     }
 
     /**
-     * 已完成字节数 = 已转正的 .chunk 长度之和 + 当前 .part 的长度。
+     * Completed bytes = sum of the lengths of finalized .chunk files + the length of the current .part.
      *
-     * 不用累加式计数器：哈希失败重下、服务器忽略 Range 重来、续传起点
-     * 来自上次运行的文件……这些情况下"加了多少就减多少"很难保持平衡，
-     * 一旦减多进度就变负、减少了进度就虚高。按磁盘现状重算永远是对的，
-     * 代价只是每片扫一次目录（片数最多几百）。
+     * Do not use an accumulating counter: hash-failure re-downloads, servers ignoring Range and restarting, resume points
+     * left over from a previous run... in these cases "subtract what was added" is hard to keep balanced,
+     * subtract too much and progress goes negative; subtract too little and progress is inflated. Recomputing from disk state is always right,
+     * at the cost of one directory scan per chunk (at most a few hundred chunks).
      */
     private static long completedBytes(File dir, DataManifest.Package pkg) {
         long total = 0;
@@ -156,52 +156,52 @@ public final class ChunkDownloader {
         File finalized = chunkFile(dir, c, true);
 
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            if (cancelled.get()) throw new InterruptedException("已取消");
+            if (cancelled.get()) throw new InterruptedException("Cancelled");
 
             try {
                 long existing = part.isFile() ? part.length() : 0;
-                // 已下完但还没改名：直接校验后转正。
+                // Already downloaded but not yet renamed: verify it directly, then finalize it.
                 if (existing == c.bytes) {
                     if (verify(part, c.sha256)) {
                         if (!part.renameTo(finalized)) {
-                            throw new IOException("重命名分片失败：" + part);
+                            throw new IOException("Failed to rename chunk: " + part);
                         }
                         return true;
                     }
-                    // 大小对但哈希不对：删掉整片重来，不能续传（内容已损坏）。
-                    // 注意不能减 done —— 这片只有在校验通过转正时才 addAndGet，
-                    // 此处从未计入，做减法会让进度变成负数。
+                    // Size matches but hash does not: delete the whole chunk and start over; resuming is not possible (the content is corrupt).
+                    // Note: do not subtract from done — this chunk is only addAndGet'ed when it is verified and finalized,
+                    // it was never counted here, so subtracting would make progress go negative.
                     if (!part.delete()) {
-                        throw new IOException("无法删除损坏分片：" + part);
+                        throw new IOException("Cannot delete the corrupt chunk: " + part);
                     }
                     existing = 0;
                 }
 
                 if (attempt > 1) {
-                    listener.onStatus("第 " + c.index + " 片重试 " + attempt + "/" + MAX_ATTEMPTS);
+                    listener.onStatus("Chunk " + c.index + " retry " + attempt + "/" + MAX_ATTEMPTS);
                 }
 
                 boolean got = fetchTo(urlStr, part, existing, c.bytes, done, totalBytes, listener);
                 if (!got) {
-                    // fetchTo 返回 false 表示服务器不支持 Range 且已有残留，已重置，下一轮再来
+                    // fetchTo returning false means the server does not support Range and there was leftover data; it has been reset, so try again next round
                     continue;
                 }
 
                 if (part.length() != c.bytes) {
-                    throw new IOException("分片长度不符：期望 " + c.bytes + " 实际 " + part.length());
+                    throw new IOException("Chunk length mismatch: expected " + c.bytes + " actual " + part.length());
                 }
                 if (!verify(part, c.sha256)) {
-                    throw new IOException("分片哈希不符：" + c.index);
+                    throw new IOException("Chunk hash mismatch: " + c.index);
                 }
                 if (!part.renameTo(finalized)) {
-                    throw new IOException("重命名分片失败：" + part);
+                    throw new IOException("Failed to rename chunk: " + part);
                 }
                 return true;
 
             } catch (IOException e) {
-                Log.w(TAG, "分片 " + c.index + " 第 " + attempt + " 次失败: " + e.getMessage());
+                Log.w(TAG, "Chunk " + c.index + " attempt " + attempt + " failed: " + e.getMessage());
                 if (attempt == MAX_ATTEMPTS) return false;
-                // 退避，避免连续失败打爆服务器
+                // Back off, so repeated failures do not hammer the server
                 Thread.sleep(800L * attempt);
             }
         }
@@ -209,10 +209,10 @@ public final class ChunkDownloader {
     }
 
     /**
-     * 把一片下载/续传到 {@code target}。
+     * Download/resume one chunk into {@code target}.
      *
-     * @param skip 已存在的字节数，作为 Range 起点
-     * @return false 表示服务器忽略了 Range（返回 200 全量），已清空 target 让上层重来
+     * @param skip Bytes already present, used as the Range start
+     * @return false means the server ignored Range (returned the full 200 response); target has been cleared so the caller can retry
      */
     private boolean fetchTo(String urlStr, File target, long skip, long expected,
                             AtomicLong done, long totalBytes, Listener listener)
@@ -225,16 +225,16 @@ public final class ChunkDownloader {
             conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
             conn.setReadTimeout(READ_TIMEOUT_MS);
             conn.setInstanceFollowRedirects(true);
-            conn.setRequestProperty("Accept-Encoding", "identity");  // 压缩会破坏 Range
+            conn.setRequestProperty("Accept-Encoding", "identity");  // Compression breaks Range
             if (skip > 0) {
                 conn.setRequestProperty("Range", "bytes=" + skip + "-");
             }
 
             int code = conn.getResponseCode();
             if (code == 416) {
-                // 请求区间不合法：说明本地 part 比远端还大，整片重来
+                // Requested range is invalid: the local part is larger than the remote file, so re-download the whole chunk
                 if (target.isFile() && !target.delete()) {
-                    throw new IOException("无法重置分片：" + target);
+                    throw new IOException("Cannot reset chunk: " + target);
                 }
                 return false;
             }
@@ -244,11 +244,11 @@ public final class ChunkDownloader {
 
             boolean serverHonouredRange = (code == HttpURLConnection.HTTP_PARTIAL);
             if (skip > 0 && !serverHonouredRange) {
-                // 服务器不支持 Range：必须从头写，先把旧内容清掉。
-                // skip 是 part 的既有长度，来源可能是上次运行留下的文件，
-                // 并不一定计入过本轮的 done，减它会让进度变成负数。
+                // Server does not support Range: must write from the start, so clear the old content first.
+                // skip is the part's existing length, which may come from a file left by a previous run,
+                // and was not necessarily counted in this run's done, so subtracting it would make progress go negative.
                 if (!target.delete() && target.exists()) {
-                    throw new IOException("无法重置分片：" + target);
+                    throw new IOException("Cannot reset chunk: " + target);
                 }
                 skip = 0;
             }
@@ -257,19 +257,19 @@ public final class ChunkDownloader {
                  FileOutputStream out = new FileOutputStream(target, skip > 0)) {
 
                 byte[] buf = new byte[64 * 1024];
-                // done 记的是"已转正分片"的字节；当前片按实际写入量叠加，
-                // 这样无论续传起点来自哪里、失败重试几次，进度都不会错。
+                // done records the bytes of "finalized chunks"; the current chunk is added by its actual written amount,
+                // so progress stays correct no matter where the resume point came from or how many retries failed.
                 final long base = done.get();
                 long written = skip;
                 int n;
                 while ((n = in.read(buf)) > 0) {
-                    if (cancelled.get()) throw new InterruptedException("已取消");
+                    if (cancelled.get()) throw new InterruptedException("Cancelled");
                     out.write(buf, 0, n);
                     written += n;
                     listener.onProgress(base + written, totalBytes);
                     if (written > expected) {
-                        // 远端比清单声明的还长：数据不对，别继续写。
-                        throw new IOException("分片超出预期长度 " + expected);
+                        // Remote file is longer than the manifest declares: the data is wrong, stop writing.
+                        throw new IOException("Chunk exceeds the expected length " + expected);
                     }
                 }
                 out.flush();
@@ -281,12 +281,12 @@ public final class ChunkDownloader {
         }
     }
 
-    // ------------------------------------------------------------------ 工具
+    // ------------------------------------------------------------------ Utilities
 
     private static String resolveUrl(String baseUrl, String relative) {
         if (relative.startsWith("http://") || relative.startsWith("https://")) return relative;
         if (!baseUrl.endsWith("/")) baseUrl = baseUrl + "/";
-        // 去掉相对路径开头的 ./ 或 /
+        // Strip a leading ./ or / from a relative path
         while (relative.startsWith("./")) relative = relative.substring(2);
         while (relative.startsWith("/")) relative = relative.substring(1);
         return baseUrl + relative;
@@ -296,7 +296,7 @@ public final class ChunkDownloader {
         return new File(dir, c.fileName() + (finalized ? ".chunk" : ".part"));
     }
 
-    /** 算文件 SHA-256 并比对。sha 为空表示不校验（整包仍会校验）。 */
+    /** Compute a file's SHA-256 and compare. An empty sha means no verification (the whole package is still verified). */
     static boolean verify(File f, String sha256) {
         if (sha256 == null || sha256.isEmpty()) return true;
         try {
@@ -308,38 +308,38 @@ public final class ChunkDownloader {
             }
             return toHex(md.digest()).equalsIgnoreCase(sha256);
         } catch (NoSuchAlgorithmException | IOException e) {
-            Log.w(TAG, "校验失败 " + f + ": " + e.getMessage());
+            Log.w(TAG, "Verification failed " + f + ": " + e.getMessage());
             return false;
         }
     }
 
     /**
-     * 把一个包的所有分片按序号拼接成单文件。
+     * Concatenate all chunks of a package, in order, into a single file.
      *
-     * 边拼边删：每片拷进输出流后立即删掉该片，峰值占用只有"输出文件 + 一个分片"，
-     * 而不是"输出 + 全部分片"。2GB 包上这能省 2GB 空间 —— 手机上这点很关键。
+     * Delete as you assemble: each chunk is deleted right after being copied into the output stream, so peak usage is only "output file + one chunk",
+     * instead of "output + all chunks". On a 2GB package this saves 2GB of space — critical on a phone.
      *
-     * @param keepChunks true 时保留分片（调试用），正常路径传 false
+     * @param keepChunks true keeps the chunks (for debugging); the normal path passes false
      */
     public static boolean concatChunks(File dir, DataManifest.Package pkg, File out,
                                        boolean keepChunks) throws IOException {
         File parent = out.getParentFile();
         if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
-            throw new IOException("无法创建输出目录：" + parent);
+            throw new IOException("Cannot create output directory: " + parent);
         }
         File tmp = new File(out.getPath() + ".tmp");
         try (FileOutputStream fos = new FileOutputStream(tmp)) {
             for (DataManifest.Chunk c : pkg.chunks) {
                 File f = chunkFile(dir, c, true);
-                if (!f.isFile()) throw new IOException("缺少分片 " + f);
+                if (!f.isFile()) throw new IOException("Missing chunk " + f);
                 try (InputStream in = new java.io.FileInputStream(f)) {
                     byte[] buf = new byte[256 * 1024];
                     int n;
                     while ((n = in.read(buf)) > 0) fos.write(buf, 0, n);
                 }
                 if (!keepChunks) {
-                    // 已经拼进 tmp，原片不再需要。删失败不影响正确性，只影响空间。
-                    if (!f.delete()) Log.w(TAG, "分片删除失败（不影响结果）: " + f);
+                    // Already assembled into tmp, so the original chunk is no longer needed. A failed delete does not affect correctness, only space.
+                    if (!f.delete()) Log.w(TAG, "Failed to delete chunk (does not affect the result): " + f);
                 }
             }
             fos.flush();
@@ -348,15 +348,15 @@ public final class ChunkDownloader {
         if (tmp.length() != pkg.bytes) {
             //noinspection ResultOfMethodCallIgnored
             tmp.delete();
-            throw new IOException("拼装后大小不符：期望 " + pkg.bytes + " 实际 " + tmp.length());
+            throw new IOException("Assembled size mismatch: expected " + pkg.bytes + " actual " + tmp.length());
         }
         //noinspection ResultOfMethodCallIgnored
         out.delete();
-        if (!tmp.renameTo(out)) throw new IOException("无法重命名为 " + out);
+        if (!tmp.renameTo(out)) throw new IOException("Cannot rename to " + out);
         return true;
     }
 
-    /** 兼容旧调用（保留分片）。 */
+    /** Kept for old callers (keeps the chunks). */
     public static boolean concatChunks(File dir, DataManifest.Package pkg, File out)
             throws IOException {
         return concatChunks(dir, pkg, out, true);
@@ -368,7 +368,7 @@ public final class ChunkDownloader {
         return sb.toString();
     }
 
-    /** 读取指定区间的字节（生成清单时用不到，留给上传脚本做一致性抽查）。 */
+    /** Read the bytes of a given range (not used when generating manifests; kept for upload scripts to spot-check consistency). */
     static byte[] readRange(File f, long offset, int len) throws IOException {
         try (RandomAccessFile raf = new RandomAccessFile(f, "r")) {
             raf.seek(offset);

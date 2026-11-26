@@ -368,7 +368,7 @@ void RunJsonVectors()
     Check("json 1 -> Int", v.array[0].type == cefjson::Value::Type::Int && v.array[0].intValue == 1);
     Check("json 1.5 -> Double",
           v.array[1].type == cefjson::Value::Type::Double && v.array[1].doubleValue == 1.5);
-    // "a\"b中" decoded: quote, b, U+4E2D as 3 utf-8 bytes.
+    // "a\"b[U+4E2D]" decoded: quote, b, U+4E2D as 3 UTF-8 bytes.
     const std::string want = std::string("a\"b") + "\xE4\xB8\xAD";
     Check("json string escapes", v.array[2].IsString() && v.array[2].stringValue == want,
           v.array[2].stringValue);

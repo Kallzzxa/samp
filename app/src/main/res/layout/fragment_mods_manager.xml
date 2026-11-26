@@ -31,7 +31,7 @@
             android:paddingVertical="@dimen/_3sdp"
             android:textColor="@color/launcher_text_dim"
             android:textSize="@dimen/_7ssp"
-            tools:text="64位 (arm64-v8a)" />
+            tools:text="64-bit (arm64-v8a)" />
 
         <LinearLayout
             android:id="@+id/btn_mods_logs"
@@ -117,7 +117,7 @@
                 android:textColor="@color/launcher_text_dim"
                 android:textSize="@dimen/_8ssp"
                 android:visibility="gone"
-                tools:text="暂无模组文件" />
+                tools:text="No mod files yet" />
         </FrameLayout>
 
         <LinearLayout
@@ -145,7 +145,7 @@
                     android:textColor="@color/launcher_text"
                     android:textSize="@dimen/_11ssp"
                     android:textStyle="bold"
-                    tools:text="Modloader 资源覆写" />
+                    tools:text="Modloader Resource Override" />
 
                 <Switch
                     android:id="@+id/switch_section_master"
@@ -164,7 +164,7 @@
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_7ssp"
                 android:textStyle="bold"
-                tools:text="状态：已就绪（双 ABI 原生支持）" />
+                tools:text="Status: Ready (dual-ABI native support)" />
 
             <ScrollView
                 android:layout_width="match_parent"
@@ -186,7 +186,7 @@
                         android:lineSpacingExtra="@dimen/_2sdp"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_7ssp"
-                        tools:text="说明文本" />
+                        tools:text="Description" />
 
                     <TextView
                         android:id="@+id/tv_section_path"
@@ -198,7 +198,7 @@
                         android:padding="@dimen/_6sdp"
                         android:textColor="@color/launcher_text_dim"
                         android:textSize="@dimen/_6ssp"
-                        tools:text="目录：.../files/modloader" />
+                        tools:text="Directory: .../files/modloader" />
                 </LinearLayout>
             </ScrollView>
 
@@ -213,7 +213,7 @@
                 android:textColor="@color/launcher_on_accent"
                 android:textSize="@dimen/_9ssp"
                 android:textStyle="bold"
-                tools:text="导入 ZIP 模组包" />
+                tools:text="Import ZIP Mod Pack" />
 
             <TextView
                 android:id="@+id/btn_action_secondary"
@@ -225,7 +225,7 @@
                 android:textColor="@color/launcher_text"
                 android:textSize="@dimen/_8ssp"
                 android:textStyle="bold"
-                tools:text="新建空模组目录" />
+                tools:text="Create Empty Mod Folder" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -246,7 +246,7 @@
                     android:textSize="@dimen/_7ssp"
                     android:textStyle="bold"
                     android:visibility="gone"
-                    tools:text="应用 SA-MP 安全预设" />
+                    tools:text="Apply SA-MP Safe Preset" />
 
                 <TextView
                     android:id="@+id/btn_action_quaternary"
@@ -261,7 +261,7 @@
                     android:textColor="@color/launcher_text_dim"
                     android:textSize="@dimen/_7ssp"
                     android:visibility="gone"
-                    tools:text="访问 JPatch 官方页" />
+                    tools:text="Visit JPatch Official Page" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

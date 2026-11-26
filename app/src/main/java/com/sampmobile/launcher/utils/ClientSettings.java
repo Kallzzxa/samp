@@ -64,38 +64,38 @@ public final class ClientSettings {
     };
 
     public static final StringOption[] ASPECT_RATIOS = {
-            new StringOption("auto", "自动适配屏幕", 0),
-            new StringOption("16:9", "16:9 标准宽屏", 1),
-            new StringOption("20:9", "20:9 全面屏", 2),
-            new StringOption("21:9", "21:9 超宽屏", 3),
-            new StringOption("16:10", "16:10 平板比例", 4),
-            new StringOption("4:3", "4:3 经典比例", 5),
+            new StringOption("auto", "Auto-fit screen", 0),
+            new StringOption("16:9", "16:9 standard widescreen", 1),
+            new StringOption("20:9", "20:9 full screen", 2),
+            new StringOption("21:9", "21:9 ultra-wide", 3),
+            new StringOption("16:10", "16:10 tablet ratio", 4),
+            new StringOption("4:3", "4:3 classic ratio", 5),
     };
 
     public static final StringOption[] CROSSHAIR_STYLES = {
-            new StringOption("default", "原版经典准星", 0),
-            new StringOption("cross", "精简十字准星", 1),
-            new StringOption("dot", "中心高亮圆点", 2),
-            new StringOption("cross_dot", "十字加圆点", 3),
-            new StringOption("hidden", "隐藏准星", 4),
+            new StringOption("default", "Classic stock crosshair", 0),
+            new StringOption("cross", "Minimal cross crosshair", 1),
+            new StringOption("dot", "Highlighted center dot", 2),
+            new StringOption("cross_dot", "Cross plus dot", 3),
+            new StringOption("hidden", "Hidden crosshair", 4),
     };
 
     public static final StringOption[] FONT_FAMILIES = {
-            new StringOption("chinese", "默认中文黑体", 0),
-            new StringOption("arial_bold", "经典西文粗体", 1),
-            new StringOption("custom", "自定义字体", 2),
+            new StringOption("chinese", "Default Chinese Heiti", 0),
+            new StringOption("arial_bold", "Classic Western bold", 1),
+            new StringOption("custom", "Custom font", 2),
     };
 
     public static final String SCREENSHOT_MODE_HUD = "hud";
     public static final String SCREENSHOT_MODE_GAME = "game";
     public static final StringOption[] SCREENSHOT_MODES = {
-            new StringOption(SCREENSHOT_MODE_HUD, "含界面与聊天", 0),
-            new StringOption(SCREENSHOT_MODE_GAME, "仅游戏画面", 1),
+            new StringOption(SCREENSHOT_MODE_HUD, "With HUD and chat", 0),
+            new StringOption(SCREENSHOT_MODE_GAME, "Game view only", 1),
     };
 
     public static final StringOption[] VOICE_MIC_MODES = {
-            new StringOption("ptt", "按住说话", 0),
-            new StringOption("toggle", "点击切换", 1),
+            new StringOption("ptt", "Hold to talk", 0),
+            new StringOption("toggle", "Tap to toggle", 1),
     };
 
     public static final StringOption[] CHARSETS = {
@@ -106,7 +106,7 @@ public final class ClientSettings {
     };
 
     public static final IntOption[] FPS_LIMITS = {
-            new IntOption(0, "无限制"),
+            new IntOption(0, "Unlimited"),
             new IntOption(30, "30"),
             new IntOption(45, "45"),
             new IntOption(60, "60"),
@@ -118,56 +118,56 @@ public final class ClientSettings {
 
     // GTA:SA MobileSettings explicit numeric enum tables (value = GTA engine enum value)
     public static final IntOption[] VISUAL_FX_OPTIONS = {
-            new IntOption(0, "低"),
-            new IntOption(1, "中"),
-            new IntOption(2, "高"),
-            new IntOption(3, "极高"),
+            new IntOption(0, "Low"),
+            new IntOption(1, "Medium"),
+            new IntOption(2, "High"),
+            new IntOption(3, "Very High"),
     };
     public static final IntOption[] SHADOWS_OPTIONS = {
-            new IntOption(0, "关闭"),
-            new IntOption(1, "经典"),
-            new IntOption(2, "高级实时"),
+            new IntOption(0, "Off"),
+            new IntOption(1, "Classic"),
+            new IntOption(2, "Advanced real-time"),
     };
     public static final IntOption[] CAR_REFL_OPTIONS = {
-            new IntOption(0, "关闭"),
-            new IntOption(1, "低"),
-            new IntOption(2, "中"),
-            new IntOption(3, "高"),
+            new IntOption(0, "Off"),
+            new IntOption(1, "Low"),
+            new IntOption(2, "Medium"),
+            new IntOption(3, "High"),
     };
     public static final IntOption[] TRAFFIC_OPTIONS = {
-            new IntOption(0, "稀少"),
-            new IntOption(1, "适中"),
-            new IntOption(2, "密集"),
+            new IntOption(0, "Sparse"),
+            new IntOption(1, "Moderate"),
+            new IntOption(2, "Dense"),
     };
     public static final IntOption[] PED_ZOOM_OPTIONS = {
-            new IntOption(1, "近距"),
-            new IntOption(2, "标准"),
-            new IntOption(3, "远距"),
+            new IntOption(1, "Near"),
+            new IntOption(2, "Standard"),
+            new IntOption(3, "Far"),
     };
     public static final IntOption[] VEH_CAM_OPTIONS = {
-            new IntOption(0, "低视角"),
-            new IntOption(1, "高视角"),
+            new IntOption(0, "Low view"),
+            new IntOption(1, "High view"),
     };
     public static final IntOption[] TARGETING_OPTIONS = {
-            new IntOption(0, "锁定辅助"),
-            new IntOption(1, "自由准星"),
+            new IntOption(0, "Lock-on assist"),
+            new IntOption(1, "Free crosshair"),
     };
     public static final IntOption[] STEERING_OPTIONS = {
-            new IntOption(0, "虚拟摇杆"),
-            new IntOption(1, "左右按键"),
-            new IntOption(2, "滑动转向"),
+            new IntOption(0, "Virtual joystick"),
+            new IntOption(1, "Left/right buttons"),
+            new IntOption(2, "Swipe to steer"),
     };
     public static final IntOption[] LAYOUT_OPTIONS = {
-            new IntOption(0, "经典布局"),
-            new IntOption(1, "双侧自适应"),
+            new IntOption(0, "Classic layout"),
+            new IntOption(1, "Dual-side adaptive"),
     };
     public static final IntOption[] ACCEL_OPTIONS = {
-            new IntOption(0, "关闭"),
-            new IntOption(1, "轻度"),
-            new IntOption(2, "重度"),
+            new IntOption(0, "Off"),
+            new IntOption(1, "Light"),
+            new IntOption(2, "Heavy"),
     };
     public static final IntOption[] RADIO_STATION_OPTIONS = {
-            new IntOption(0, "关闭电台"),
+            new IntOption(0, "Radio off"),
             new IntOption(1, "Playback FM"),
             new IntOption(2, "K-Rose"),
             new IntOption(3, "K-DST"),
@@ -179,7 +179,7 @@ public final class ClientSettings {
             new IntOption(9, "K-Jah West"),
             new IntOption(10, "Master Sounds"),
             new IntOption(11, "WCTR"),
-            new IntOption(12, "自定义音乐"),
+            new IntOption(12, "Custom music"),
     };
 
     // Single canonical defaults map (key -> Boolean / Integer / Float / String)

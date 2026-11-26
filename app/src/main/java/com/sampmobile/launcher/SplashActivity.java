@@ -72,7 +72,7 @@ public class SplashActivity extends AppCompatActivity implements GLSurfaceView.R
         if (EasyPermissions.hasPermissions(this, requiredPermissions)) {
             startApp();
         } else {
-            EasyPermissions.requestPermissions(this, "请允许应用所需权限", PERMISSION_REQUEST_CODE, requiredPermissions);
+            EasyPermissions.requestPermissions(this, "Please allow the permissions the app needs", PERMISSION_REQUEST_CODE, requiredPermissions);
         }
     }
 
@@ -128,17 +128,17 @@ public class SplashActivity extends AppCompatActivity implements GLSurfaceView.R
         }
         if (!Utils.isOnline(this)) {
             new AlertDialog.Builder(this)
-                    .setTitle("没有网络连接！")
-                    .setMessage("请连接网络后重试。")
-                    .setPositiveButton("重试", (dialog, which) -> {
+                    .setTitle("No network connection!")
+                    .setMessage("Please connect to the network and try again.")
+                    .setPositiveButton("Retry", (dialog, which) -> {
                         dialog.dismiss();
                         startApp();
-                    }).setNegativeButton("单机模式", (dialog, which) -> {
+                    }).setNegativeButton("Offline mode", (dialog, which) -> {
                         if (isFinishing() || isDestroyed()) return;
                         AlertDialog alertDialog = new AlertDialog.Builder(this)
                                 .setTitle(R.string.offline_mode)
-                                .setMessage("确定要以单机模式启动游戏吗？")
-                                .setPositiveButton("是", (dialog2, which2) -> {
+                                .setMessage("Are you sure you want to launch the game in offline mode?")
+                                .setPositiveButton("Yes", (dialog2, which2) -> {
                                     ClientSettings.prepareOfflineLaunch(this);
                                     try {
                                         Intent intent = new Intent(this, com.sampmobile.game.SAMP.class);
@@ -148,7 +148,7 @@ public class SplashActivity extends AppCompatActivity implements GLSurfaceView.R
                                         e.printStackTrace();
                                     }
                                 })
-                                .setNegativeButton("否", (dialog2, which2) -> {
+                                .setNegativeButton("No", (dialog2, which2) -> {
                                     dialog2.dismiss();
                                     startApp();
                                 })
@@ -233,7 +233,7 @@ public class SplashActivity extends AppCompatActivity implements GLSurfaceView.R
 
     public void quitApp() {
         if ((System.currentTimeMillis() - quit_time) > 2000) {
-            Toast.makeText(this, "再按一次退出", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Press again to exit", Toast.LENGTH_LONG).show();
             quit_time = System.currentTimeMillis();
         } else {
             finish();

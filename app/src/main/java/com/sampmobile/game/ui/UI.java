@@ -114,8 +114,8 @@ public class UI implements Dialog.Listener, Keyboard.Listener, HeightProvider.Li
         if (visible && samp != null) {
             samp.cancelAllNativeTouches();
         }
-        // 游戏聊天输入开/关 -> omp-cef：本地事件发给每个页面，同时上行
-        // ClientEmitEvent(ChatInputState)，对应 PC ChatHook::SetChatInputState。
+        // Game chat input on/off -> omp-cef: the local event is sent to every page and also sent upstream
+        // ClientEmitEvent(ChatInputState), matching PC ChatHook::SetChatInputState.
         CefManager.onGameChatStateChanged(visible);
     }
 
@@ -205,8 +205,8 @@ public class UI implements Dialog.Listener, Keyboard.Listener, HeightProvider.Li
 
     public void showKeyboard(boolean z) {
         Log.i(TAG, "**** showKeyboard " + z);
-        // 页面输入框正拿着键盘且该浏览器 controlsChat=true 时，游戏聊天框让位
-        // （PC ChatHook::Hook_OpenChatInput -> FocusManager::ShouldBlockChat）。
+        // When a page input box holds the keyboard and that browser has controlsChat=true, the in-game chat box yields
+        // (PC ChatHook::Hook_OpenChatInput -> FocusManager::ShouldBlockChat).
         if (z && CefManager.shouldBlockChat()) {
             Log.i(TAG, "**** showKeyboard blocked - focused CEF page owns chat input");
             return;

@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
-# CEF 输入路径纯逻辑的离线回归（不需要手机 / 游戏 / gradle / 网络）。
+# Offline regression for the pure logic of the CEF input path (no phone / game / gradle / network needed).
 #
 #   bash tests/cef/logic_tests/run_logic_tests.sh
 #
-# 做法：把产品源码里的 CefKeys.java 与 CefLogic.java 原样复制到临时 ASCII 目录
-# （中文路径会干扰 javac），用 android.jar 只做**编译期** classpath，**运行时故意
-# 不带 android.jar** —— 这样一旦有人往这两个类里引入 android 的运行时类型，
-# 测试会直接 NoClassDefFoundError，等于"纯逻辑"这条约束被破坏时立刻报警。
+# Approach: copy CefKeys.java and CefLogic.java from the product source verbatim into a temporary ASCII directory
+# (a Chinese path would confuse javac), use android.jar only as a **compile-time** classpath and **deliberately leave it out at runtime**
+# — so if someone introduces an Android runtime type into either class,
+# the test fails straight away with NoClassDefFoundError, flagging the broken "pure logic" constraint immediately.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CEF_DIR="$ROOT/app/src/main/java/com/sampmobile/game/ui/cef"
 TEST_SRC="$ROOT/tests/cef/logic_tests/LogicTests.java"
 
-# --- 找 javac -----------------------------------------------------------------
+# --- find javac -----------------------------------------------------------------
 JAVAC=""
 JAVA=""
 if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/javac.exe" ]; then
     JAVAC="$JAVA_HOME/bin/javac.exe"
     JAVA="$JAVA_HOME/bin/java.exe"
-elif [ -x "D:/服务器/DAYZSA/_build_env/jdk/jdk-21.0.2/bin/javac.exe" ]; then
-    JAVAC="D:/服务器/DAYZSA/_build_env/jdk/jdk-21.0.2/bin/javac.exe"
-    JAVA="D:/服务器/DAYZSA/_build_env/jdk/jdk-21.0.2/bin/java.exe"
+elif [ -x "D:/server/DAYZSA/_build_env/jdk/jdk-21.0.2/bin/javac.exe" ]; then
+    JAVAC="D:/server/DAYZSA/_build_env/jdk/jdk-21.0.2/bin/javac.exe"
+    JAVA="D:/server/DAYZSA/_build_env/jdk/jdk-21.0.2/bin/java.exe"
 elif command -v javac >/dev/null 2>&1; then
     JAVAC="$(command -v javac)"
     JAVA="$(command -v java)"
@@ -30,7 +30,7 @@ else
     exit 2
 fi
 
-# --- 找 android.jar（取最高 platform） ----------------------------------------
+# --- find android.jar (take the highest platform) ----------------------------------------
 ANDROID_JAR=""
 SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-D:/android-sdk}}"
 for d in "$SDK"/platforms/android-*/; do
@@ -61,7 +61,7 @@ if ! "$JAVAC" -nowarn -encoding UTF-8 -cp "$ANDROID_JAR" -d "$OUT" "$SRC"/*.java
     exit 1
 fi
 
-# 运行时 classpath 只有 $OUT，没有 android.jar —— 见文件头的说明。
+# Runtime classpath is only $OUT, no android.jar — see the header comment.
 echo "== running (no android.jar on the runtime classpath)"
 "$JAVA" -cp "$OUT" com.sampmobile.game.ui.cef.LogicTests
 STATUS=$?

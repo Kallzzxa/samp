@@ -62,7 +62,7 @@ public class ModManager {
         public File file;
         public boolean enabled;
         public long sizeBytes;
-        public String abiLabel;    // for .so: "64位 (arm64-v8a)", "32位 (armeabi-v7a)", etc.
+        public String abiLabel;    // for .so: "64-bit (arm64-v8a)", "32-bit (armeabi-v7a)", etc.
         public boolean abiCompatible = true;
         public boolean isJPatch;
     }
@@ -70,7 +70,7 @@ public class ModManager {
     public static class ElfInfo {
         public boolean valid;
         public boolean is64Bit;
-        public String abiName; // "arm64-v8a", "armeabi-v7a", "未知架构", "非 ELF 文件"
+        public String abiName; // "arm64-v8a", "armeabi-v7a", "Unknown architecture", "Not an ELF file"
         public boolean matchesProcess;
     }
 
@@ -118,7 +118,7 @@ public class ModManager {
     }
 
     public static String getProcessAbiLabel() {
-        return is64BitProcess() ? "64位 (arm64-v8a)" : "32位 (armeabi-v7a)";
+        return is64BitProcess() ? "64-bit (arm64-v8a)" : "32-bit (armeabi-v7a)";
     }
 
     public static File getGameFilesDir(Context ctx) {
@@ -208,7 +208,7 @@ public class ModManager {
 
     public static ElfInfo inspectElfAbi(File file) {
         ElfInfo info = new ElfInfo();
-        info.abiName = "非 ELF 文件";
+        info.abiName = "Not an ELF file";
         if (file == null || !file.isFile() || file.length() < 20) {
             return info;
         }
@@ -227,14 +227,14 @@ public class ModManager {
         info.valid = true;
         if (eiClass == 2 && eMachine == 183) { // ELFCLASS64 + EM_AARCH64
             info.is64Bit = true;
-            info.abiName = "64位 (arm64-v8a)";
+            info.abiName = "64-bit (arm64-v8a)";
             info.matchesProcess = is64BitProcess();
         } else if (eiClass == 1 && eMachine == 40) { // ELFCLASS32 + EM_ARM
             info.is64Bit = false;
-            info.abiName = "32位 (armeabi-v7a)";
+            info.abiName = "32-bit (armeabi-v7a)";
             info.matchesProcess = !is64BitProcess();
         } else {
-            info.abiName = "不兼容架构 (machine=" + eMachine + ")";
+            info.abiName = "Incompatible architecture (machine=" + eMachine + ")";
             info.matchesProcess = false;
         }
         return info;
@@ -470,7 +470,7 @@ public class ModManager {
             destRoot = new File(getModLoaderDir(ctx), folderName + "_" + (suffix++));
         }
         if (!destRoot.mkdirs()) {
-            throw new IOException("无法创建目录: " + destRoot.getName());
+            throw new IOException("Cannot create directory: " + destRoot.getName());
         }
 
         String canonicalDest = destRoot.getCanonicalPath() + File.separator;
@@ -480,14 +480,14 @@ public class ModManager {
         final long MAX_ZIP_TOTAL_BYTES = 512L * 1024L * 1024L;
 
         try (InputStream raw = ctx.getContentResolver().openInputStream(uri)) {
-            if (raw == null) throw new IOException("无法读取所选文件");
+            if (raw == null) throw new IOException("Cannot read the selected file");
             try (ZipInputStream zis = new ZipInputStream(raw)) {
                 byte[] buf = new byte[8192];
                 ZipEntry entry;
                 int entryCount = 0;
                 while ((entry = zis.getNextEntry()) != null) {
                     if (++entryCount > MAX_ZIP_ENTRIES) {
-                        throw new IOException("压缩包内条目数超过限制 (" + MAX_ZIP_ENTRIES + ")");
+                        throw new IOException("Number of entries in the archive exceeds the limit (" + MAX_ZIP_ENTRIES + ")");
                     }
                     String entryName = entry.getName().replace('\\', '/');
                     if (entryName.startsWith("/") || entryName.contains("..")) {
@@ -510,7 +510,7 @@ public class ModManager {
                             while ((n = zis.read(buf)) > 0) {
                                 totalExtractedBytes += n;
                                 if (totalExtractedBytes > MAX_ZIP_TOTAL_BYTES) {
-                                    throw new IOException("压缩包解压总大小超过 512 MB 限制");
+                                    throw new IOException("Total extracted size of the archive exceeds the 512 MB limit");
                                 }
                                 fos.write(buf, 0, n);
                             }
@@ -527,7 +527,7 @@ public class ModManager {
 
         if (extractedFiles == 0) {
             deleteRecursive(destRoot);
-            throw new IOException("压缩包内未找到有效文件");
+            throw new IOException("No valid files found in the archive");
         }
 
         // Flatten nested non-GTA wrapper folders (e.g. MyHud.zip -> Android/data/com.rockstargames.gtasa/files/texdb/... => texdb/...)
@@ -778,11 +778,11 @@ public class ModManager {
         File dest = new File(targetDir, name);
         String canonicalTarget = targetDir.getCanonicalPath() + File.separator;
         if (!dest.getCanonicalPath().startsWith(canonicalTarget)) {
-            throw new IOException("非法文件名: " + name);
+            throw new IOException("Illegal file name: " + name);
         }
         File tmp = new File(targetDir, name + ".importing");
         try (InputStream in = ctx.getContentResolver().openInputStream(uri)) {
-            if (in == null) throw new IOException("无法读取所选文件");
+            if (in == null) throw new IOException("Cannot read the selected file");
             try (FileOutputStream out = new FileOutputStream(tmp)) {
                 byte[] buf = new byte[8192];
                 int n;
@@ -797,7 +797,7 @@ public class ModManager {
         if (dest.exists()) dest.delete();
         if (!tmp.renameTo(dest)) {
             tmp.delete();
-            throw new IOException("保存文件失败: " + name);
+            throw new IOException("Failed to save file: " + name);
         }
         return dest;
     }
@@ -827,12 +827,12 @@ public class ModManager {
             if (start > 0) {
                 int nl = text.indexOf('\n');
                 if (nl >= 0 && nl + 1 < text.length()) {
-                    text = "... (仅显示末尾日志)\n" + text.substring(nl + 1);
+                    text = "... (only showing the tail of the log)\n" + text.substring(nl + 1);
                 }
             }
             return text;
         } catch (IOException e) {
-            return "读取日志失败: " + e.getMessage();
+            return "Failed to read log: " + e.getMessage();
         }
     }
 

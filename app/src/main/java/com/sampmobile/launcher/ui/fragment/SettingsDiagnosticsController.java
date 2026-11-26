@@ -70,18 +70,18 @@ final class SettingsDiagnosticsController {
                 act.runOnUiThread(() -> {
                     if (!host.isAdded() || host.getView() == null) return;
                     if (hasCrash) {
-                        tvStatusTitle.setText("运行诊断状态：检测到历史异常记录");
+                        tvStatusTitle.setText("Diagnostics status: past crash records found");
                         tvStatusDesc.setText(String.format(Locale.US,
-                                "系统已在后台自动保存 %d 份运行诊断记录。如您刚遇到闪退或卡顿，可直接点击下方「一键复制故障反馈信息」发送给客服或开发者协助排查。",
+                                "The system has auto-saved %d diagnostics records in the background. If you just had a crash or freeze, tap "Copy bug report" below and send it to support or a developer for help.",
                                 finalLogCount));
                     } else if (finalLogCount > 0) {
-                        tvStatusTitle.setText("运行诊断状态：正常");
+                        tvStatusTitle.setText("Diagnostics status: OK");
                         tvStatusDesc.setText(String.format(Locale.US,
-                                "客户端运行环境自检通过，当前已归档 %d 份运行记录，近期未发现崩溃异常。",
+                                "The client environment self-check passed; %d run records are archived and no recent crashes were found.",
                                 finalLogCount));
                     } else {
-                        tvStatusTitle.setText("运行诊断状态：就绪");
-                        tvStatusDesc.setText("当前尚无历史故障记录。进入游戏后系统将在后台自动守护并记录运行状态。");
+                        tvStatusTitle.setText("Diagnostics status: Ready");
+                        tvStatusDesc.setText("No past crash records yet. After you enter the game, the system will monitor and record run status in the background.");
                     }
                 });
             }
@@ -98,8 +98,8 @@ final class SettingsDiagnosticsController {
             if (act != null && host.isAdded()) {
                 act.runOnUiThread(() -> {
                     if (!host.isAdded() || host.getContext() == null) return;
-                    host.copyTextToClipboard("SA-MP Mobile 故障反馈", report);
-                    Toast.makeText(host.getContext(), "故障反馈信息已复制到剪贴板，可直接粘贴发送！", Toast.LENGTH_LONG).show();
+                    host.copyTextToClipboard("SA-MP Mobile bug report", report);
+                    Toast.makeText(host.getContext(), "Bug report copied to the clipboard — just paste it to send!", Toast.LENGTH_LONG).show();
                 });
             }
         });
@@ -112,7 +112,7 @@ final class SettingsDiagnosticsController {
         host.ioExecutor.execute(() -> {
             try {
                 File baseDir = appCtx.getExternalFilesDir(null);
-                if (baseDir == null) throw new IllegalStateException("存储目录不可用");
+                if (baseDir == null) throw new IllegalStateException("Storage folder unavailable");
                 File dir = new File(baseDir, "logcat");
                 if (!dir.exists()) dir.mkdirs();
                 File reportFile = new File(dir, "SAMP_Feedback_Report.log");
@@ -124,7 +124,7 @@ final class SettingsDiagnosticsController {
                 if (act != null && host.isAdded()) {
                     act.runOnUiThread(() -> {
                         if (!host.isAdded() || host.getContext() == null) return;
-                        host.shareFile(reportFile, "text/plain", "导出故障反馈日志文件");
+                        host.shareFile(reportFile, "text/plain", "Export bug report log file");
                     });
                 }
             } catch (Exception e) {
@@ -132,7 +132,7 @@ final class SettingsDiagnosticsController {
                 if (act != null && host.isAdded()) {
                     act.runOnUiThread(() -> {
                         if (!host.isAdded() || host.getContext() == null) return;
-                        Toast.makeText(host.getContext(), "导出反馈文件失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(host.getContext(), "Failed to export report file: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     });
                 }
             }
@@ -143,7 +143,7 @@ final class SettingsDiagnosticsController {
         Context ctx = host.getContext();
         if (ctx == null) return;
         final Context appCtx = ctx.getApplicationContext();
-        host.showAlertDialog("确定要清理所有历史日志缓存文件吗？", (d, w) -> {
+        host.showAlertDialog("Delete all archived log cache files?", (d, w) -> {
             host.ioExecutor.execute(() -> {
                 File baseDir = appCtx.getExternalFilesDir(null);
                 File logcatDir = baseDir != null ? new File(baseDir, "logcat") : null;
@@ -158,7 +158,7 @@ final class SettingsDiagnosticsController {
                     act.runOnUiThread(() -> {
                         if (!host.isAdded() || host.getContext() == null) return;
                         refresh();
-                        Toast.makeText(host.getContext(), "日志缓存已清理", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(host.getContext(), "Log cache cleared", Toast.LENGTH_SHORT).show();
                     });
                 }
             });
@@ -170,23 +170,23 @@ final class SettingsDiagnosticsController {
         File baseDir = appCtx.getExternalFilesDir(null);
         File logcatDir = baseDir != null ? new File(baseDir, "logcat") : null;
         StringBuilder sb = new StringBuilder();
-        sb.append("========== SA-MP Mobile 故障反馈诊断信息 ==========\n");
+        sb.append("========== SA-MP Mobile bug report diagnostics ==========\n");
         sb.append(buildDeviceSummaryLine(appCtx)).append("\n\n");
 
         File latest = findLatestClientLog(logcatDir);
         if (latest != null && latest.exists()) {
             List<String> crashes = extractCrashAndErrorLines(latest);
             if (!crashes.isEmpty()) {
-                sb.append("--- 异常摘要 (").append(latest.getName()).append(") ---\n");
+                sb.append("--- Crash summary (").append(latest.getName()).append(") ---\n");
                 for (String line : crashes) {
                     sb.append(line).append("\n");
                 }
                 sb.append("\n");
             }
-            sb.append("--- 最近一次客户端运行记录 (").append(latest.getName()).append(") ---\n");
+            sb.append("--- Latest client run record (").append(latest.getName()).append(") ---\n");
             sb.append(readFileTail(latest, 160));
         } else {
-            sb.append("尚未生成客户端运行日志记录。\n");
+            sb.append("No client run log records have been generated yet.\n");
         }
         return sb.toString();
     }
@@ -248,7 +248,7 @@ final class SettingsDiagnosticsController {
 
     private String buildDeviceSummaryLine(Context appCtx) {
         boolean is64 = android.os.Process.is64Bit();
-        String abi = is64 ? "64位" : "32位";
+        String abi = is64 ? "64-bit" : "32-bit";
         File extDir = appCtx.getExternalFilesDir(null);
         long freeMB = 0;
         if (extDir != null && extDir.exists()) {
@@ -257,8 +257,8 @@ final class SettingsDiagnosticsController {
         }
         ClientSettings settings = ClientSettings.loadLauncher(appCtx);
         return String.format(Locale.US,
-                "版本: v%s (%s) | 设备: %s %s | 系统: Android %s | 剩余空间: %d MB\n"
-                + "模组开关: Modloader=%b, AML=%b, JPatch=%b, MonetLoader=%b, CLEO=%b",
+                "Version: v%s (%s) | Device: %s %s | System: Android %s | Free space: %d MB\n"
+                + "Mod switches: Modloader=%b, AML=%b, JPatch=%b, MonetLoader=%b, CLEO=%b",
                 BuildConfig.VERSION_NAME, abi,
                 Build.MANUFACTURER, Build.MODEL, Build.VERSION.RELEASE, freeMB,
                 settings.getBoolean("modloader"),

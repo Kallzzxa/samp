@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 """
-把本地游戏数据打包成客户端可下载的分片 + 清单，可选直接上传到 Cloudflare R2。
+Packages local game data into downloadable chunks + a manifest for the client, optionally uploading straight to Cloudflare R2.
 
-用法：
-    # 只生成产物到 dist/cdn/
+Usage:
+    # Only generate output into dist/cdn/
     python tools/gamedata/publish_gamedata.py --game dist/gamedata/files
 
-    # 生成后上传到 R2
+    # Generate, then upload to R2
     python tools/gamedata/publish_gamedata.py --game dist/gamedata/files --upload
 
-    # 游戏本体 + 联机包分别指定
+    # Specify the game data and online package separately
     python tools/gamedata/publish_gamedata.py \\
         --game dist/gamedata/files \\
         --online dist/samp_online/files \\
         --version 2
 
-产物结构（dist/cdn/）：
+Output structure (dist/cdn/):
     manifest.json
     chunks/<packageId>/0000.bin, 0001.bin, ...
 
-设计要点：
-- 先打 zip（不压缩，只做容器），再切片。这样客户端拼装后是一个标准 zip，
-  解压逻辑不需要认识自定义格式。
-- 每片 16MB：兼顾并发数与单片重传代价。R2 支持 Range，断点续传按片进行。
-- 分片与整包都算 SHA-256，客户端两级校验。
+Design notes:
+- Zip first (stored, not compressed — just a container), then split into chunks. That way the client reassembles a standard zip,
+  and the extraction logic never needs to know a custom format.
+- 16 MB per chunk: balances concurrency against per-chunk retransmission cost. R2 supports Range, so resume works per chunk.
+- Both chunks and the whole package get a SHA-256; the client verifies at both levels.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ from pathlib import Path
 
 CHUNK_SIZE = 16 * 1024 * 1024  # 16MB
 
-# 允许用环境变量覆盖分片大小，仅用于离线自检（真机发布不要改）。
+# Chunk size may be overridden via environment variable, for offline self-checks only (do not change for real-device releases).
 _env_chunk = os.environ.get("SAMP_GAMEDATA_CHUNK_SIZE")
 if _env_chunk:
     CHUNK_SIZE = int(_env_chunk)
@@ -66,9 +66,9 @@ def sha256_file(path: Path, bufsize: int = 1024 * 1024) -> str:
 
 
 def make_zip(src_dir: Path, out_zip: Path) -> Path:
-    """把目录打成 zip（存储模式，不压缩——游戏数据多为已压缩格式，再压没收益）。"""
+    """Zip a directory (stored, not compressed — game data is mostly already-compressed formats, so compressing gains nothing)."""
     if not src_dir.is_dir():
-        raise SystemExit(f"目录不存在: {src_dir}")
+        raise SystemExit(f"Directory does not exist: {src_dir}")
 
     out_zip.parent.mkdir(parents=True, exist_ok=True)
     if out_zip.exists():
@@ -81,21 +81,21 @@ def make_zip(src_dir: Path, out_zip: Path) -> Path:
             for name in files:
                 full = Path(root) / name
                 rel = full.relative_to(src_dir).as_posix()
-                # 跳过隐藏文件与 macOS 垃圾
+                # Skip hidden files and macOS junk
                 if rel.startswith(".") or rel.startswith("__MACOSX") or name == ".DS_Store":
                     continue
                 zf.write(full, rel)
                 count += 1
                 total += full.stat().st_size
                 if count % 2000 == 0:
-                    print(f"  打包中… {count} 个文件 / {human(total)}", flush=True)
+                    print(f"  Packaging… {count} files / {human(total)}", flush=True)
 
-    print(f"  完成：{count} 个文件 / {human(total)} -> {out_zip} ({human(out_zip.stat().st_size)})")
+    print(f"  Done: {count} files / {human(total)} -> {out_zip} ({human(out_zip.stat().st_size)})")
     return out_zip
 
 
 def split_zip(zip_path: Path, out_dir: Path, package_id: str) -> list[dict]:
-    """把 zip 切成固定大小的分片，返回分片描述列表。"""
+    """Split a zip into fixed-size chunks; returns the list of chunk descriptors."""
     chunk_dir = out_dir / "chunks" / package_id
     if chunk_dir.exists():
         shutil.rmtree(chunk_dir)
@@ -117,28 +117,28 @@ def split_zip(zip_path: Path, out_dir: Path, package_id: str) -> list[dict]:
                 "bytes": len(block),
                 "sha256": hashlib.sha256(block).hexdigest(),
             })
-            print(f"  分片 {name}: {human(len(block))}", flush=True)
+            print(f"  Chunk {name}: {human(len(block))}", flush=True)
             index += 1
 
     if not chunks:
-        raise SystemExit(f"zip 为空: {zip_path}")
+        raise SystemExit(f"zip is empty: {zip_path}")
     return chunks
 
 
 def build_package(src_dir: Path, out_dir: Path, work_dir: Path,
                   package_id: str, label: str) -> dict:
-    print(f"[包 {package_id}]")
+    print(f"[Package {package_id}]")
     zip_path = work_dir / f"{package_id}.zip"
     make_zip(src_dir, zip_path)
 
     total = zip_path.stat().st_size
     digest = sha256_file(zip_path)
-    print(f"  整包 SHA-256: {digest}")
+    print(f"  Whole-package SHA-256: {digest}")
 
     chunks = split_zip(zip_path, out_dir, package_id)
 
-    # 校验：分片大小之和 == 整包大小，否则客户端会拒绝
-    assert sum(c["bytes"] for c in chunks) == total, "分片大小之和不等于整包"
+    # Check: sum of chunk sizes == whole-package size, otherwise the client will reject it
+    assert sum(c["bytes"] for c in chunks) == total, "Sum of chunk sizes does not equal the whole package"
 
     return {
         "id": package_id,
@@ -151,14 +151,14 @@ def build_package(src_dir: Path, out_dir: Path, work_dir: Path,
 
 def upload_r2(out_dir: Path, bucket: str, account_id: str, access_key: str,
               secret_key: str) -> None:
-    """用 boto3 上传到 R2（S3 兼容）。没装 boto3 就提示安装。"""
+    """Upload to R2 with boto3 (S3-compatible). Prompts to install boto3 if it is missing."""
     try:
         import boto3
         from botocore.config import Config
     except ImportError:
         raise SystemExit(
-            "上传需要 boto3：pip install boto3\n"
-            "（不上传可去掉 --upload，产物在 dist/cdn/ 手动上传也行）"
+            "Uploading requires boto3: pip install boto3\n"
+            "(To skip uploading, drop --upload; the output in dist/cdn/ can be uploaded manually)"
         )
 
     endpoint = f"https://{account_id}.r2.cloudflarestorage.com"
@@ -173,7 +173,7 @@ def upload_r2(out_dir: Path, bucket: str, account_id: str, access_key: str,
 
     files = sorted(p for p in out_dir.rglob("*") if p.is_file())
     total = sum(p.stat().st_size for p in files)
-    print(f"\n上传 {len(files)} 个文件 / {human(total)} -> r2://{bucket}")
+    print(f"\nUploading {len(files)} files / {human(total)} -> r2://{bucket}")
 
     done = 0
     for path in files:
@@ -182,26 +182,26 @@ def upload_r2(out_dir: Path, bucket: str, account_id: str, access_key: str,
         if key.endswith(".json"):
             extra = {"ContentType": "application/json", "CacheControl": "no-cache"}
         else:
-            # 分片内容不变，长缓存；断点续传依赖 Range（R2 原生支持）
+            # Chunk contents never change: long cache. Resume depends on Range (natively supported by R2)
             extra = {"ContentType": "application/octet-stream",
                      "CacheControl": "public, max-age=31536000, immutable"}
         s3.upload_file(str(path), bucket, key, ExtraArgs=extra)
         done += path.stat().st_size
         print(f"  {key}  ({done * 100 // max(total,1)}%)", flush=True)
 
-    print("上传完成")
+    print("Upload complete")
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="打包并发布游戏数据包")
-    ap.add_argument("--game", help="游戏本体数据目录（会打成 game-data 包）")
-    ap.add_argument("--online", help="联机数据目录（会打成 online-data 包）")
-    ap.add_argument("--version", default="1", help="数据版本号，客户端据此判断是否重下")
-    ap.add_argument("--out", default="dist/cdn", help="产物目录（默认 dist/cdn）")
-    ap.add_argument("--work", default="dist/cdn-work", help="临时 zip 目录")
+    ap = argparse.ArgumentParser(description="Package and publish the game data package")
+    ap.add_argument("--game", help="Game data directory (packaged as the game-data package)")
+    ap.add_argument("--online", help="Online data directory (packaged as the online-data package)")
+    ap.add_argument("--version", default="1", help="Data version; the client uses it to decide whether to re-download")
+    ap.add_argument("--out", default="dist/cdn", help="Output directory (default dist/cdn)")
+    ap.add_argument("--work", default="dist/cdn-work", help="Temporary zip directory")
     ap.add_argument("--min-client", type=int, default=0,
-                    help="要求的最低客户端 versionCode（0=不限）")
-    ap.add_argument("--upload", action="store_true", help="上传到 Cloudflare R2")
+                    help="Minimum required client versionCode (0 = no limit)")
+    ap.add_argument("--upload", action="store_true", help="Upload to Cloudflare R2")
     ap.add_argument("--bucket", default=os.environ.get("R2_BUCKET", ""))
     ap.add_argument("--account-id", default=os.environ.get("R2_ACCOUNT_ID", ""))
     ap.add_argument("--access-key", default=os.environ.get("R2_ACCESS_KEY_ID", ""))
@@ -209,7 +209,7 @@ def main() -> int:
     args = ap.parse_args()
 
     if not args.game and not args.online:
-        ap.error("至少给一个 --game 或 --online")
+        ap.error("Provide at least one of --game or --online")
 
     out_dir = Path(args.out)
     work_dir = Path(args.work)
@@ -224,18 +224,18 @@ def main() -> int:
         manifest["minClientVersionCode"] = args.min_client
 
     if args.game:
-        pkg = build_package(Path(args.game), out_dir, work_dir, "game-data", "游戏本体")
+        pkg = build_package(Path(args.game), out_dir, work_dir, "game-data", "Game data")
         manifest["game"] = {
-            "label": "GTA:SA 游戏数据",
+            "label": "GTA:SA game data",
             "totalBytes": pkg["bytes"],
             "required": True,
             "packages": [pkg],
         }
 
     if args.online:
-        pkg = build_package(Path(args.online), out_dir, work_dir, "online-data", "联机数据包")
+        pkg = build_package(Path(args.online), out_dir, work_dir, "online-data", "Online data package")
         manifest["online"] = {
-            "label": "SA-MP 联机数据",
+            "label": "SA-MP online data",
             "totalBytes": pkg["bytes"],
             "required": True,
             "packages": [pkg],
@@ -245,7 +245,7 @@ def main() -> int:
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     total = sum(g["totalBytes"] for g in manifest.values() if isinstance(g, dict) and "totalBytes" in g)
-    print(f"\n清单已生成: {manifest_path}  (共 {human(total)})")
+    print(f"\nManifest generated: {manifest_path}  (total {human(total)})")
 
     if args.upload:
         missing = [k for k, v in {
@@ -253,14 +253,14 @@ def main() -> int:
             "access-key": args.access_key, "secret-key": args.secret_key,
         }.items() if not v]
         if missing:
-            raise SystemExit("上传缺少参数：" + ", ".join(missing)
-                             + "\n可用环境变量 R2_BUCKET / R2_ACCOUNT_ID / "
+            raise SystemExit("Missing upload parameters: " + ", ".join(missing)
+                             + "\nAvailable via environment variables R2_BUCKET / R2_ACCOUNT_ID / "
                                "R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY")
         upload_r2(out_dir, args.bucket, args.account_id, args.access_key, args.secret_key)
     else:
-        print("未上传。产物可直接拖进 R2 控制台，或加 --upload 自动传。")
-        print(f"上传后用这个地址配置客户端：")
-        print(f"  SAMP_GAMEDATA_MANIFEST=https://<你的域名>/manifest.json")
+        print("Not uploaded. You can drag the output straight into the R2 console, or add --upload to upload automatically.")
+        print(f"After uploading, configure the client with this URL:")
+        print(f"  SAMP_GAMEDATA_MANIFEST=https://<your-domain>/manifest.json")
 
     return 0
 

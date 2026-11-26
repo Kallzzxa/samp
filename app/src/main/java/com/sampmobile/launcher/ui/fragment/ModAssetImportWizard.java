@@ -39,11 +39,11 @@ final class ModAssetImportWizard {
     void showSourceChooser() {
         Context ctx = host.requireContext();
         String[] choices = {
-                "从 ZIP 压缩包导入（自动识别 .dff + .png / PC .txd）",
-                "多选散文件导入（.dff / .ifp / .col / .txd / .png）"
+                "Import from a ZIP archive (auto-detects .dff + .png / PC .txd)",
+                "Import multiple loose files (.dff / .ifp / .col / .txd / .png)"
         };
         new AlertDialog.Builder(ctx)
-                .setTitle("内置 IMG + TXD 零污染导入")
+                .setTitle("Built-in IMG + TXD Clean Import")
                 .setItems(choices, (d, which) -> {
                     if (which == 0) {
                         host.launchPicker(ModsManagerFragment.IMPORT_MODE_ASSET_TOOL_ZIP,
@@ -52,11 +52,11 @@ final class ModAssetImportWizard {
                         try {
                             host.multiFilePickerLauncher.launch(new String[]{"*/*"});
                         } catch (Exception e) {
-                            Toast.makeText(ctx, "无法打开多文件选择器: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                            Toast.makeText(ctx, "Could not open the multi-file picker: " + e.getMessage(), Toast.LENGTH_LONG).show();
                         }
                     }
                 })
-                .setNegativeButton("取消", null)
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
@@ -68,12 +68,12 @@ final class ModAssetImportWizard {
         StringBuilder summary = new StringBuilder();
         if (uris.size() == 1) {
             String name = ModManager.queryDisplayName(ctx, uris.get(0));
-            if (name == null) name = "所选文件";
-            summary.append("已选文件：").append(name);
+            if (name == null) name = "Selected file";
+            summary.append("Selected file: ").append(name);
             int dot = name.lastIndexOf('.');
             suggestedPack = (dot > 0) ? name.substring(0, dot) : name;
         } else {
-            summary.append("已多选 ").append(uris.size()).append(" 个文件：");
+            summary.append("Selected ").append(uris.size()).append(" files:");
             int shown = 0;
             for (Uri u : uris) {
                 String n = ModManager.queryDisplayName(ctx, u);
@@ -88,7 +88,7 @@ final class ModAssetImportWizard {
                     shown++;
                 }
             }
-            if (uris.size() > 3) summary.append(" 等");
+            if (uris.size() > 3) summary.append(" etc.");
             if (suggestedPack.isEmpty()) suggestedPack = "CustomSkin";
         }
         suggestedPack = suggestedPack.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
@@ -107,36 +107,36 @@ final class ModAssetImportWizard {
         layout.addView(tvSummary);
 
         TextView lblPack = new TextView(ctx);
-        lblPack.setText("\n模组包名称（生成在 modloader/<名称>/，可随时开关或删除）：");
+        lblPack.setText("\nMod pack name (created under modloader/<name>/, can be toggled or deleted anytime):");
         lblPack.setTextSize(12);
         layout.addView(lblPack);
 
         EditText etPack = new EditText(ctx);
         etPack.setText(suggestedPack);
-        etPack.setHint("如 MaiShiranui_Skin1");
+        etPack.setHint("e.g. MaiShiranui_Skin1");
         etPack.setSingleLine(true);
         layout.addView(etPack);
 
         TextView lblTarget = new TextView(ctx);
-        lblTarget.setText("\n目标模型名（可选；留空 = 保持原 .dff 文件名，如皮肤/载具需改名请点击下方速查）：");
+        lblTarget.setText("\nTarget model name (optional; leave empty to keep the original .dff file name — tap the quick lookup below to rename a skin/vehicle):");
         lblTarget.setTextSize(12);
         layout.addView(lblTarget);
 
         EditText etTarget = new EditText(ctx);
-        etTarget.setHint("留空保持原名，或填如 truth / infernus");
+        etTarget.setHint("Leave empty to keep the original name, or enter e.g. truth / infernus");
         etTarget.setSingleLine(true);
         layout.addView(etTarget);
 
         LinearLayout btnRow = new LinearLayout(ctx);
         btnRow.setOrientation(LinearLayout.HORIZONTAL);
         Button btnPickSkin = new Button(ctx);
-        btnPickSkin.setText("选择皮肤 ID");
+        btnPickSkin.setText("Pick skin ID");
         btnPickSkin.setOnClickListener(v -> showIdeSelectorDialog(true, etTarget));
         Button btnPickVeh = new Button(ctx);
-        btnPickVeh.setText("选择载具 ID");
+        btnPickVeh.setText("Pick vehicle ID");
         btnPickVeh.setOnClickListener(v -> showIdeSelectorDialog(false, etTarget));
         Button btnClearTarget = new Button(ctx);
-        btnClearTarget.setText("保持原名");
+        btnClearTarget.setText("Keep original name");
         btnClearTarget.setOnClickListener(v -> etTarget.setText(""));
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -146,26 +146,26 @@ final class ModAssetImportWizard {
         layout.addView(btnRow);
 
         TextView tvHint = new TextView(ctx);
-        tvHint.setText("\n说明：PNG/JPG/WEBP 与 PC .txd 会自动编译为 Android 贴图库，.dff/.ifp/.col 在进游戏时自动装入虚拟 models.img，完全不修改官方 gta3.img。");
+        tvHint.setText("\nNote: PNG/JPG/WEBP and PC .txd files are auto-compiled into an Android texture library, and .dff/.ifp/.col files are auto-loaded into a virtual models.img when you enter the game — the official gta3.img is never modified.");
         tvHint.setTextSize(11);
         layout.addView(tvHint);
 
         new AlertDialog.Builder(ctx)
-                .setTitle("配置并编译模型 / 贴图包")
+                .setTitle("Configure & Compile Model / Texture Pack")
                 .setView(sv)
-                .setPositiveButton("开始编译并安装", (d, w) -> {
+                .setPositiveButton("Compile & Install", (d, w) -> {
                     String packName = etPack.getText().toString().trim();
                     String targetModel = etTarget.getText().toString().trim();
                     runImport(uris, packName, targetModel.isEmpty() ? null : targetModel);
                 })
-                .setNegativeButton("取消", null)
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
     private void showIdeSelectorDialog(boolean isSkins, EditText targetField) {
         Context ctx = host.requireContext();
         Context appCtx = ctx.getApplicationContext();
-        Toast.makeText(ctx, isSkins ? "正在读取 SAMP/peds.ide…" : "正在读取 SAMP/vehicles.ide…", Toast.LENGTH_SHORT).show();
+        Toast.makeText(ctx, isSkins ? "Reading SAMP/peds.ide…" : "Reading SAMP/vehicles.ide…", Toast.LENGTH_SHORT).show();
 
         host.ioExecutor.execute(() -> {
             List<ModAssetTool.IdeEntry> allEntries = isSkins
@@ -177,7 +177,7 @@ final class ModAssetImportWizard {
                 if (!host.isAdded()) return;
                 if (allEntries.isEmpty()) {
                     Toast.makeText(ctx,
-                            isSkins ? "未找到 SAMP/peds.ide（请先部署游戏数据）" : "未找到 SAMP/vehicles.ide（请先部署游戏数据）",
+                            isSkins ? "SAMP/peds.ide not found (deploy the game data first)" : "SAMP/vehicles.ide not found (deploy the game data first)",
                             Toast.LENGTH_LONG).show();
                     return;
                 }
@@ -188,7 +188,7 @@ final class ModAssetImportWizard {
                 box.setPadding(pad, pad / 2, pad, pad / 2);
 
                 EditText etSearch = new EditText(ctx);
-                etSearch.setHint(isSkins ? "搜索皮肤 ID 或名称（如 1 / truth / swat）" : "搜索载具 ID 或名称（如 411 / infernus / sultan）");
+                etSearch.setHint(isSkins ? "Search skin ID or name (e.g. 1 / truth / swat)" : "Search vehicle ID or name (e.g. 411 / infernus / sultan)");
                 etSearch.setSingleLine(true);
                 box.addView(etSearch);
 
@@ -203,9 +203,9 @@ final class ModAssetImportWizard {
                 box.addView(lv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, listHeight));
 
                 AlertDialog pickerDlg = new AlertDialog.Builder(ctx)
-                        .setTitle(isSkins ? "选择目标 SA-MP 皮肤" : "选择目标 SA-MP 载具")
+                        .setTitle(isSkins ? "Pick a target SA-MP skin" : "Pick a target SA-MP vehicle")
                         .setView(box)
-                        .setNegativeButton("取消", null)
+                        .setNegativeButton("Cancel", null)
                         .create();
 
                 etSearch.addTextChangedListener(new TextWatcher() {
@@ -232,7 +232,7 @@ final class ModAssetImportWizard {
                     if (position >= 0 && position < filtered.size()) {
                         ModAssetTool.IdeEntry picked = filtered.get(position);
                         targetField.setText(picked.modelName);
-                        Toast.makeText(ctx, "已选 " + picked.displayLabel(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(ctx, "Selected " + picked.displayLabel(), Toast.LENGTH_SHORT).show();
                         pickerDlg.dismiss();
                     }
                 });
@@ -249,10 +249,10 @@ final class ModAssetImportWizard {
         TextView tvProg = new TextView(ctx);
         int pad = (int) (18 * host.getResources().getDisplayMetrics().density);
         tvProg.setPadding(pad, pad, pad, pad);
-        tvProg.setText("准备解析并编译资产…");
+        tvProg.setText("Preparing to parse and compile assets…");
 
         AlertDialog progDlg = new AlertDialog.Builder(ctx)
-                .setTitle("正在编译安装模组")
+                .setTitle("Compiling and installing mod")
                 .setView(tvProg)
                 .setCancelable(false)
                 .create();
@@ -292,32 +292,32 @@ final class ModAssetImportWizard {
                     host.reloadCurrentTab();
 
                     StringBuilder detail = new StringBuilder();
-                    detail.append("模组包目录：modloader/").append(res.packName).append("\n");
-                    detail.append("• 模型文件：").append(res.modelCount).append(" 个（进游戏自动装入虚拟 models.img）\n");
+                    detail.append("Mod pack folder: modloader/").append(res.packName).append("\n");
+                    detail.append("• Model files: ").append(res.modelCount).append(" (auto-loaded into the virtual models.img in game)\n");
                     if (res.renamedPrimaryModel != null) {
-                        detail.append("• 主模型已重命名为：").append(res.renamedPrimaryModel).append("\n");
+                        detail.append("• Main model renamed to: ").append(res.renamedPrimaryModel).append("\n");
                     }
                     if (res.compiledTextureCount > 0) {
-                        detail.append("• 已编译贴图：").append(res.compiledTextureCount)
-                                .append(" 张 → texdb/").append(res.texDbName).append("/\n");
+                        detail.append("• Compiled textures: ").append(res.compiledTextureCount)
+                                .append(" → texdb/").append(res.texDbName).append("/\n");
                     }
                     if (res.passthroughFileCount > 0) {
-                        detail.append("• 原样导入附带文件：").append(res.passthroughFileCount).append(" 个\n");
+                        detail.append("• Extra files imported as-is: ").append(res.passthroughFileCount).append(" files\n");
                     }
                     if (enabledNow) {
-                        detail.append("• 已自动开启 Modloader 总开关\n");
+                        detail.append("• Modloader master switch turned on automatically\n");
                     }
                     if (!res.warnings.isEmpty()) {
-                        detail.append("\n注意事项：\n");
+                        detail.append("\nNotes:\n");
                         for (String w : res.warnings) {
                             detail.append("- ").append(w).append("\n");
                         }
                     }
 
                     new AlertDialog.Builder(host.getContext())
-                            .setTitle("编译并安装成功")
+                            .setTitle("Compiled and installed")
                             .setMessage(detail.toString().trim())
-                            .setPositiveButton("确定", null)
+                            .setPositiveButton("OK", null)
                             .show();
                 });
             } catch (Exception e) {
@@ -327,9 +327,9 @@ final class ModAssetImportWizard {
                     if (progDlg.isShowing()) progDlg.dismiss();
                     if (!host.isAdded() || host.getContext() == null) return;
                     new AlertDialog.Builder(host.getContext())
-                            .setTitle("导入失败")
+                            .setTitle("Import failed")
                             .setMessage(e.getMessage() != null ? e.getMessage() : e.toString())
-                            .setPositiveButton("确定", null)
+                            .setPositiveButton("OK", null)
                             .show();
                 });
             }

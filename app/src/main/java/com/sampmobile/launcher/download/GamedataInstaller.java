@@ -16,30 +16,30 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * 把下载好的数据包解压/安装到应用私有目录。
+ * Extract/install a downloaded data package into the app's private directory.
  *
- * 落盘位置：{@code getExternalFilesDir(null)}，即
- * {@code /sdcard/Android/data/<pkg>/files} —— **不是** files/gamedata 子目录。
- * 游戏（SAMP.java）与 GameDataImporter 都以 files/ 为根读 texdb/、SAMP/、audio/，
- * 装到子目录里游戏会读不到。
+ * Installed at: {@code getExternalFilesDir(null)}, i.e.
+ * {@code /sdcard/Android/data/<pkg>/files} — **not** a files/gamedata subdirectory.
+ * The game (SAMP.java) and GameDataImporter both read texdb/, SAMP/, and audio/ from files/ as the root,
+ * installing into a subdirectory would make the game unable to find them.
  *
- * 这个路径在 Android 11+ 上**应用自己可以随便写**，不需要 MANAGE_EXTERNAL_STORAGE。
- * 只有第三方（adb、文件管理器）才受 FUSE 的 secure_mkdirs 限制，所以之前
- * push_gamedata_to_device.py 才要绕道"打 tar → 设备端解压"。现在下载器直接在
- * 应用进程里写，那条绕行完全不需要。
+ * On Android 11+, the app itself can freely write to this path, without MANAGE_EXTERNAL_STORAGE.
+ * Only third parties (adb, file managers) are restricted by FUSE secure_mkdirs, which is why
+ * push_gamedata_to_device.py used to take the "tar it up, then extract on-device" detour. The downloader now writes directly
+ * from the app process, so that detour is no longer needed at all.
  *
- * 安装是**先解到临时目录再整体合并**的：中途断电/杀进程不会留下半套数据
- * 让游戏读到一半崩溃。
+ * Installation **extracts to a temp directory first, then merges it in as a whole**: a power cut or killed process mid-way cannot leave a half-installed data set
+ * that crashes the game halfway through reading it.
  */
 public final class GamedataInstaller {
 
     private static final String TAG = "GamedataInstaller";
 
-    /** 解压中的临时目录（与 files/ 同级，避免被游戏误读）。 */
+    /** Temp directory used while extracting (a sibling of files/, so the game cannot mistake it for data). */
     private static final String STAGING_DIR = ".gamedata.staging";
 
     public interface Listener {
-        /** @param entryName 当前正在解压的条目（已归一化后的相对路径） */
+        /** @param entryName The entry currently being extracted (normalized relative path) */
         void onProgress(String entryName, long bytesWritten, long bytesTotal);
 
         void onStatus(String message);
@@ -54,13 +54,13 @@ public final class GamedataInstaller {
     public File filesRoot() {
         File dir = context.getExternalFilesDir(null);
         if (dir == null) {
-            // 极少数设备外置存储未挂载，退回内部存储。容量可能不够，但至少不崩。
+            // On the rare device where external storage is not mounted, fall back to internal storage. Capacity may be insufficient, but at least it does not crash.
             dir = new File(context.getFilesDir(), "ext");
         }
         return dir;
     }
 
-    /** 安装目标就是 files/ 根目录。 */
+    /** The install target is the files/ root directory. */
     public File installDir() {
         return filesRoot();
     }
@@ -69,33 +69,33 @@ public final class GamedataInstaller {
         return new File(filesRoot(), STAGING_DIR);
     }
 
-    /** 数据是否已就绪：复用 GameDataImporter 的核心文件判定，口径与手动导入一致。 */
+    /** Whether the data is ready: reuses GameDataImporter's core-file check, so it agrees with manual imports. */
     public boolean isInstalled() {
         return GameDataImporter.isGameDataReady(filesRoot());
     }
 
-    /** 缺少哪些核心文件（空列表表示就绪）。 */
+    /** Which core files are missing (an empty list means ready). */
     public java.util.List<String> missingCoreFiles() {
         return GameDataImporter.findMissingCoreFiles(filesRoot());
     }
 
     /**
-     * 解压一个 zip 到 staging 目录。
+     * Extract a zip into the staging directory.
      *
-     * 条目路径用 {@link GameDataImporter#normalizeZipEntryPath} 归一化：
-     * 包的顶层可能带 files/ 或 gamedata/files/ 包装，归一化后统一落到根，
-     * 这样无论打包脚本怎么包，装出来都对。
+     * Entry paths are normalized with {@link GameDataImporter#normalizeZipEntryPath}:
+     * A package's top level may carry a files/ or gamedata/files/ wrapper; after normalization everything lands at the root,
+     * so the install comes out right no matter how the packaging script wrapped it.
      *
-     * @param zip        已下载并校验通过的 zip
-     * @param totalBytes 进度分母（用压缩包大小近似）
+     * @param zip        The downloaded and verified zip
+     * @param totalBytes Progress denominator (approximated by the archive size)
      */
     public void extractToStaging(File zip, long totalBytes, Listener listener) throws IOException {
         extractToStaging(zip, totalBytes, listener, true);
     }
 
     /**
-     * @param fresh true = 先清空 staging（第一个包用）；
-     *              false = 追加到已有 staging（后续包，用于覆盖同名资源）
+     * @param fresh true = clear staging first (for the first package);
+     *              false = append to the existing staging directory (for later packages, to overwrite same-named resources)
      */
     public void extractToStaging(File zip, long totalBytes, Listener listener, boolean fresh)
             throws IOException {
@@ -104,7 +104,7 @@ public final class GamedataInstaller {
             deleteRecursively(staging);
         }
         if (!staging.isDirectory() && !staging.mkdirs()) {
-            throw new IOException("无法创建临时目录：" + staging);
+            throw new IOException("Cannot create temp directory: " + staging);
         }
 
         long written = 0;
@@ -121,15 +121,15 @@ public final class GamedataInstaller {
                     continue;
                 }
 
-                // 归一化 + 安全校验（拒绝 .. / 绝对路径 / __MACOSX）
+                // Normalize + safety check (reject .. / absolute paths / __MACOSX)
                 String rel = GameDataImporter.normalizeZipEntryPath(raw);
                 if (rel == null) {
-                    Log.d(TAG, "跳过条目: " + raw);
+                    Log.d(TAG, "Skipping entry: " + raw);
                     zis.closeEntry();
                     continue;
                 }
                 if (!isSafeEntryName(rel)) {
-                    Log.w(TAG, "跳过不安全的 zip 条目: " + raw);
+                    Log.w(TAG, "Skipping unsafe zip entry: " + raw);
                     zis.closeEntry();
                     continue;
                 }
@@ -137,7 +137,7 @@ public final class GamedataInstaller {
                 File out = new File(staging, rel);
                 File parent = out.getParentFile();
                 if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
-                    throw new IOException("无法创建父目录：" + parent);
+                    throw new IOException("Cannot create parent directory: " + parent);
                 }
 
                 try (OutputStream os = new FileOutputStream(out)) {
@@ -154,25 +154,25 @@ public final class GamedataInstaller {
             }
         }
 
-        if (listener != null) listener.onStatus("解压完成，正在启用…");
+        if (listener != null) listener.onStatus("Extraction complete, activating...");
     }
 
     /**
-     * 把 staging 合并进 files/ 根目录。
+     * Merge staging into the files/ root directory.
      *
-     * 为什么是"合并"而不是"整体改名"：安装目标是 files/ 根，里面还可能有人工
-     * 放进去的其他文件（设置、存档），整体替换会把它们一起干掉。合并只覆盖
-     * 数据包里的同名文件，其余原样保留。
+     * Why "merge" instead of "rename the whole thing": the install target is the files/ root, which may also contain files placed there by hand
+     * (settings, saves); replacing the whole directory would delete those too. Merging only overwrites
+     * same-named files from the package and leaves the rest untouched.
      */
     public void activateStaging() throws IOException {
         File staging = stagingDir();
         if (!staging.isDirectory()) {
-            throw new IOException("临时目录不存在，无法启用：" + staging);
+            throw new IOException("Temp directory does not exist, cannot activate: " + staging);
         }
 
         File root = installDir();
         int files = mergeDir(staging, root, "");
-        Log.i(TAG, "已合并 " + files + " 个文件到 " + root);
+        Log.i(TAG, "Merged " + files + " files into " + root);
 
         deleteRecursively(staging);
     }
@@ -188,24 +188,24 @@ public final class GamedataInstaller {
 
             if (src.isDirectory()) {
                 if (!dst.isDirectory() && !dst.mkdirs()) {
-                    throw new IOException("无法创建目录：" + dst);
+                    throw new IOException("Cannot create directory: " + dst);
                 }
                 count += mergeDir(src, dst, rel);
             } else {
-                // 用户配置（服务器列表、设置、日志）不能被数据包覆盖，
-                // 否则玩家每次更新数据都会丢掉自己的服务器书签。
+                // User config (server list, settings, logs) must not be overwritten by a data package,
+                // otherwise players would lose their server bookmarks on every data update.
                 if (GameDataImporter.shouldPreserveExisting(rel) && dst.exists()) {
-                    Log.i(TAG, "保留用户文件，不覆盖：" + rel);
+                    Log.i(TAG, "Keeping user file, not overwriting: " + rel);
                     continue;
                 }
-                // 覆盖同名文件；先删掉旧的
+                // Overwrite the same-named file; delete the old one first
                 if (dst.exists() && !dst.delete()) {
-                    throw new IOException("无法覆盖已有文件：" + dst);
+                    throw new IOException("Cannot overwrite existing file: " + dst);
                 }
 
-                // 优先 renameTo：staging 与 files/ 在同一文件系统内，改名是零拷贝，
-                // 1GB+ 数据不需要额外一份空间，也没有逐字节 I/O。
-                // 只有跨文件系统（理论上不该发生，但外置存储被拆分时有可能）才回退到拷贝。
+                // Prefer renameTo: staging and files/ are on the same filesystem, so renaming is zero-copy,
+                // 1GB+ of data needs no extra copy of the space and no byte-by-byte I/O.
+                // Only fall back to copying across filesystems (which in theory should not happen, but can when external storage is split).
                 if (!src.renameTo(dst)) {
                     copyFile(src, dst);
                 }
@@ -216,10 +216,10 @@ public final class GamedataInstaller {
     }
 
     /**
-     * 逐字节拷贝（renameTo 跨文件系统失败时的回退）。
+     * Byte-by-byte copy (fallback when renameTo fails across filesystems).
      *
-     * 刻意不用 java.nio.file.Files.copy：那是 API 26 才有的，
-     * 而本项目 minSdk 24，Android 7.x 上会直接 NoClassDefFoundError。
+     * Deliberately not using java.nio.file.Files.copy: that is API 26 only,
+     * while this project targets minSdk 24, and it would throw NoClassDefFoundError outright on Android 7.x.
      */
     private static void copyFile(File src, File dst) throws IOException {
         try (InputStream in = new FileInputStream(src);
@@ -229,26 +229,26 @@ public final class GamedataInstaller {
             while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
         }
         if (!src.delete()) {
-            Log.w(TAG, "临时文件删除失败（不影响结果）: " + src);
+            Log.w(TAG, "Failed to delete temp file (does not affect the result): " + src);
         }
     }
 
-    /** 安装失败时清理临时目录。 */
+    /** Clean up the temp directory when installation fails. */
     public void discardStaging() {
         deleteRecursively(stagingDir());
     }
 
     /**
-     * 把一个已解压的文件合并进安装目录（用于 online 包覆盖 game 包的同名资源）。
+     * Merge an already-extracted file into the install directory (so the online package can overwrite same-named resources from the game package).
      */
     public void mergeIntoInstall(File srcFile, String relPath) throws IOException {
         if (!isSafeEntryName(relPath)) {
-            throw new IOException("不安全的相对路径：" + relPath);
+            throw new IOException("Unsafe relative path: " + relPath);
         }
         File dst = new File(installDir(), relPath);
         File parent = dst.getParentFile();
         if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
-            throw new IOException("无法创建目录：" + parent);
+            throw new IOException("Cannot create directory: " + parent);
         }
         try (InputStream in = new FileInputStream(srcFile);
              OutputStream out = new FileOutputStream(dst)) {
@@ -259,10 +259,10 @@ public final class GamedataInstaller {
     }
 
     /**
-     * 判断 zip 条目名是否安全。
+     * Check whether a zip entry name is safe.
      *
-     * 拒绝：绝对路径（/ 开头、盘符）、含 .. 段、含反斜杠的 Windows 风格路径
-     * （Android 上反斜杠会被当普通字符，但解出来的目录结构会和预期不符）。
+     * Reject: absolute paths (starting with / or a drive letter), segments containing .., and Windows-style paths with backslashes
+     * (On Android a backslash is treated as an ordinary character, but the extracted directory structure would not match expectations).
      */
     static boolean isSafeEntryName(String name) {
         if (name == null || name.isEmpty()) return false;
@@ -275,7 +275,7 @@ public final class GamedataInstaller {
         return true;
     }
 
-    /** 递归删除；失败不抛异常（清理场景抛了也没人处理）。 */
+    /** Delete recursively; failures do not throw (nobody handles exceptions in cleanup paths). */
     public static void deleteRecursively(File f) {
         if (f == null || !f.exists()) return;
         if (f.isDirectory()) {
@@ -284,6 +284,6 @@ public final class GamedataInstaller {
                 for (File c : children) deleteRecursively(c);
             }
         }
-        if (!f.delete()) Log.w(TAG, "删除失败: " + f);
+        if (!f.delete()) Log.w(TAG, "Failed to delete: " + f);
     }
 }

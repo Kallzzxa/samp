@@ -12,7 +12,7 @@
 //   on create result:
 //            EmitEvent(SetKeyCapture, true) + EmitEvent(EnableKey, VK, true) for
 //            A/H/E/L/O/ENTER, then EmitBrowserEvent(test:early, "early-tag", 7)
-//   +6000ms  EmitBrowserEvent(test:hello, "服务端", 42, 3.5, true)   <- four wire types
+//   +6000ms  EmitBrowserEvent(test:hello, "server", 42, 3.5, true)   <- four wire types
 //   +9000ms  EmitBrowserEvent(test:command, "flash", 1500)
 //   +12000ms EmitBrowserEvent(test:ping)                    <- the page removed its first
 //                                                            handler with cef.off, so the
@@ -322,7 +322,7 @@ public:
             else if (step == 3 && t >= 6000)
             {
                 SendBrowserEvent("test:hello",
-                                 {Argument::FromString("服务端"),
+                                 {Argument::FromString("server"),
                                   Argument::FromInt(42),
                                   Argument::FromFloat(3.5f),
                                   Argument::FromBool(true)});
@@ -666,14 +666,14 @@ private:
         if (ev.name == "test:ack")
         {
             ++stats_.helloAck;
-            // expected: ["ack:服务端🚀", 43, 7.5, false]
+            // expected: ["ack:server🚀", 43, 7.5, false]
             // The rocket is U+1F680 (4-byte UTF-8): inside the JVM it is a
             // surrogate pair, so this also proves the CESU-8 -> UTF-8 fixup.
             // The float is deliberately fractional: JS integral numbers (7.0)
             // become Integer on the wire, exactly like CefV8Value::IsInt().
             if (ev.args.size() == 4 &&
                 ev.args[0].type == ArgumentType::String &&
-                ev.args[0].stringValue == "ack:服务端🚀" &&
+                ev.args[0].stringValue == "ack:server🚀" &&
                 ev.args[1].type == ArgumentType::Integer &&
                 ev.args[1].intValue == 43 &&
                 ev.args[2].type == ArgumentType::Float &&

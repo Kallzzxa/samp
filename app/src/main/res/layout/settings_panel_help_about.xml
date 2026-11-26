@@ -16,7 +16,7 @@
         android:orientation="vertical"
         android:padding="@dimen/_12sdp">
 
-        <!-- 卡片 1：模组安装与使用帮助 -->
+        <!-- Card 1: Mod Installation &amp; Usage Help -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -27,7 +27,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="模组安装与使用指南"
+                android:text="Mod Installation &amp; Usage Guide"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_9ssp"
                 android:textStyle="bold" />
@@ -42,7 +42,7 @@
                 android:textSize="@dimen/_8ssp" />
         </LinearLayout>
 
-        <!-- 卡片 2：游戏操作与联机常见问题 -->
+        <!-- Card 2: Game Controls &amp; Multiplayer FAQ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -54,7 +54,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="游戏操作与常见问题"
+                android:text="Game Controls &amp; FAQ"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_9ssp"
                 android:textStyle="bold" />
@@ -69,7 +69,7 @@
                 android:textSize="@dimen/_8ssp" />
         </LinearLayout>
 
-        <!-- 卡片 3：游戏内常用聊天指令 -->
+        <!-- Card 3: Common In-Game Chat Commands -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -81,7 +81,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="游戏内常用聊天指令"
+                android:text="Common In-Game Chat Commands"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_9ssp"
                 android:textStyle="bold" />
@@ -90,7 +90,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/_2sdp"
-                android:text="在游戏内打开聊天输入框即可直接输入以下指令"
+                android:text="Open the chat input in game and type any of these commands"
                 android:textColor="@color/launcher_text_dim"
                 android:textSize="@dimen/_7ssp" />
 
@@ -106,7 +106,7 @@
                 android:textSize="@dimen/_8ssp" />
         </LinearLayout>
 
-        <!-- 卡片 4：关于客户端 -->
+        <!-- Card 4: About the Client -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -118,7 +118,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="关于客户端"
+                android:text="About the Client"
                 android:textColor="@color/launcher_accent"
                 android:textSize="@dimen/_9ssp"
                 android:textStyle="bold" />

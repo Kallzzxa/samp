@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-只上传已打包好的产物到 Cloudflare R2（不重新打包）。
+Only uploads already-packaged output to Cloudflare R2 (does not re-package).
 
-打包（publish_gamedata.py）与上传分开，是因为 2GB 打包要几分钟，
-而上传可能因网络中断重试多次 —— 不该每次都重打包一遍。
+Packaging (publish_gamedata.py) and uploading are separate because packaging 2 GB takes several minutes,
+while an upload may be retried many times after network interruptions — it should not be re-packaged every time.
 
     python tools/gamedata/upload_r2.py --account-id XXX --bucket samp-mobile
-    # 凭据从环境变量读，避免写进命令历史：
+    # Credentials are read from environment variables, so they never land in shell history:
     set R2_ACCESS_KEY_ID=...        # Windows
     set R2_SECRET_ACCESS_KEY=...
     python tools/gamedata/upload_r2.py --account-id XXX --bucket samp-mobile
 
-特性：
-- 已存在且大小一致的对象跳过（R2 的 HeadObject 比上传便宜得多）
-- 单文件失败重试 3 次，指数退避
-- 按大小排序上传：先传小文件（清单最早就能用），大分片后续跟上
-- 传完做一次抽样 HEAD 校验，确认远端 Content-Length 与本地一致
+Features:
+- Objects that already exist with a matching size are skipped (an R2 HeadObject is far cheaper than an upload)
+- A failed single file retries 3 times, with exponential backoff
+- Uploads sorted by size: small files first (so the manifest is usable as early as possible), large chunks follow
+- After uploading, a sampled HEAD check confirms the remote Content-Length matches the local one
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def make_client(account_id: str, access_key: str, secret_key: str):
         import boto3
         from botocore.config import Config
     except ImportError:
-        raise SystemExit("需要 boto3：python -m pip install boto3")
+        raise SystemExit("boto3 is required: python -m pip install boto3")
 
     from boto3.s3.transfer import TransferConfig
 
@@ -57,8 +57,8 @@ def make_client(account_id: str, access_key: str, secret_key: str):
             max_pool_connections=8,
         ),
     ), TransferConfig(
-        # 16MB 分片：单块失败只重传该块，不整文件重来。
-        # 2GB 文件约 135 块，配合并发 4，跨境线路也能跑满。
+        # 16 MB chunks: if one block fails, only that block is re-uploaded, not the whole file.
+        # A 2 GB file is about 135 blocks; with concurrency 4, even cross-border links can saturate.
         multipart_threshold=16 * 1024 * 1024,
         multipart_chunksize=16 * 1024 * 1024,
         max_concurrency=4,
@@ -75,12 +75,12 @@ def remote_size(client, bucket: str, key: str) -> int | None:
 
 
 def upload_one(client, bucket: str, path: Path, key: str, xfer) -> bool:
-    """上传单个文件，失败重试 3 次。"""
+    """Upload a single file, retrying up to 3 times on failure."""
     size = path.stat().st_size
 
     existing = remote_size(client, bucket, key)
     if existing == size:
-        print(f"  跳过（已存在且大小一致）: {key}")
+        print(f"  Skipped (already exists with matching size): {key}")
         return True
 
     extra = {"ContentType": "application/json", "CacheControl": "no-cache"} \
@@ -93,7 +93,7 @@ def upload_one(client, bucket: str, path: Path, key: str, xfer) -> bool:
             client.upload_file(str(path), bucket, key, ExtraArgs=extra, Config=xfer)
             return True
         except Exception as e:
-            print(f"  第 {attempt} 次失败 {key}: {e}")
+            print(f"  Attempt {attempt} failed for {key}: {e}")
             if attempt == 3:
                 return False
             time.sleep(2 ** attempt)
@@ -101,19 +101,19 @@ def upload_one(client, bucket: str, path: Path, key: str, xfer) -> bool:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="上传数据包到 Cloudflare R2")
-    ap.add_argument("--dir", default="dist/cdn", help="产物目录（默认 dist/cdn）")
+    ap = argparse.ArgumentParser(description="Upload the data package to Cloudflare R2")
+    ap.add_argument("--dir", default="dist/cdn", help="Output directory (default dist/cdn)")
     ap.add_argument("--account-id", default=os.environ.get("R2_ACCOUNT_ID", ""))
     ap.add_argument("--bucket", default=os.environ.get("R2_BUCKET", ""))
     ap.add_argument("--access-key", default=os.environ.get("R2_ACCESS_KEY_ID", ""))
     ap.add_argument("--secret-key", default=os.environ.get("R2_SECRET_ACCESS_KEY", ""))
     ap.add_argument("--sample-check", type=int, default=5,
-                    help="上传后抽样校验的个数（0=不校验）")
+                    help="Number of objects to sample-check after upload (0 = no check)")
     args = ap.parse_args()
 
     root = Path(args.dir)
     if not (root / "manifest.json").is_file():
-        raise SystemExit(f"{root} 里没有 manifest.json，先跑 publish_gamedata.py")
+        raise SystemExit(f"{root} has no manifest.json; run publish_gamedata.py first")
 
     missing = [n for n, v in {
         "account-id": args.account_id, "bucket": args.bucket,
@@ -121,21 +121,21 @@ def main() -> int:
     }.items() if not v]
     if missing:
         raise SystemExit(
-            "缺少参数：" + ", ".join(missing) + "\n"
-            "建议用环境变量传凭据（不进命令历史）：\n"
+            "Missing parameters: " + ", ".join(missing) + "\n"
+            "Pass credentials via environment variables (they stay out of shell history):\n"
             "  export R2_ACCESS_KEY_ID=...\n"
             "  export R2_SECRET_ACCESS_KEY=...\n"
-            "凭据在 Cloudflare 后台 -> R2 -> Manage R2 API Tokens 创建，\n"
-            "权限选 Object Read & Write，并限定到目标 bucket。")
+            "Create credentials in the Cloudflare dashboard -> R2 -> Manage R2 API Tokens,\n"
+            "with Object Read & Write permission, scoped to the target bucket.")
 
     client, xfer = make_client(args.account_id, args.access_key, args.secret_key)
 
     files = [p for p in root.rglob("*") if p.is_file()]
-    # 清单最先传（小，且客户端靠它决定下什么），其余按大小升序
+    # The manifest goes first (small, and the client uses it to decide what to download); the rest go in ascending size order
     files.sort(key=lambda p: (0 if p.name == "manifest.json" else 1, p.stat().st_size))
 
     total = sum(p.stat().st_size for p in files)
-    print(f"准备上传 {len(files)} 个文件 / {human(total)} -> r2://{args.bucket}")
+    print(f"Preparing to upload {len(files)} files / {human(total)} -> r2://{args.bucket}")
 
     done_bytes = 0
     failed: list[str] = []
@@ -154,17 +154,17 @@ def main() -> int:
         eta = (total - done_bytes) / speed if speed > 0 else 0
         print(f"  [{i}/{len(files)}] {key}  "
               f"{human(done_bytes)}/{human(total)}  "
-              f"{human(speed)}/s  剩余 {int(eta)}s", flush=True)
+              f"{human(speed)}/s  {int(eta)}s remaining", flush=True)
 
     if failed:
-        print(f"\n失败 {len(failed)} 个：")
+        print(f"\n{len(failed)} failed:")
         for k in failed:
             print("  " + k)
         return 1
 
-    # 抽样校验：确认远端 Content-Length 与本地一致
+    # Sample check: confirm the remote Content-Length matches the local one
     if args.sample_check > 0:
-        print(f"\n抽样校验 {min(args.sample_check, len(files))} 个…")
+        print(f"\nSample-checking {min(args.sample_check, len(files))}…")
         step = max(1, len(files) // args.sample_check)
         bad = 0
         for path in files[::step][:args.sample_check]:
@@ -174,14 +174,14 @@ def main() -> int:
             ok = rs == ls
             if not ok:
                 bad += 1
-            print(f"  {'OK ' if ok else 'BAD'} {key} 远端={rs} 本地={ls}")
+            print(f"  {'OK ' if ok else 'BAD'} {key} remote={rs} local={ls}")
         if bad:
-            print(f"\n{bad} 个对象大小不一致")
+            print(f"\n{bad} objects have mismatched sizes")
             return 1
 
-    print(f"\n上传完成，用时 {int(time.time() - started)}s")
-    print(f"清单地址：https://<你的自定义域>/manifest.json")
-    print(f"（若还没绑域名，可临时用 R2 的 r2.dev 公开地址测试）")
+    print(f"\nUpload complete, took {int(time.time() - started)}s")
+    print(f"Manifest URL: https://<your-custom-domain>/manifest.json")
+    print(f"(If no domain is bound yet, you can test temporarily with R2's public r2.dev URL)")
     return 0
 
 

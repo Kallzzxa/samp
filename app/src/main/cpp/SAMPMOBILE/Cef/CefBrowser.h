@@ -72,7 +72,7 @@ public:
     // was not initialised or the callback is missing.
     static void NotifyTransportConnected();
 
-    /** 调试自检事件是否开启（环境变量 SAMP_CEF_DEBUG_WORLDOBJ=1）。 */
+    /** Whether debug self-check events are enabled (env var SAMP_CEF_DEBUG_WORLDOBJ=1). */
     static bool worldObjectDebugEnabled();
 
     // Idempotent: installs itself as CefSession's event handlers.
@@ -133,11 +133,11 @@ public:
     // the camera so the on-device test can verify projection + hit testing.
     void DebugCreateWorld2D(int32_t id, float distance, float width, float height);
 
-    // 让**所有** World2D 条目上报投影结果（debug:world2d），不限于调试入口建的那条。
+    // Make **all** World2D entries report projection results (debug:world2d), not only the one created via the debug entry point.
     //
-    // 原版插件建的 World2D 走的是 HandleServerEvent -> createWorld2DBrowser，
-    // 这条条目 debugProbe=false，所以真机验收时服务端看不到"页面到底被算到了
-    // 屏幕哪里"。这条开关只影响上报，不影响绘制/输入。
+    // World2D created by the original plugin goes through HandleServerEvent -> createWorld2DBrowser,
+    // that entry has debugProbe=false, so during real-device acceptance the server cannot see "where exactly the page was projected to
+    // on screen". This switch only affects reporting, not drawing/input.
     void SetWorld2DProbeAll(bool on);
 
     // WorldObject3D (stage 7, second batch): pull one frame per attached page
@@ -182,8 +182,8 @@ private:
         // client's log on this ROM, so the server log is the only reliable
         // place to observe where the client put the page.
         bool debugProbe = false;
-        // 上报节流的时间戳，按条目存。之前是函数级 static，只要服务端同时开
-        // 两条 World2D，第二条就永远轮不到上报 —— 验收脚本会误判"没投影"。
+        // Report-throttling timestamps, stored per entry. Previously a function-level static, so whenever the server opened
+        // two World2D entries at once, the second never got its turn to report -- the acceptance script would misjudge it as "no projection".
         uint64_t lastProbeMs = 0;
     };
 
@@ -340,8 +340,8 @@ private:
     // TickWorld2D the reads are in the same thread).
     std::vector<World2DEntry> world2d_;
 
-    // 见 SetWorld2DProbeAll()。默认关：正常玩家不该为每条 World2D 付上报开销。
-    // Java 线程（广播）写、游戏线程读，所以用原子量而不是裸 bool。
+    // See SetWorld2DProbeAll(). Off by default: normal players should not pay a reporting cost for every World2D.
+    // Written by the Java thread (broadcast) and read by the game thread, so use an atomic instead of a bare bool.
     std::atomic<bool> world2dProbeAll_{ false };
 
     // Java main thread -> game thread job queue (see PostToGameThread above).

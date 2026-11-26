@@ -15,25 +15,25 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * 复刻 PC 客户端 CEF custom scheme handler 的 URL 语义：
+ * Replicates the URL semantics of the PC client's CEF custom scheme handler:
  *
  *     http://cef/[resourceName]/[relativePath]
- *     cef://[resourceName]/[relativePath]        （PC 端也识别这种写法）
+ *     cef://[resourceName]/[relativePath]        (the PC side also recognizes this form)
  *
- * PC 侧数据流是：服务端 FileData 分块下发 -> 客户端组装/解密到本地资源包 ->
- * scheme handler 从资源包读取。Android 侧保持同一分段：
+ * PC-side data flow: server sends FileData in chunks -> client assembles/decrypts into a local resource pack ->
+ * scheme handler reads from the resource pack. Android keeps the same split:
  *
- *     服务端下发  ->  CefSession/CefResourceStore 落盘（阶段5）
+ *     Server delivers  ->  CefSession/CefResourceStore writes to disk (stage 5)
  *                          |
  *                          v
  *                 <filesDir>/cef/resources/<resource>/<path>
  *                          |
  *                          v
- *                   CefResourceProvider（本类）
+ *                   CefResourceProvider (this class)
  *
- * 本轮（阶段3）只打通 URL 路由与错误反馈：文件存在则原样返回，不存在则返回
- * 明确标注“资源层未同步”的诊断页，避免把空页面误判为网页加载成功。
- * 阶段5 在此处补 OCEF2 解密与 manifest 版本校验，不需要改动调用方。
+ * This round (stage 3) only wires up URL routing and error feedback: existing files are returned as-is; missing files return a
+ * diagnostic page clearly marked "resource layer not synced", so an empty page is not mistaken for a successful page load.
+ * Stage 5 adds OCEF2 decryption and manifest version checks here, without changing callers.
  */
 final class CefResourceProvider {
 
@@ -47,7 +47,7 @@ final class CefResourceProvider {
     }
 
     /**
-     * @return null 表示不拦截（交给 WebView 默认处理）；非 null 表示本机应答。
+     * @return null means do not intercept (leave to WebView default handling); non-null means a local response.
      */
     static WebResourceResponse open(Context context, String url) {
         if (url == null || url.length() == 0) return null;
@@ -56,7 +56,7 @@ final class CefResourceProvider {
         if (schemeEnd <= 0) return null;
         String scheme = url.substring(0, schemeEnd).toLowerCase(Locale.US);
 
-        // 去掉 query / fragment：资源路径本身不含这些，但它们会污染文件名。
+        // Strips query / fragment: resource paths never contain them, but they would pollute the filename.
         String rest = url.substring(schemeEnd + 3);
         int cut = rest.length();
         int q = rest.indexOf('?');
@@ -69,15 +69,15 @@ final class CefResourceProvider {
         String authority = slash >= 0 ? rest.substring(0, slash) : rest;
         String path = slash >= 0 ? rest.substring(slash + 1) : "";
 
-        // 权威段可能带 userinfo / port，资源路由只关心主机名。
+        // The authority segment may carry userinfo / port; resource routing only cares about the hostname.
         int at = authority.lastIndexOf('@');
         if (at >= 0) authority = authority.substring(at + 1);
         int colon = authority.indexOf(':');
         if (colon >= 0) authority = authority.substring(0, colon);
 
-        // PC 客户端注册方式（manager.cpp:314）：
+        // PC client registration (manager.cpp:314):
         //   CefRegisterSchemeHandlerFactory("http", "cef", ...)
-        // 所以真实 URL 是 http://cef/<resource>/<path>；cef:// 也一并接受。
+        // So the real URL is http://cef/<resource>/<path>; cef:// is also accepted.
         final boolean isCefUrl =
                 "cef".equals(scheme)
                         || (("http".equals(scheme) || "https".equals(scheme))
@@ -88,10 +88,10 @@ final class CefResourceProvider {
         String resourceName = pathSlash >= 0 ? path.substring(0, pathSlash) : path;
         String relativePath = pathSlash >= 0 ? path.substring(pathSlash + 1) : "";
         if (relativePath.length() == 0) {
-            // http://cef/favicon.ico 这类请求里 "favicon.ico" 是主机后的第一段，
-            // 但它显然是一个文件而不是资源名。CEF 侧只处理 <resource>/<path>，
-            // 这里直接 404，不要拿它去套 index.html 再生成诊断页（那会在日志里
-            // 制造一条假的 CEF_RESOURCE_MISS，也白白注入一次 bootstrap）。
+            // In requests like http://cef/favicon.ico, "favicon.ico" is the first segment after the host,
+            // but it is clearly a file, not a resource name. The CEF side only handles <resource>/<path>,
+            // so return 404 directly here; do not wrap it in index.html to generate a diagnostic page (that would create a fake
+            // CEF_RESOURCE_MISS in the logs and inject a bootstrap for nothing).
             if (resourceName.indexOf('.') >= 0) {
                 return response("text/plain", 404, "Not Found", new byte[0]);
             }
@@ -100,10 +100,10 @@ final class CefResourceProvider {
 
         if (!isSafeSegment(resourceName) || !isSafeRelativePath(relativePath)) {
             Log.w(TAG, "rejected unsafe resource path: " + url);
-            return errorPage(400, "Bad Request", "资源路径非法");
+            return errorPage(400, "Bad Request", "Invalid resource path");
         }
 
-        // 以 '.' 开头的段是内部标记（例如资源根下的 .cefhash），不对页面开放。
+        // Segments starting with '.' are internal markers (e.g. .cefhash under the resource root) and are not exposed to pages.
         for (String segment : relativePath.split("/")) {
             if (segment.startsWith(".")) {
                 return response("text/plain", 404, "Not Found", new byte[0]);
@@ -113,16 +113,16 @@ final class CefResourceProvider {
         File root = new File(context.getFilesDir(), "cef/resources");
         File target = new File(new File(root, resourceName), relativePath);
 
-        // 防御性检查：解析后的路径必须仍在资源根目录内。
+        // Defensive check: the resolved path must stay inside the resource root.
         try {
             String rootCanonical = root.getCanonicalPath();
             String targetCanonical = target.getCanonicalPath();
             if (!targetCanonical.startsWith(rootCanonical + File.separator)) {
                 Log.w(TAG, "rejected traversal: " + url);
-                return errorPage(403, "Forbidden", "资源路径越界");
+                return errorPage(403, "Forbidden", "Resource path out of bounds");
             }
         } catch (IOException e) {
-            return errorPage(500, "Internal Error", "资源路径解析失败");
+            return errorPage(500, "Internal Error", "Failed to parse resource path");
         }
 
         if (!target.isFile()) {
@@ -132,21 +132,21 @@ final class CefResourceProvider {
 
         try {
             byte[] data = readAll(target);
-            // 正常路径下 native（CefResources）已解包并解密，磁盘上是明文；
-            // 若仍看到 OCEF2 头，说明解包环节异常（例如手工塞进来的 pak 条目），
-            // 不要把它当页面吐给 WebView。
+            // On the normal path, native (CefResources) has already unpacked and decrypted, so the disk copy is plaintext;
+            // if an OCEF2 header is still seen, the unpack step went wrong (e.g. a manually inserted pak entry),
+            // do not serve it to the WebView as a page.
             if (data.length >= 5 && data[0] == 'O' && data[1] == 'C' && data[2] == 'E'
                     && data[3] == 'F' && data[4] == '2') {
                 Log.e(TAG, "CEF_RESOURCE_ENCRYPTED " + resourceName + "/" + relativePath
                         + " (" + data.length + " bytes) - still wrapped, extraction failed");
                 return errorPage(503, "Resource Encrypted",
-                        "该文件仍处于加密封装状态（应当由资源层解密后落盘）");
+                        "This file is still in its encrypted package (the resource layer should decrypt it before writing it to disk)");
             }
             String mime = mimeOf(relativePath);
             if ("text/html".equals(mime)) {
-                // window.cef 是 CEF 在 V8 context 创建时注入的；WebView 没有等价的
-                // 文档前脚本钩子，所以在字节流里内联 —— 页面脚本执行前对象已就绪，
-                // 不存在 cef.on 早于注入的竞态。
+                // window.cef is injected by CEF when the V8 context is created; WebView has no equivalent
+                // pre-document script hook, so it is inlined into the byte stream — the object is ready before page scripts run,
+                // and there is no race where cef.on runs before injection.
                 data = CefJs.inject(data);
             }
             Log.i(TAG, "CEF_RESOURCE_HIT " + resourceName + "/" + relativePath
@@ -154,7 +154,7 @@ final class CefResourceProvider {
             return response(mime, 200, "OK", data);
         } catch (IOException e) {
             Log.w(TAG, "read failed " + target, e);
-            return errorPage(500, "Internal Error", "资源读取失败");
+            return errorPage(500, "Internal Error", "Failed to read resource");
         }
     }
 
@@ -212,11 +212,11 @@ final class CefResourceProvider {
     }
 
     private static WebResourceResponse missingPage(String resourceName, String relativePath) {
-        String body = page("资源未同步",
-                "资源 <code>" + escape(resourceName) + "/" + escape(relativePath) + "</code>"
-                        + " 不在本机资源目录中。<br>"
-                        + "说明服务端 manifest 未声明该死链，或资源包解包时该条目缺失——"
-                        + "检查 <code>CefResources</code> 日志中的 <code>extracted: N file(s) written</code>。");
+        String body = page("Resource not synced",
+                "Resource <code>" + escape(resourceName) + "/" + escape(relativePath) + "</code>"
+                        + " is not in the local resource directory.<br>"
+                        + "This means the server manifest did not declare this dead link, or the entry was missing when the resource pack was unpacked — "
+                        + "Check the <code>CefResources</code> log for <code>extracted: N file(s) written</code>.");
         return response("text/html", 503, "Resource Not Downloaded",
                 CefJs.inject(body.getBytes(StandardCharsets.UTF_8)));
     }

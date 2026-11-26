@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-带 Range 支持的极简静态服务器，用于本机验证断点续传。
+Minimal static server with Range support, for verifying resume locally.
 
-标准库 http.server 不支持 Range（会忽略 Range 头返回 200 全量），
-而断点续传完全依赖 206 Partial Content，所以测试必须用这个。
+The standard library http.server does not support Range (it ignores the Range header and returns a full 200),
+and resume depends entirely on 206 Partial Content, so tests must use this server.
 
     python tools/gamedata/dev_rangeserver.py --root /tmp/cdn --port 8899
 
-附带两个调试开关，用来验证客户端的降级路径：
-    --no-range    假装不支持 Range（应触发"从头重下"的分支）
-    --slow N      每 64KB 睡 N 毫秒，模拟弱网
+Comes with two debug switches for verifying the client's fallback paths:
+    --no-range    Pretend Range is unsupported (should trigger the "download from scratch" branch)
+    --slow N      Sleep N ms per 64 KB, simulating a slow network
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ class Handler(BaseHTTPRequestHandler):
     no_range: bool = False
     slow_ms: int = 0
 
-    def log_message(self, fmt, *args):  # 静音，避免刷屏
+    def log_message(self, fmt, *args):  # Silent, to avoid flooding the log
         pass
 
     def _resolve(self) -> Path | None:
@@ -96,7 +96,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     self.wfile.write(block)
                 except (BrokenPipeError, ConnectionResetError):
-                    return  # 客户端取消下载，正常情况
+                    return  # Client cancelled the download; normal
                 left -= len(block)
                 if self.slow_ms:
                     time.sleep(self.slow_ms / 1000.0)
@@ -107,7 +107,7 @@ def main():
     ap.add_argument("--root", required=True)
     ap.add_argument("--port", type=int, default=8899)
     ap.add_argument("--no-range", action="store_true")
-    ap.add_argument("--slow", type=int, default=0, help="每 64KB 延迟毫秒")
+    ap.add_argument("--slow", type=int, default=0, help="Delay in ms per 64 KB")
     args = ap.parse_args()
 
     Handler.root = Path(args.root)

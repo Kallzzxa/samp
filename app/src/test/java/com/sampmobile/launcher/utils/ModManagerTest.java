@@ -146,7 +146,7 @@ public class ModManagerTest {
         assertEquals(sb.toString(), full);
 
         String tail = ModManager.readLogTail(log, 120);
-        assertTrue(tail.startsWith("... (仅显示末尾日志)\n"));
+        assertTrue(tail.startsWith("... (only showing the tail of the log)\n"));
         assertTrue(tail.contains("line-39: sample log message"));
         assertFalse(tail.contains("line-0:"));
     }

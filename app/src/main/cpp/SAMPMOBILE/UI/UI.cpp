@@ -267,7 +267,7 @@ void UI::drawList()
 
 	artwork::DrawDownloadOverlay(renderer(), displaySize().x, displaySize().y);
 
-	// Custom crosshair styles (1=精简十字, 2=中心圆点, 3=十字加圆点)
+	// Custom crosshair styles (1=minimal cross, 2=centre dot, 3=cross + centre dot)
 	int chStyle = Settings::crosshairStyle();
 	if (chStyle >= 1 && chStyle <= 3 && pGame && pGame->FindPlayerPed()) {
 		CPlayerPed* pPed = pGame->FindPlayerPed();

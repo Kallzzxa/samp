@@ -112,12 +112,12 @@ public class SAMP extends GTASA {
         loadLibraries();
 
         super.onCreate(savedInstanceState);
-        Toast.makeText(this, "SAMP 已启动", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "SAMP started", Toast.LENGTH_LONG).show();
 
         File extDir = getExternalFilesDir(null);
         if (extDir == null) {
             Log.e(TAG, "External files directory is unavailable!");
-            Toast.makeText(this, "游戏数据存储目录不可用", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Game data storage directory is unavailable", Toast.LENGTH_LONG).show();
             finish();
             return;
         }
@@ -147,7 +147,7 @@ public class SAMP extends GTASA {
         ui = new UI(this, settings);
         ui.initializeUI();
 
-        // omp-cef 浏览器层：装上 DecorView，服务端 CreateBrowser 事件到达时可立即建窗
+        // omp-cef browser layer: install the DecorView so a window can be created immediately when the server's CreateBrowser event arrives
         CefManager.install(this);
 
         String gameDir = extDir.toString().concat("/");
@@ -343,7 +343,7 @@ public class SAMP extends GTASA {
         if (ui != null) {
             ui.destroy();
         }
-        // 拆除全部 omp-cef WebView，避免跨 Activity 生命周期泄漏
+        // Tear down all omp-cef WebViews to avoid leaks across Activity lifecycles
         CefManager.shutdown();
         // Kill the isolated :game process BEFORE NvEventQueueActivity.onDestroy() invokes
         // quitAndWait() (10s Main-Looper wait + OS_ApplicationEvent UAF) & systemCleanup().

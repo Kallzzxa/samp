@@ -357,7 +357,7 @@ void cmdFreeCam(const std::string& params)
 	Settings::setFreeCam(!Settings::freeCam());
 	Settings::applyDynamicCameraAndFreeCam();
 	if (pUI) {
-		pUI->chat()->addInfoMessage("-> FreeCamera (自由镜头): %s", Settings::freeCam() ? "ON" : "OFF");
+		pUI->chat()->addInfoMessage("-> FreeCamera (Free Camera): %s", Settings::freeCam() ? "ON" : "OFF");
 	}
 }
 
@@ -444,7 +444,7 @@ void cmdJetpack(const std::string& params)
 void cmdCleo(const std::string& params)
 {
 	if (!CleoEngine::isEnabled()) {
-		if (pUI) pUI->chat()->addInfoMessage("-> CLEO 未开启（请在启动器设置/模组管理中启用 CLEO）");
+		if (pUI) pUI->chat()->addInfoMessage("-> CLEO not enabled (please enable CLEO in launcher settings / mod management)");
 		return;
 	}
 	CleoEngine::toggleMenu();

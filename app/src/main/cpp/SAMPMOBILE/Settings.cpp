@@ -41,7 +41,7 @@ bool Settings::m_timestamp = false;
 bool Settings::m_fastconnect = false;
 bool Settings::m_voice = false;
 bool Settings::m_displayfps = false;
-int Settings::m_fpslimit = 0; // Default 0 = Unlimited (无限制)
+int Settings::m_fpslimit = 0; // Default 0 = Unlimited
 int Settings::m_chatstrings = 8;
 float Settings::m_fontsize = 25.0f;
 float Settings::m_chatPosX = 100.0f;

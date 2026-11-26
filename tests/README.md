@@ -1,47 +1,47 @@
 # tests/
 
-SA-MP Mobile 统一自动化校验与测试目录。
+The unified automated checks and tests directory for SA-MP Mobile.
 
-设计原则：**只校验 100% 客观可验证的工程、二进制、符号与 Android 平台契约，外加与真实业务共用源码的可执行测试**，不把易随设计演进而过时的业务代码猜测写死成门禁。
+Design principle: **only verify 100% objectively verifiable engineering, binary, symbol, and Android platform contracts, plus executable tests that share source with the real product code** — never hard-code guesses about business code that goes stale as the design evolves into a gate.
 
 ---
 
-## 统一入口：`tests/check.py`
+## Unified entry point: `tests/check.py`
 
 ```powershell
-# 日常快检（约 2–3 秒）：合规与卫生 + 平台底线 + NDK 二进制/537 符号/真实 JNI + SDK APK 工具校验
+# Daily quick check (~2–3 s): compliance & hygiene + platform baseline + NDK binary / 537 symbols / real JNI + SDK APK tool checks
 python tests/check.py
 
-# 全量校验：上述全部 + C++ 电脑端单测 + Gradle JVM 单测 + gamedata 分片拼包闭环
+# Full check: all of the above + C++ desktop unit tests + Gradle JVM unit tests + gamedata chunk reassembly round-trip
 python tests/check.py --full
 
-# 发包前严格门禁：--full + 强制要求已提取 GTA:SA 与已构建 APK + Android Lint 静态检查
+# Pre-release strict gate: --full + requires extracted GTA:SA and a built APK + Android Lint static checks
 python tests/check.py --release
 
-# 单独运行某一环节
+# Run a single stage alone
 python tests/check.py --stage <compliance|platform|abi|apk|native|jvm|gamedata|lint>
 ```
 
 ---
 
-## 5 阶段校验流程
+## 5-stage check flow
 
-| 阶段 | 模块 | 校验内容与官方工具链 |
+| Stage | Module | What is checked & official toolchain |
 |---|---|---|
-| **Stage 1** | `checks/compliance.py` | 法律/许可证文件、`res/font/` 禁商用字体、`.gitignore` 专有资产屏蔽、无硬编码密钥/本机路径/设备序列号、`gradlew` LF 换行 |
-| **Stage 2** | `checks/platform.py` | `app/build.gradle` 双 ABI / 固定 NDK / `useLegacyPackaging` / 条件 Firebase；`AndroidManifest.xml` TBI 关闭与 `:game` 独立进程；`monetloader_lib.zip` 与 GTA:SA 提取资产索引 |
-| **Stage 3** | `checks/binary_abi.py` | 双 ABI `jniLibs/*.so` ELF 头；NDK `llvm-nm` 双 ABI `Symbols.def` 全量 537 符号导出校验；NDK `llvm-readelf` 校验编译出的 `libSAMPMOBILE.so` / `libSCAnd.so` **零 `TEXTREL`**、**`DT_NEEDED` 依赖闭包**（仅链接 NDK 公开库或随包库）、**Android 15+ 16KB 页对齐提示**、以及双 ABI **真实 ELF 导出符号 ↔ Java `native` 方法对齐** |
-| **Stage 4** | `checks/apk_verify.py` | APK ZIP 结构与双 ABI 库完整度；Android SDK **`aapt2`** 核对编译后二进制 `AndroidManifest.xml`（包名、`minSdk`/`targetSdk`、双 ABI、`extractNativeLibs`、`allowNativeHeapPointerTagging`）；**`zipalign -c 4`** 对齐校验；**`apksigner verify`** 签名合法性校验 |
-| **Stage 5** | `checks/runners.py` & `checks/gamedata.py` | ① `tests/native/` 20 项 C++ 电脑端单测（含 open.mp 上游对拍）；② `gradlew testDebugUnitTest` Java JUnit 单测；③ `publish_gamedata.py` 分片/清单/重装 SHA-256 端到端闭环；④（`--lint` / `--release`）官方 Android Lint (`gradlew lintDebug`) |
+| **Stage 1** | `checks/compliance.py` | Legal/license files, no commercial fonts in `res/font/`, `.gitignore` blocking of proprietary assets, no hardcoded secrets / local paths / device serial numbers, `gradlew` LF line endings |
+| **Stage 2** | `checks/platform.py` | `app/build.gradle` dual ABI / pinned NDK / `useLegacyPackaging` / conditional Firebase; `AndroidManifest.xml` TBI disabled and the `:game` standalone process; `monetloader_lib.zip` and the GTA:SA extracted-asset index |
+| **Stage 3** | `checks/binary_abi.py` | Dual-ABI `jniLibs/*.so` ELF headers; NDK `llvm-nm` full 537-symbol export check of `Symbols.def` for both ABIs; NDK `llvm-readelf` checks on the built `libSAMPMOBILE.so` / `libSCAnd.so`: **zero `TEXTREL`**, **`DT_NEEDED` dependency closure** (links only NDK public libraries or bundled libraries), **Android 15+ 16 KB page-alignment hints**, and dual-ABI **real ELF exported symbols ↔ Java `native` method alignment** |
+| **Stage 4** | `checks/apk_verify.py` | APK ZIP structure and dual-ABI library completeness; Android SDK **`aapt2`** cross-checks the compiled binary `AndroidManifest.xml` (package name, `minSdk`/`targetSdk`, dual ABI, `extractNativeLibs`, `allowNativeHeapPointerTagging`); **`zipalign -c 4`** alignment check; **`apksigner verify`** signature validity check |
+| **Stage 5** | `checks/runners.py` & `checks/gamedata.py` | ① 20 C++ desktop unit tests in `tests/native/` (including cross-checks against open.mp upstream); ② `gradlew testDebugUnitTest` Java JUnit unit tests; ③ `publish_gamedata.py` chunk / manifest / reinstall SHA-256 end-to-end round-trip; ④ (`--lint` / `--release`) official Android Lint (`gradlew lintDebug`) |
 
 ---
 
-## 目录布局
+## Directory Layout
 
-| 路径 | 职责 |
+| Path | Responsibility |
 |---|---|
-| `tests/check.py` | 统一命令行校验入口 |
-| `tests/checks/` | 模块化客观门禁实现（仅依赖 Python 3 标准库 + 本机 Android SDK/NDK 工具） |
-| `tests/native/` | 电脑端 C++ 单元测试（CMake + Ninja + CTest，WSL/Linux 下 `sh tests/native/run.sh`，不进入 APK）：<br>- `proto/`：RakNet BitStream、线格式、`/netcap`、入站 RPC / 同步 / 出站包单测<br>- `core/`：无引擎依赖的客户端核心纯逻辑单测（`InputArbiterCore`、`SettingsContract`）<br>- `interop/`：与本地 `reference/open.mp 上游源码` 对拍测试（无本地源码时自动跳过） |
-| `tests/cef/` | `omp-cef` 协议 KAT 向量、逻辑断言与设备端浏览器回归套件（见 `tests/cef/verify_all.sh`） |
-| `app/src/test/` | Gradle 标准 JVM 单元测试（如 `ClientSettingsTest`、`ModManagerTest`），由 `tests/check.py --full` 统一调起 |
+| `tests/check.py` | Unified command-line check entry point |
+| `tests/checks/` | Modular objective gate implementations (Python 3 standard library only + local Android SDK/NDK tools) |
+| `tests/native/` | Desktop C++ unit tests (CMake + Ninja + CTest; run with `sh tests/native/run.sh` under WSL/Linux, not shipped in the APK):<br>- `proto/`: RakNet BitStream, wire format, `/netcap`, inbound RPC / sync / outbound packet unit tests<br>- `core/`: engine-free pure-logic unit tests for client core (`InputArbiterCore`, `SettingsContract`)<br>- `interop/`: cross-check tests against the local `reference/open.mp upstream source` (auto-skipped when the local source is absent) |
+| `tests/cef/` | `omp-cef` protocol KAT vectors, logic assertions, and on-device browser regression suite (see `tests/cef/verify_all.sh`) |
+| `app/src/test/` | Standard Gradle JVM unit tests (e.g. `ClientSettingsTest`, `ModManagerTest`), invoked together by `tests/check.py --full` |

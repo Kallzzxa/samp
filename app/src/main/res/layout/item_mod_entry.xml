@@ -45,7 +45,7 @@
                 android:textSize="@dimen/_6ssp"
                 android:textStyle="bold"
                 android:visibility="gone"
-                tools:text="64位"
+                tools:text="64-bit"
                 tools:visibility="visible" />
         </LinearLayout>
 
@@ -58,7 +58,7 @@
             android:maxLines="2"
             android:textColor="@color/launcher_text_dim"
             android:textSize="@dimen/_7ssp"
-            tools:text="14 个文件 · 12.4 MB · 优先级 50" />
+            tools:text="14 files · 12.4 MB · Priority 50" />
     </LinearLayout>
 
     <ImageView
@@ -67,7 +67,7 @@
         android:layout_height="@dimen/_22sdp"
         android:layout_marginStart="@dimen/_4sdp"
         android:background="@drawable/launcher_btn_outline"
-        android:contentDescription="提高优先级"
+        android:contentDescription="Raise Priority"
         android:foreground="?attr/selectableItemBackground"
         android:padding="@dimen/_4sdp"
         android:src="@drawable/ic_arrow_up"
@@ -80,7 +80,7 @@
         android:layout_height="@dimen/_22sdp"
         android:layout_marginStart="@dimen/_3sdp"
         android:background="@drawable/launcher_btn_outline"
-        android:contentDescription="降低优先级"
+        android:contentDescription="Lower Priority"
         android:foreground="?attr/selectableItemBackground"
         android:padding="@dimen/_4sdp"
         android:src="@drawable/ic_arrow_down"
@@ -118,7 +118,7 @@
         android:layout_height="@dimen/_22sdp"
         android:layout_marginStart="@dimen/_5sdp"
         android:background="@drawable/launcher_btn_danger"
-        android:contentDescription="删除"
+        android:contentDescription="Delete"
         android:foreground="?attr/selectableItemBackground"
         android:padding="@dimen/_4sdp"
         android:src="@drawable/ic_delete"

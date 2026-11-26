@@ -73,13 +73,13 @@ std::vector<uint8_t> DecryptPacket(const uint8_t* data, size_t size,
 std::string Sha256Hex(const uint8_t* data, size_t size);
 
 /**
- * 分块计算文件 SHA-256（小写 hex）。
+ * Compute a file's SHA-256 in chunks (lowercase hex).
  *
- * 资源包可能有几十到上百 MB，ReadFile + Sha256Hex 需要把整个文件放进内存，
- * 而这个调用点在游戏主线程。流式读取只用 1MB 缓冲，内存峰值与文件大小无关。
+ * Resource packs can be tens to hundreds of MB; ReadFile + Sha256Hex needs the whole file in memory,
+ * and this call site is on the game main thread. Streaming reads use only a 1 MB buffer, so peak memory is independent of file size.
  *
- * @param maxBytes 最多读取的字节数；超过则视为失败（防止被超大文件拖死）
- * @return 失败（打不开 / 超限）返回空串
+ * @param maxBytes Maximum number of bytes to read; exceeding it counts as failure (prevents being dragged down by an oversized file)
+ * @return On failure (cannot open / over limit) returns an empty string
  */
 std::string Sha256FileHex(const char* path, size_t maxBytes);
 

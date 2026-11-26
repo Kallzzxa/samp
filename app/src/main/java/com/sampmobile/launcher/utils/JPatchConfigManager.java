@@ -49,50 +49,50 @@ final class JPatchConfigManager {
     static List<JPatchOption> buildKnownJPatchCatalog() {
         List<JPatchOption> list = new ArrayList<>();
         // Safe & high-value GTA:SA 2.10 fixes (exact keys from official net.rusjj.jpatch.ini)
-        list.add(new JPatchOption("Gameplay", "Fix210Crash", "修复 2.10 原版随机崩溃",
-                "应用 2.10 引擎崩溃补丁（推荐开启）", true, "1", true));
-        list.add(new JPatchOption("Gameplay", "GetCompositeMatrixFixPossibleCrash", "修复矩阵合成崩溃",
-                "防止模型/骨骼矩阵空指针崩溃", true, "1", true));
-        list.add(new JPatchOption("Gameplay", "FixCollisionAllocatingData", "修复碰撞分配异常",
-                "修复动态碰撞数据分配越界崩溃", true, "1", true));
-        list.add(new JPatchOption("Gameplay", "FixEnterVehicleTasks", "修复上车任务异常",
-                "修复部分情形下上车动作卡住问题", true, "1", true));
-        list.add(new JPatchOption("Gameplay", "FixChassisSwingingHighFPS", "高帧率载具防抖动",
-                "修复 60+ FPS 下车辆底盘剧烈晃动", true, "1", true));
-        list.add(new JPatchOption("Gameplay", "FixVehiclesSpeedHighFPS", "高帧率载具速度修正",
-                "修复高帧率下车辆加速与阻力异常", true, "1", true));
-        list.add(new JPatchOption("Visual", "FixFogWall", "修复雾气背后黑墙",
-                "修复默认着色器下远景雾墙显示异常", true, "1", true));
-        list.add(new JPatchOption("Visual", "FixWheelsRotationSpeed", "高帧率车轮转速修正",
-                "修复高帧率下车轮旋转速度过快", true, "1", true));
-        list.add(new JPatchOption("Visual", "FixGreenTextures", "修复绿色贴图异常",
-                "修复部分 GPU/贴图组合发绿问题", true, "1", true));
-        list.add(new JPatchOption("Visual", "SP_BilinearFilterForPlate", "修复车牌双线性过滤",
-                "提升载具车牌清晰度（SilentPatch）", true, "1", true));
-        list.add(new JPatchOption("Visual", "FixAdjustableSizeLowering", "修复 HUD 缩放偏移",
-                "修复 Adjustable.cfg 自定义 HUD 按钮尺寸偏移", true, "1", true));
-        list.add(new JPatchOption("Visual", "FixXclipseCrash", "修复 Xclipse/Adreno 着色器崩溃",
-                "增强部分新 GPU 驱动下的渲染稳定性", true, "1", true));
+        list.add(new JPatchOption("Gameplay", "Fix210Crash", "Fix random crashes in stock 2.10",
+                "Apply the 2.10 engine crash patch (recommended)", true, "1", true));
+        list.add(new JPatchOption("Gameplay", "GetCompositeMatrixFixPossibleCrash", "Fix composite-matrix crash",
+                "Prevent model/skeleton matrix null-pointer crashes", true, "1", true));
+        list.add(new JPatchOption("Gameplay", "FixCollisionAllocatingData", "Fix collision allocation fault",
+                "Fix dynamic collision data allocation out-of-bounds crash", true, "1", true));
+        list.add(new JPatchOption("Gameplay", "FixEnterVehicleTasks", "Fix enter-vehicle task fault",
+                "Fix the enter-vehicle action getting stuck in some cases", true, "1", true));
+        list.add(new JPatchOption("Gameplay", "FixChassisSwingingHighFPS", "High-FPS vehicle anti-jitter",
+                "Fix violent vehicle chassis shaking at 60+ FPS", true, "1", true));
+        list.add(new JPatchOption("Gameplay", "FixVehiclesSpeedHighFPS", "High-FPS vehicle speed fix",
+                "Fix abnormal vehicle acceleration and drag at high FPS", true, "1", true));
+        list.add(new JPatchOption("Visual", "FixFogWall", "Fix black wall behind fog",
+                "Fix distant fog-wall rendering glitches under the default shader", true, "1", true));
+        list.add(new JPatchOption("Visual", "FixWheelsRotationSpeed", "High-FPS wheel rotation speed fix",
+                "Fix wheels spinning too fast at high FPS", true, "1", true));
+        list.add(new JPatchOption("Visual", "FixGreenTextures", "Fix green texture glitch",
+                "Fix some GPU/texture combinations rendering green", true, "1", true));
+        list.add(new JPatchOption("Visual", "SP_BilinearFilterForPlate", "Fix license-plate bilinear filtering",
+                "Sharpen vehicle license plates (SilentPatch)", true, "1", true));
+        list.add(new JPatchOption("Visual", "FixAdjustableSizeLowering", "Fix HUD scaling offset",
+                "Fix Adjustable.cfg custom HUD button size offset", true, "1", true));
+        list.add(new JPatchOption("Visual", "FixXclipseCrash", "Fix Xclipse/Adreno shader crash",
+                "Improve rendering stability on some newer GPU drivers", true, "1", true));
 
         // Caution: overlap with SAMPMOBILE hooks/patches — disabled in SA-MP safe preset
-        list.add(new JPatchOption("Gameplay", "MultiTouch4", "JPatch 四指触控补丁 [联机冲突]",
-                "本端已内置 MultiTouch 拦截与 MonetLoader/CLEO 触控路由，建议关闭以免冲突", false, "0", true));
-        list.add(new JPatchOption("Gameplay", "BuffStreamingMem", "JPatch 固定流送扩容 [联机慎用]",
-                "本端已内置 CStreaming×3 扩容，重复开启可能加大内存压力", false, "0", true));
-        list.add(new JPatchOption("Gameplay", "DynamicStreamingMem", "JPatch 动态流送扩容 [联机慎用]",
-                "与本端内置流送内存策略重叠，联机安全预设默认关闭", false, "0", true));
-        list.add(new JPatchOption("Visual", "EnableAnimatedTextures", "JPatch UV 动画补丁 [联机冲突]",
-                "本端已自研 2.10 有界 UVAnim 驱动，建议关闭以免重复 Hook", false, "0", true));
-        list.add(new JPatchOption("Visual", "FixCrosshair", "JPatch 准星修正 [联机冲突]",
-                "本端已内置联机准星 Hook，建议关闭以免冲突", false, "0", true));
-        list.add(new JPatchOption("Gameplay", "ForceLoadDXT", "强制 DXT 贴图格式 [联机冲突]",
-                "本端已自动按实际存在的 texdb 格式加载，开启会导致黑贴图", false, "0", true));
-        list.add(new JPatchOption("Gameplay", "ForceLoadETC", "强制 ETC 贴图格式 [联机冲突]",
-                "本端已自动选择贴图格式，不建议强制覆盖", false, "0", true));
-        list.add(new JPatchOption("Gameplay", "ForceLoadPVR", "强制 PVR 贴图格式 [联机冲突]",
-                "本端已自动选择贴图格式，不建议强制覆盖", false, "0", true));
-        list.add(new JPatchOption("Visual", "AlwaysDrawWantedStars", "常显通缉星级 [联机慎用]",
-                "联机通缉星级由服务端控制，默认关闭", false, "0", true));
+        list.add(new JPatchOption("Gameplay", "MultiTouch4", "JPatch four-finger touch patch [online conflict]",
+                "This client already has built-in MultiTouch interception and MonetLoader/CLEO touch routing; keep it off to avoid conflicts", false, "0", true));
+        list.add(new JPatchOption("Gameplay", "BuffStreamingMem", "JPatch fixed streaming memory expansion [use with caution online]",
+                "This client already has built-in CStreaming x3 expansion; enabling it again may increase memory pressure", false, "0", true));
+        list.add(new JPatchOption("Gameplay", "DynamicStreamingMem", "JPatch dynamic streaming memory expansion [use with caution online]",
+                "Overlaps this client's built-in streaming memory policy; off by default in the online-safe preset", false, "0", true));
+        list.add(new JPatchOption("Visual", "EnableAnimatedTextures", "JPatch UV animation patch [online conflict]",
+                "This client already has its own bounded 2.10 UVAnim driver; keep it off to avoid duplicate hooks", false, "0", true));
+        list.add(new JPatchOption("Visual", "FixCrosshair", "JPatch crosshair fix [online conflict]",
+                "This client already has a built-in online crosshair hook; keep it off to avoid conflicts", false, "0", true));
+        list.add(new JPatchOption("Gameplay", "ForceLoadDXT", "Force DXT texture format [online conflict]",
+                "This client already loads automatically based on the texdb format actually present; forcing it causes black textures", false, "0", true));
+        list.add(new JPatchOption("Gameplay", "ForceLoadETC", "Force ETC texture format [online conflict]",
+                "This client already picks the texture format automatically; forcing an override is not recommended", false, "0", true));
+        list.add(new JPatchOption("Gameplay", "ForceLoadPVR", "Force PVR texture format [online conflict]",
+                "This client already picks the texture format automatically; forcing an override is not recommended", false, "0", true));
+        list.add(new JPatchOption("Visual", "AlwaysDrawWantedStars", "Always show wanted stars [use with caution online]",
+                "Online wanted stars are controlled by the server; off by default", false, "0", true));
         return list;
     }
 
@@ -132,7 +132,7 @@ final class JPatchConfigManager {
                 if (dupKey) continue;
 
                 boolean isBool = isBooleanLike(v);
-                JPatchOption custom = new JPatchOption(sec, k, k, "来自 " + cfgFile.getName() + " [" + sec + "]", true, v, isBool);
+                JPatchOption custom = new JPatchOption(sec, k, k, "From " + cfgFile.getName() + " [" + sec + "]", true, v, isBool);
                 custom.value = v;
                 custom.fromKnownCatalog = false;
                 options.add(custom);

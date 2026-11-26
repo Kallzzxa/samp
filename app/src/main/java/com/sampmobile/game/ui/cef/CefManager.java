@@ -23,12 +23,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * omp-cef 浏览器管理器（Android 实现）。
+ * omp-cef browser manager (Android implementation).
  *
- * 对上层（原生 CefBrowser）暴露静态方法，全部可从任意线程调用 —— 原生侧在游戏
- * 线程收到服务端事件后直接调进来，内部统一切到主线程执行 View 操作。
+ * Exposes static methods to the upper layer (native CefBrowser), callable from any thread — the native side calls in directly from the game
+ * thread when it receives a server event, and internally everything switches to the main thread for View operations.
  *
- * 与 PC 版 BrowserManager 的职责对应：
+ * Mirrors the responsibilities of the PC BrowserManager:
  *
  *   createBrowser        <-> CreateBrowser / CreateBrowserInternal
  *   setBrowserVisible    <-> SetBrowserVisible
@@ -37,23 +37,23 @@ import java.util.List;
  *   reloadBrowser        <-> ReloadBrowser
  *   focusBrowser         <-> FocusBrowser
  *   setBrowserLayer      <-> SetBrowserLayer
- *   nativeOnBrowserCreated -> SendBrowserCreateResult（回到服务端）
+ *   nativeOnBrowserCreated -> SendBrowserCreateResult (back to the server)
  *
- * 不支持的部分（阶段6/7）：World2D / WorldObject3D / 音频空间化 / 屏幕捕获。
- * 这些事件当前被 CefBrowser 记录并忽略，不会伪装成已实现。
+ * Unsupported parts (stages 6/7): World2D / WorldObject3D / audio spatialization / screen capture.
+ * These events are currently logged and ignored by CefBrowser, not faked as implemented.
  */
 public final class CefManager {
 
     private static final String TAG = "CefManager";
 
-    /** BrowserCreateStatus（omp-cef manager.hpp）。 */
+    /** BrowserCreateStatus (omp-cef manager.hpp). */
     public static final int CREATE_OK = 0;
     public static final int CREATE_ERROR_GENERIC = 1;
     public static final int CREATE_ERROR_ID_IN_USE = 2;
 
     private static final Object LOCK = new Object();
 
-    /** 预热只做一次；握手成功后才置 true。 */
+    /** Warm-up runs only once; set to true only after a successful handshake. */
     private static boolean sWarmUpStarted = false;
     private static final SparseArray<CefWebView> sBrowsers = new SparseArray<>();
     private static final List<Runnable> sPending = new ArrayList<>();
@@ -62,26 +62,26 @@ public final class CefManager {
     private static Handler sMain;
     private static boolean sInstalled = false;
 
-    /** 调试广播（仅 debuggable 包注册）：不依赖服务端即可验证浏览器层。 */
+    /** Debug broadcast (registered only in debuggable builds): verifies the browser layer without needing a server. */
     private static final String ACTION_DEBUG = "com.sampmobile.CEFDEBUG";
     private static BroadcastReceiver sDebugReceiver;
 
     /**
-     * 预热用的隐藏 WebView。
+     * Hidden WebView used for warm-up.
      *
-     * 实测（vivo V2312A / Android 13）：首次 new WebView + loadUrl 到真正上屏
-     * 需要 6~9 秒（Chromium 进程冷启动 + 首帧合成）。服务端 CreateBrowser 之后
-     * 玩家要等这么久才看到界面是不可接受的，所以在 install() 阶段就先建一个
-     * 不可见的 WebView 常驻，把引擎和首帧管线热起来。
+     * Measured (vivo V2312A / Android 13): the first new WebView + loadUrl takes
+     * 6-9 seconds (Chromium cold process start + first-frame composition) before anything is actually on screen. After the server sends CreateBrowser,
+     * making the player wait that long for the UI is unacceptable, so an
+     * invisible WebView is created early in install() and kept resident to warm up the engine and first-frame pipeline.
      */
     private static WebView sWarmupView;
 
     private CefManager() {
     }
 
-    // ---------------------------------------------------------------- 生命周期
+    // ---------------------------------------------------------------- Lifecycle
 
-    /** 由 SAMP.onCreate 调用一次（主线程）。 */
+    /** Called once by SAMP.onCreate (main thread). */
     public static void install(Activity activity) {
         if (activity == null) return;
 
@@ -99,22 +99,22 @@ public final class CefManager {
             main.post(r);
         }
 
-        // 资源层（阶段5）把 .pak 解到 <filesDir>/cef/resources/，Java 侧
-        // CefResourceProvider 就从这个目录给 http://cef/ 供文件，两边必须同根。
+        // The resource layer (stage 5) extracts .pak files to <filesDir>/cef/resources/, and the Java side
+        // CefResourceProvider serves http://cef/ files from this directory; both sides must share the same root.
         File cefRoot = new File(activity.getFilesDir(), "cef");
         nativeSetStorageRoot(cefRoot.getAbsolutePath());
 
         registerDebugReceiver(activity, main);
         installImeWatcher(activity);
-        // 不在这里预热：普通（非 CEF）服务器根本不需要 Chromium，
-        // 无条件拉一个隐藏 WebView 会让所有玩家白付内存与启动时间。
-        // 等握手成功、确认是 CEF 服后再预热，见 onTransportConnected()。
+        // No warm-up here: ordinary (non-CEF) servers do not need Chromium at all,
+        // unconditionally spinning up a hidden WebView would make every player pay memory and startup time for nothing.
+        // Warm up only after a successful handshake confirms a CEF server; see onTransportConnected().
     }
 
     /**
-     * 握手成功（确认对端是 CEF 服务器）后调用，此时才值得起 Chromium。
+     * Called after a successful handshake (confirming the peer is a CEF server); only then is starting Chromium worthwhile.
      *
-     * 由 C++ 侧在 CefNetwork 进入 Connected 时回调。幂等：重复调用无副作用。
+     * Called back from the C++ side when CefNetwork enters Connected. Idempotent: repeated calls have no side effects.
      */
     public static void onTransportConnected() {
         final Activity activity;
@@ -131,8 +131,8 @@ public final class CefManager {
     }
 
     /**
-     * 建立常驻的隐藏 WebView，把 Chromium 进程与首帧管线提前热起来。
-     * 不影响布局（1x1、INVISIBLE、不接收触摸）。
+     * Creates a resident hidden WebView to warm up the Chromium process and first-frame pipeline ahead of time.
+     * Does not affect layout (1x1, INVISIBLE, no touch input).
      */
     private static void warmUp(final Activity activity, Handler main) {
         main.post(() -> {
@@ -160,7 +160,7 @@ public final class CefManager {
         });
     }
 
-    /** 由 SAMP.onDestroy 调用；拆除全部 WebView，避免跨越 Activity 生命周期泄漏。 */
+    /** Called by SAMP.onDestroy; tears down all WebViews to avoid leaking across the Activity lifecycle. */
     public static void shutdown() {
         Activity activity = sActivity.get();
         BroadcastReceiver receiver;
@@ -224,20 +224,20 @@ public final class CefManager {
         }
     }
 
-    // ------------------------------------------------------- 原生侧调用（任意线程）
+    // ------------------------------------------------------- Native-side calls (any thread)
 
     public static void createBrowser(int id, String url, boolean focused, boolean controlsChat) {
         post(() -> doCreateBrowser(id, url, focused, controlsChat));
     }
 
     /**
-     * World2D（阶段7）：服务端 `CreateWorld2DBrowser`。
+     * World2D (stage 7): server-side `CreateWorld2DBrowser`.
      *
-     * PC: `BrowserManager::CreateWorld2DBrowser` -> windowless 浏览器 + `View::Create(width, height)`，
-     * 之后每帧把世界坐标投影到屏幕，用 `view.SetPosition(x, y)` 摆放（manager.cpp:1569）。
-     * Android: WebView 的视口就是服务端给的 width×height 像素，位置由 native 每帧投影后
-     * 经 {@link #setWorld2DScreen} 推过来。因此页面内容、尺寸、锚点语义与 PC 一致，
-     * 差别只在"页面不是画进游戏纹理，而是叠在游戏画面上"（无世界遮挡）。
+     * PC: `BrowserManager::CreateWorld2DBrowser` -> windowless browser + `View::Create(width, height)`,
+     * then projects world coordinates to the screen every frame and positions it with `view.SetPosition(x, y)` (manager.cpp:1569).
+     * Android: the WebView viewport is exactly the width x height pixels given by the server, and its position comes from the native projection each frame,
+     * pushed over via {@link #setWorld2DScreen}. So page content, size, and anchor semantics match the PC,
+     * the only difference is that "the page is overlaid on the game screen rather than drawn into a game texture" (no world occlusion).
      */
     public static void createWorld2DBrowser(int id, String url,
                                             float worldX, float worldY, float worldZ,
@@ -248,12 +248,12 @@ public final class CefManager {
     }
 
     /**
-     * native 每帧投影结果（游戏线程）-> 主线程摆放。
+     * Native per-frame projection result (game thread) -> main-thread placement.
      *
-     * 相机一动就会每帧来一次，如果每次都 post 一个 Runnable，主线程队列会被
-     * 位置更新灌满，离屏抓帧（WorldObject3D）根本挤不进去。这里只保留"最新
-     * 一帧"：已经有一个 Runnable 在排队时只更新参数，不重复投递。语义等价，
-     * 因为最终摆放的就是最后一次投影的结果。
+     * Every camera move produces one per frame; posting a Runnable each time would flood the main-thread queue with
+     * position updates, leaving no room for offscreen frame capture (WorldObject3D). So only the "latest
+     * frame" is kept: if a Runnable is already queued, only its parameters are updated, with no duplicate posting. Semantically equivalent,
+     * because the final placement is just the result of the last projection.
      */
     public static void setWorld2DScreen(int id, int x, int y, boolean onScreen) {
         synchronized (sWorld2DPending) {
@@ -273,46 +273,46 @@ public final class CefManager {
         });
     }
 
-    /** World2D 待摆放的最新位置（见 {@link #setWorld2DScreen}）。 */
+    /** Latest World2D position waiting to be placed (see {@link #setWorld2DScreen}). */
     private static final java.util.HashMap<Integer, int[]> sWorld2DPending =
             new java.util.HashMap<>();
     private static final java.util.HashSet<Integer> sWorld2DQueued = new java.util.HashSet<>();
 
-    // ------------------------------------------------- WorldObject3D（阶段7 第二批）
+    // ------------------------------------------------- WorldObject3D (stage 7, second batch)
 
-    /** 最近一次抓到的页面帧，按 browserId 存放。游戏线程取走，主线程填入。 */
+    /** Most recently captured page frame, stored by browserId. Taken by the game thread, filled in by the main thread. */
     private static final java.util.HashMap<Integer, java.nio.ByteBuffer> sWorldFrames =
             new java.util.HashMap<>();
 
     /**
-     * 每个离屏浏览器的上一次光栅化耗时（ms），native 用来自适应抓帧间隔。
-     * 独立于 sWorldFrames：即使这一次没有新帧，native 也要能拿到旧数据。
+     * Last rasterization time (ms) of each offscreen browser; native uses it to adapt the frame-capture interval.
+     * Independent of sWorldFrames: even when there is no new frame this time, native still needs the old data.
      */
     private static final java.util.HashMap<Integer, Integer> sWorldFrameCost =
             new java.util.HashMap<>();
 
     /**
-     * 正在抓帧的 browserId。draw(Canvas) 偶尔会慢，这里保证同一时刻只有一个
-     * 抓帧任务在主线程排队，避免每 100ms 的请求把它堆满。
+     * The browserId currently being captured. draw(Canvas) is occasionally slow; this guarantees only one
+     * capture task is queued on the main thread at a time, so the every-100ms requests cannot pile up.
      */
     private static final java.util.HashSet<Integer> sCaptureInFlight = new java.util.HashSet<>();
 
     /**
-     * CreateBrowser 的离屏变体（native 调用，游戏线程）。
+     * Offscreen variant of CreateBrowser (called by native, game thread).
      *
-     * 页面不显示给玩家，只用来抓帧；尺寸就是服务端给的纹理尺寸。
+     * The page is not shown to the player, only used for frame capture; its size is the texture size given by the server.
      */
     public static void createWorldObjectBrowser(int id, String url, int w, int h) {
         post(() -> doCreateWorldObject(id, url, w, h));
     }
 
     /**
-     * 取上一帧并请求下一帧（native 按自适应间隔调，游戏线程）。
+     * Takes the previous frame and requests the next one (called by native at an adaptive interval, game thread).
      *
-     * 不能在调用线程直接 draw：Canvas 绘制必须在主线程，而这里拿到的是游戏
-     * 线程。所以改成"取走缓存 + 投递下一次抓帧"，两边都不阻塞。
+     * Cannot draw directly on the calling thread: Canvas drawing must happen on the main thread, but this is the game
+     * thread. So it becomes "take the cached frame + post the next capture", blocking neither side.
      *
-     * 返回的是复用缓冲的引用，native 要立刻上传到纹理，不能长期持有。
+     * Returns a reference to the reused buffer; native must upload it to the texture immediately and must not hold it long-term.
      */
     public static java.nio.ByteBuffer captureWorldObject(int id) {
         java.nio.ByteBuffer ready;
@@ -321,7 +321,7 @@ public final class CefManager {
         }
         synchronized (sCaptureInFlight) {
             if (!sCaptureInFlight.add(id)) {
-                // 上一帧还没画完，直接把现有的（或 null）交回去。
+                // The previous frame is not drawn yet; hand back the existing one (or null) directly.
                 return ready;
             }
         }
@@ -349,10 +349,10 @@ public final class CefManager {
     }
 
     /**
-     * 上一次离屏抓帧的耗时（ms），0 = 还没有数据。
+     * Last offscreen frame-capture time (ms); 0 = no data yet.
      *
-     * native 用它决定下一次抓帧的间隔：页面越复杂 draw 越慢，就抓得越稀，
-     * 而不是让请求堆在主线程队列里。
+     * Native uses it to decide the next capture interval: the more complex the page, the slower draw is, so captures get sparser,
+     * instead of letting requests pile up in the main-thread queue.
      */
     public static int worldObjectCaptureCost(int id) {
         synchronized (sWorldFrameCost) {
@@ -381,7 +381,7 @@ public final class CefManager {
 
         CefWebView view;
         try {
-            // offscreen=true：几乎透明、不接收触摸，只负责出帧。
+            // offscreen=true: nearly transparent, no touch input, only produces frames.
             view = new CefWebView(activity, id, url, false, false, pw, ph, true);
         } catch (Throwable t) {
             Log.e(TAG, "createWorldObject(" + id + "): WebView creation failed", t);
@@ -437,20 +437,20 @@ public final class CefManager {
     }
 
     /**
-     * 告诉 native 丢掉这个 id 的 WorldObject3D 条目（纹理 + 抓帧调度）。
+     * Tells native to drop this id's WorldObject3D entry (texture + capture scheduling).
      *
-     * 正常路径上服务端会发 DestroyBrowser，native 自己会清；这里兜的是"只有
-     * Java 侧被销毁"的情况（调试广播、服务端没确认的销毁）。不清的话那张纹理
-     * 会一直留着，而且每 3 秒还会有一轮注定拿不到帧的抓帧尝试——实测表现为
-     * worldobjperf 连续报 frames=0 却始终不退场。
+     * On the normal path the server sends DestroyBrowser and native cleans up itself; this covers the case where "only
+     * the Java side is destroyed" (debug broadcasts, destroys the server never confirmed). Without cleanup that texture
+     * stays around, and every 3 seconds there is another capture attempt doomed to get no frame — in practice this shows up as
+     * worldobjperf repeatedly reporting frames=0 without ever exiting.
      */
     private static void forgetWorldObject(int id) {
         try {
             nativeForgetWorldObject(id);
         } catch (Throwable t) {
-            // 只可能是符号没导出（忘了 extern "C"，名字被 C++ mangle 了）。
-            // 之前这里的 catch 是空的，于是"改了但完全没生效"且没有任何痕迹；
-            // 现在至少留一条日志，并且 verify_all.sh 会直接 nm 检查符号。
+            // The only possibility is that the symbol was not exported (missing extern "C", so the name was C++-mangled).
+            // The catch here used to be empty, so a change could "take effect nowhere" with no trace at all;
+            // now at least a log line is left, and verify_all.sh checks the symbols directly with nm.
             Log.w(TAG, "nativeForgetWorldObject(" + id + ") unavailable", t);
         }
     }
@@ -465,7 +465,7 @@ public final class CefManager {
                 return;
             }
             view.setVisible(visible);
-            // 隐藏的浏览器不保留退让，否则再显示时会顶着一块空白。
+            // A hidden browser does not keep its inset; otherwise it would show again with a blank block on top.
             pushImeInset();
             Log.i(TAG, "browser " + id + " visible=" + visible);
         });
@@ -503,14 +503,14 @@ public final class CefManager {
                 return;
             }
             if (focus) {
-                // 单焦点语义与 PC 一致：新获得焦点的浏览器会抢占旧焦点。
+                // Single-focus semantics, same as PC: a newly focused browser takes focus from the old one.
                 for (int i = 0; i < sBrowsers.size(); i++) {
                     CefWebView other = sBrowsers.valueAt(i);
                     if (other != view && other.isFocused()) {
                         other.setFocus(false);
                     }
                 }
-                // 页面要整屏接管输入：先把游戏侧没抬起的手指清掉，否则摇杆会卡住。
+                // The page is about to take over fullscreen input: first clear any game-side fingers still down, or the joystick will stick.
                 cancelGameTouches();
             }
             view.setFocus(focus);
@@ -532,12 +532,12 @@ public final class CefManager {
     }
 
     /**
-     * EmitBrowserEvent：服务端定向发给某个浏览器页面的自定义事件。
+     * EmitBrowserEvent: a custom event the server sends to a specific browser page.
      *
-     * PC: app.cpp SendEmitToBrowser -> renderer `emit_event` -> events_[name] 回调。
-     * Android: CefWebView.dispatchEvent -> window.__cefDispatch(name, args)。
-     * 页面尚未加载完成时事件在 view 内排队，onPageFinished 后按序补齐，与 PC
-     * 端 pending_emits_ 的行为一致。
+     * PC: app.cpp SendEmitToBrowser -> renderer `emit_event` -> events_[name] callback.
+     * Android: CefWebView.dispatchEvent -> window.__cefDispatch(name, args).
+     * While the page has not finished loading, events queue inside the view and are delivered in order after onPageFinished, matching the PC
+     * pending_emits_ behavior.
      */
     public static void emitBrowserEvent(int id, String name, String argsJson) {
         post(() -> {
@@ -551,8 +551,8 @@ public final class CefManager {
     }
 
     /**
-     * 页面 cef.emit(...) 上行。运行在 WebView 的 JavaBridge 线程，直接进 native
-     * （CefNetwork 的发送路径是线程安全的），避免主线程排队带来的额外延迟。
+     * Page-side cef.emit(...) uplink. Runs on the WebView JavaBridge thread and goes straight into native
+     * (CefNetwork's send path is thread-safe), avoiding the extra delay of main-thread queueing.
      */
     static void onJsEmit(int browserId, String name, String argsJson) {
         try {
@@ -562,7 +562,7 @@ public final class CefManager {
         }
     }
 
-    /** 会话断开：与 PC app.cpp 的断线清理等价，销毁全部页面，避免僵尸 UI。 */
+    /** Session disconnected: equivalent to the PC app.cpp disconnect cleanup; destroys all pages to avoid zombie UI. */
     public static void destroyAllBrowsers() {
         post(() -> {
             List<CefWebView> victims;
@@ -587,27 +587,27 @@ public final class CefManager {
         });
     }
 
-    // ------------------------------------------------- 输入（阶段6：键鼠 / IME / 返回键）
+    // ------------------------------------------------- Input (stage 6: keyboard/mouse / IME / back key)
 
-    /** 服务端 SetKeyCapture：打开后才上行 PressKey。默认关闭（与 PC key_capture_enabled_ 一致）。 */
+    /** Server-side SetKeyCapture: PressKey is only sent upstream once enabled. Off by default (same as PC key_capture_enabled_). */
     private static volatile boolean sKeyCaptureEnabled = false;
 
-    /** 服务端 EnableKey：白名单按 Windows VK 索引，默认全关（PC key_allowed_{} 全零）。 */
+    /** Server-side EnableKey: allowlist indexed by Windows VK, all off by default (PC key_allowed_{} all zero). */
     private static final boolean[] sKeyAllowed = new boolean[256];
 
-    /** 服务端 ToggleChatInput：false 时游戏聊天框不再打开（PC FocusManager::ShouldBlockChat）。 */
+    /** Server-side ToggleChatInput: when false, the game chat box no longer opens (PC FocusManager::ShouldBlockChat). */
     private static volatile boolean sChatInputEnabled = true;
 
-    /** 页面内文本输入框当前所在的浏览器，-1 = 无（PC input_focused_browser_id_）。 */
+    /** The browser currently holding a page text input, -1 = none (PC input_focused_browser_id_). */
     private static volatile int sInputFocusedId = -1;
 
-    /** 切 adjustResize 之前窗口的 softInputMode，-1 = 当前没切过。 */
+    /** The window's softInputMode before switching to adjustResize; -1 = never switched. */
     private static int sOriginalSoftInputMode = -1;
 
-    /** 软键盘当前占掉的高度（px），0 = 键盘没弹出。由 {@link #sampleImeInset()} 维护。 */
+    /** Height (px) currently taken by the soft keyboard; 0 = keyboard not shown. Maintained by {@link #sampleImeInset()}. */
     private static int sImeInset = 0;
 
-    /** 输入焦点刚变化时连续采样几次，等输入法动画结束。 */
+    /** Sample several times in a row right after input focus changes, waiting for the IME animation to finish. */
     private static final int[] IME_SAMPLE_DELAYS = {80, 200, 400, 700, 1200};
 
     public static void setKeyCaptureEnabled(boolean enabled) {
@@ -628,10 +628,10 @@ public final class CefManager {
     }
 
     /**
-     * 页面内输入框焦点（omp:cef:internal:inputFocusChanged）。
+     * Page text-input focus (omp:cef:internal:inputFocusChanged).
      *
-     * PC 把它和"浏览器焦点"分开存：浏览器焦点决定鼠标/键盘给谁，输入框焦点只用于
-     * 判断聊天框要不要让位（ShouldBlockChat）。Android 保持同样的两套状态。
+     * PC stores it separately from "browser focus": browser focus decides who gets mouse/keyboard, input focus is only used to
+     * decide whether the chat box should yield (ShouldBlockChat). Android keeps the same two states.
      */
     public static void setInputFocus(int browserId, boolean hasFocus) {
         if (hasFocus) {
@@ -644,8 +644,8 @@ public final class CefManager {
         Log.i(TAG, "input focus browser=" + browserId + " hasFocus=" + hasFocus
                 + " (current=" + sInputFocusedId + ")");
 
-        // 输入框拿到/失去焦点是"键盘即将弹出/收起"的唯一可靠信号，在这里补采几次：
-        // 输入法窗口动画要几百毫秒，单次采样容易量到 0 或量到半截高度。
+        // An input gaining/losing focus is the only reliable signal that the keyboard is about to show/hide; sample a few extra times here:
+        // The IME window animation takes a few hundred milliseconds, so a single sample easily measures 0 or a half height.
         if (hasFocus) {
             Handler main;
             synchronized (LOCK) {
@@ -665,25 +665,25 @@ public final class CefManager {
     }
 
     /**
-     * 游戏聊天框是否应该被页面接管（PC FocusManager::ShouldBlockChat 的等价实现）。
+     * Whether the game chat box should be taken over by the page (equivalent of PC FocusManager::ShouldBlockChat).
      *
-     * true = 玩家在页面输入框里打字，游戏自己的聊天输入不该再抢键盘。
+     * true = the player is typing in a page input, so the game's own chat input must not grab the keyboard.
      */
     public static boolean shouldBlockChat() {
         final int id = sInputFocusedId;
-        // 三级判定（chat 被关 / 无输入焦点 / 该页 controls_chat_input）在 CefLogic
-        // 里，由离线单测覆盖；这里只负责取页面状态。
+        // The three-level check (chat disabled / no input focus / this page's controls_chat_input) lives in CefLogic
+        // and is covered by offline unit tests; this only fetches the page state.
         CefWebView view = id < 0 ? null : find(id);
         return CefLogic.shouldBlockChat(sChatInputEnabled, id,
                 view != null && view.controlsChatInput());
     }
 
     /**
-     * 游戏聊天输入开/关（UI._onKeyboardVisibilityChanged -> 这里）。
+     * Game chat input on/off (UI._onKeyboardVisibilityChanged -> here).
      *
-     * PC ChatHook::SetChatInputState 做两件事：给每个页面发本地事件
-     * omp:cef:internal:chatInputState，再发 ClientEmitEvent(ChatInputState, browserId=-1)。
-     * 两者这里都照做。
+     * PC ChatHook::SetChatInputState does two things: sends a local event to every page,
+     * omp:cef:internal:chatInputState, then sends ClientEmitEvent(ChatInputState, browserId=-1).
+     * Both are done here too.
      */
     public static void onGameChatStateChanged(final boolean open) {
         post(() -> {
@@ -708,11 +708,11 @@ public final class CefManager {
     }
 
     /**
-     * 按键上报（SAMP.dispatchKeyEvent 调用，主线程）。
+     * Key reporting (called by SAMP.dispatchKeyEvent, main thread).
      *
-     * 与 PC 逐条对齐：只有 key_capture_enabled 且该 VK 在白名单里才发；按下自动重复
-     * 一律丢弃（PC: if (!(down && repeat))），所以 repeat 字段在线上恒为 false。
-     * 不做任何 UI 操作，因此可以直接在当前线程把事件送进 KCP。
+     * Aligned with PC item by item: only sent when key_capture_enabled is on and the VK is allowlisted; auto-repeat on key-down
+     * is always dropped (PC: if (!(down && repeat))), so the repeat field is always false in production.
+     * Does no UI work, so the event can be sent into KCP directly on the current thread.
      */
     public static void handleKeyEvent(KeyEvent event) {
         if (event == null || !sKeyCaptureEnabled) return;
@@ -724,12 +724,12 @@ public final class CefManager {
         } else if (action == KeyEvent.ACTION_UP) {
             down = false;
         } else {
-            return;   // ACTION_MULTIPLE 等：PC 只处理 WM_KEYDOWN/WM_KEYUP
+            return;   // ACTION_MULTIPLE etc.: PC only handles WM_KEYDOWN/WM_KEYUP
         }
 
         final boolean repeat = down && event.getRepeatCount() > 0;
         final int vk = CefKeys.vkOf(event.getKeyCode());
-        // 门控条件（捕获开关 / 白名单 / 丢弃自动重复）集中在 CefLogic，离线单测覆盖。
+        // Gating conditions (capture switch / allowlist / drop auto-repeat) are centralized in CefLogic and covered by offline unit tests.
         if (!CefLogic.shouldSendKey(sKeyCaptureEnabled, sKeyAllowed, vk, down, repeat)) return;
 
         final int scan = CefKeys.scanOf(event.getKeyCode());
@@ -753,8 +753,8 @@ public final class CefManager {
     }
 
     /**
-     * 返回键：有浏览器拿着焦点时，第一下只把焦点还给游戏，不销毁页面
-     * （页面生命周期属于服务端，客户端不能替它 DestroyBrowser）。
+     * Back key: when a browser holds focus, the first press only returns focus to the game, without destroying the page
+     * (the page lifecycle belongs to the server; the client must not DestroyBrowser on its behalf).
      */
     public static boolean onBackPressed() {
         int focusedId = -1;
@@ -773,7 +773,7 @@ public final class CefManager {
         return true;
     }
 
-    /** 应用切到后台 / 重建时收起输入法并让出游戏输入。 */
+    /** Hides the IME and yields game input when the app goes to the background / is recreated. */
     public static void releaseAllFocus() {
         List<CefWebView> all;
         synchronized (LOCK) {
@@ -791,25 +791,24 @@ public final class CefManager {
     }
 
     /**
-     * 页面需要键盘时把窗口切成 adjustResize，同时把软键盘高度退让给页面视口。
+     * When a page needs the keyboard, switches the window to adjustResize and yields the soft-keyboard height to the page viewport.
      *
-     * 为什么两步都要做：
+     * Why both steps are needed:
      *
-     *   1) 窗口模式。Activity 清单里是 adjustPan（游戏自己的聊天框靠平移就够），但
-     *      adjustPan 只是把整窗往上推，Chromium 收不到"可视区域变小"的信号，页面里
-     *      靠下的 input 会被键盘盖住且不会自动滚动 —— 实测（V2312A）输入框正好压在
-     *      键盘下沿。切成 adjustResize 后窗口本身会缩。
+     *   1) Window mode. The Activity manifest uses adjustPan (panning is enough for the game's own chat box), but
+     *      adjustPan only pushes the whole window up; Chromium never gets a "visible area shrank" signal, so an input near the bottom of the page
+     *      gets covered by the keyboard and never auto-scrolls — measured (V2312A) with the input sitting exactly under the
+     *      keyboard's bottom edge. Switching to adjustResize shrinks the window itself.
      *
-     *   2) 视口退让。本 ROM 上 setSoftInputMode(adjustResize) 只改了请求值，DecorView
-     *      的测量并没有跟着变（dumpsys window 仍是 sim={adjust=pan}）。而 CEF 覆盖层
-     *      是直接挂在 DecorView 上的 MATCH_PARENT 子 View，即使 android.R.id.content
-     *      缩了它也不会缩。所以最终靠 {@link #sampleImeInset()} 量出键盘真实高度，把
-     *      覆盖层底部顶起同样高度，WebView 的 innerHeight 才会真的变小、Chromium 才会
-     *      把聚焦元素滚进可视区。
+     *   2) Viewport inset. On this ROM, setSoftInputMode(adjustResize) only changes the requested value; DecorView's
+     *      measurement does not follow (dumpsys window still shows sim={adjust=pan}). And the CEF overlay
+     *      is a MATCH_PARENT child view attached directly to DecorView, so even if android.R.id.content
+     *      shrinks, it does not. So in the end {@link #sampleImeInset()} measures the keyboard's real height, and
+     *      the overlay's bottom is raised by the same height, so the WebView innerHeight actually shrinks and Chromium
+     *      scrolls the focused element into view.
      *
-     * 两步是自洽的：窗口若真被 resize，DecorView 高度就等于可见高度，量出来的 inset
-     * 自然是 0，不会重复退让。只在"浏览器持有焦点"期间生效 —— 这时游戏输入本来就让
-     * 出去了。
+     * The two steps are self-consistent: if the window is really resized, DecorView's height equals the visible height, so the measured inset
+     * is naturally 0, with no double inset. It only applies while "a browser holds focus" — when game input has already yielded.
      */
     private static void applyImeResize(boolean enable) {
         Activity activity = sActivity.get();
@@ -832,18 +831,18 @@ public final class CefManager {
         } catch (Throwable t) {
             Log.w(TAG, "setSoftInputMode failed", t);
         }
-        // 焦点/可见性变了：立刻按当前 inset 重新分配一次（不退让的浏览器清零）。
+        // Focus/visibility changed: immediately re-assign by the current inset (browsers that do not yield are zeroed).
         pushImeInset();
         sampleImeInset();
     }
 
     /**
-     * 装一个只在布局变化时跑一次的采样器（不轮询）。
+     * Installs a sampler that runs once only on layout changes (no polling).
      *
-     * 键盘弹出在多数 ROM 上都会触发一次 traversal，因此全局布局回调足够。但
-     * adjustPan 路径下窗口尺寸不变，个别 ROM 不会重新布局，所以页面报告
-     * inputFocusChanged 时还会用 {@link #IME_SAMPLE_DELAYS} 补采几次，避免
-     * "键盘明明弹了却没量到"。采样次数有上限，不会常驻耗电。
+     * A keyboard showing triggers a traversal on most ROMs, so the global layout callback is enough. But
+     * under the adjustPan path the window size does not change and some ROMs never re-layout, so when a page reports
+     * inputFocusChanged, {@link #IME_SAMPLE_DELAYS} samples a few extra times to avoid
+     * "the keyboard clearly showed but nothing was measured". Sampling is capped, so it never drains battery in the background.
      */
     private static void installImeWatcher(final Activity activity) {
         try {
@@ -860,7 +859,7 @@ public final class CefManager {
         }
     }
 
-    /** 量一次"可见区域"底部与 DecorView 底部的差额，作为软键盘高度。 */
+    /** Measures the gap between the bottom of the "visible area" and the bottom of DecorView once, as the soft-keyboard height. */
     private static void sampleImeInset() {
         Activity activity = sActivity.get();
         if (activity == null) return;
@@ -871,9 +870,9 @@ public final class CefManager {
         try {
             final android.graphics.Rect frame = new android.graphics.Rect();
             decor.getWindowVisibleDisplayFrame(frame);
-            // 用 imeMarginOf 而不是 imeInsetOf：adjustResize 生效时窗口已经变矮，
-            // 再按"屏幕被键盘占了多少"去减 bottomMargin 就是二次退让 —— 页面会被
-            // 永久压在键盘上沿（真机现象：键盘收起后 viewport 只剩 2298x372）。
+            // Uses imeMarginOf instead of imeInsetOf: when adjustResize takes effect the window is already shorter,
+            // subtracting bottomMargin again by "how much of the screen the keyboard occupies" would be a double inset — the page would be
+            // permanently pressed against the top edge of the keyboard (real-device symptom: after the keyboard hides, the viewport is left at only 2298x372).
             final android.util.DisplayMetrics dm = new android.util.DisplayMetrics();
             try {
                 activity.getWindowManager().getDefaultDisplay().getRealMetrics(dm);
@@ -892,7 +891,7 @@ public final class CefManager {
         }
     }
 
-    /** 把当前软键盘高度写给"可见且有焦点"的浏览器，其余清零。 */
+    /** Writes the current soft-keyboard height to "visible and focused" browsers; zeroes the rest. */
     private static void pushImeInset() {
         for (int i = 0; i < sBrowsers.size(); i++) {
             CefWebView view = sBrowsers.valueAt(i);
@@ -903,7 +902,7 @@ public final class CefManager {
         }
     }
 
-    /** 游戏侧手势清零（页面开始接管触摸时调用，避免摇杆粘键）。 */
+    /** Clears game-side gestures (called when a page starts taking over touch, to avoid a stuck joystick). */
     private static void cancelGameTouches() {
         Activity activity = sActivity.get();
         if (activity instanceof com.sampmobile.game.SAMP) {
@@ -915,7 +914,7 @@ public final class CefManager {
         }
     }
 
-    // ------------------------------------------------------------- 主线程实现
+    // ------------------------------------------------------------- Main-thread implementation
 
     private static void doCreateBrowser(int id, String url, boolean focused, boolean controlsChat) {
         Activity activity = sActivity.get();
@@ -933,7 +932,7 @@ public final class CefManager {
             }
         }
 
-        // CreateBrowser(focused=true)：新页面直接接管输入，旧焦点让位（单焦点语义）。
+        // CreateBrowser(focused=true): the new page takes over input directly; the old focus yields (single-focus semantics).
         if (focused) {
             for (int i = 0; i < sBrowsers.size(); i++) {
                 CefWebView other = sBrowsers.valueAt(i);
@@ -966,15 +965,15 @@ public final class CefManager {
             sBrowsers.put(id, view);
         }
 
-        // PC 版在 CefBrowser 对象创建完成后即回报成功（不等页面加载完成），
-        // 这里 WebView 已挂载，语义等价。
+        // On PC, success is reported as soon as the CefBrowser object is created (without waiting for the page to load);
+        // here the WebView is already attached, so the semantics are equivalent.
         applyImeResize(isAnyBrowserFocused());
         Log.i(TAG, "browser " + id + " created url=" + url
                 + " focused=" + focused + " controlsChat=" + controlsChat);
         reportCreateResult(id, true, CREATE_OK, "Successfully created");
     }
 
-    /** World2D 的创建：固定像素视口、不抢焦点、不接管游戏聊天（PC 同样置 false）。 */
+    /** World2D creation: fixed pixel viewport, no focus grab, no game-chat takeover (PC sets false too). */
     private static void doCreateWorld2D(int id, String url,
                                         float worldX, float worldY, float worldZ,
                                         float width, float height,
@@ -1031,7 +1030,7 @@ public final class CefManager {
                 + " viewport=" + w + "x" + h
                 + " world=(" + worldX + "," + worldY + "," + worldZ + ")"
                 + " offsetZ=" + offsetZ + " pivot=(" + pivotX + "," + pivotY + ")");
-        // PC 的 OnBrowserCreated 对 World2D 也回报 BrowserCreateResult。
+        // PC's OnBrowserCreated also reports BrowserCreateResult for World2D.
         reportCreateResult(id, true, CREATE_OK, "Successfully created");
     }
 
@@ -1057,8 +1056,8 @@ public final class CefManager {
         synchronized (LOCK) {
             main = sMain;
             if (!sInstalled || main == null) {
-                // 管理器尚未安装（游戏线程早于 onCreate 收到事件）：
-                // 先排队，install() 时按序重放，不丢事件。
+                // Manager not installed yet (the game thread received an event before onCreate):
+                // Queue it first; replay in order during install(), losing no events.
                 if (sPending.size() < 64) {
                     sPending.add(task);
                     Log.i(TAG, "queued command until install (" + sPending.size() + ")");
@@ -1071,38 +1070,38 @@ public final class CefManager {
         main.post(task);
     }
 
-    /** 由原生 CefBrowser 实现：把创建结果作为 BrowserCreateResult 事件回给服务端。 */
+    /** Implemented by native CefBrowser: returns the creation result to the server as a BrowserCreateResult event. */
     private static native void nativeOnBrowserCreated(int id, boolean ok, int code, String reason);
 
-    /** window.cef.emit 上行：name + JSON 标量数组，原生侧还原类型后发 ClientEmitEvent。 */
+    /** window.cef.emit uplink: name + JSON scalar array; native restores the types and sends ClientEmitEvent. */
     private static native void nativeEmitFromJs(int browserId, String name, String argsJson);
 
-    /** 按键上行：ClientEmitEvent(PressKey, [vk, scancode, modifiers, down, repeat])。 */
+    /** Key uplink: ClientEmitEvent(PressKey, [vk, scancode, modifiers, down, repeat]). */
     private static native void nativeSendPressKey(int vk, int scancode, int modifiers,
                                                  boolean down, boolean repeat);
 
-    /** 游戏聊天输入开/关：ClientEmitEvent(ChatInputState, [open])，browserId = -1。 */
+    /** Game chat input on/off: ClientEmitEvent(ChatInputState, [open]), browserId = -1. */
     private static native void nativeSendChatInputState(boolean open);
 
     private static native void nativeDebugConnect(String host, int port, int playerId);
 
-    /** 资源缓存根目录（<filesDir>/cef），DownloadComplete 前解出的页面都在其下。 */
+    /** Resource cache root (<filesDir>/cef); pages extracted before DownloadComplete all live under it. */
     private static native void nativeSetStorageRoot(String root);
 
     private static native void nativeDebugDisconnect();
 
-    /** 阶段7 调试入口：在本地玩家头顶放一个 World2D 页面（仅 debuggable 包）。 */
+    /** Stage 7 debug entry: places a World2D page above the local player's head (debuggable builds only). */
     private static native void nativeDebugWorld2D(int id, float heightAbovePed, float width, float height);
 
-    /** 让所有 World2D（含服务端事件的）上报投影矩形，仅用于验收。 */
+    /** Makes all World2D pages (including server-driven ones) report their projection rectangles, for acceptance testing only. */
     private static native void nativeSetWorld2DProbe(boolean on);
     private static native void nativeDebugWorldObject(int id, int model, float distance);
 
-    // ------------------------------------------------------------- 调试入口
+    // ------------------------------------------------------------- Debug entries
 
     /**
-     * 仅 debuggable 包注册。用途：手机未连游戏服务器时，也能验证
-     * CreateBrowser / 可见性 / 销毁与协议回执链路。
+     * Registered in debuggable builds only. Purpose: even when the phone is not connected to a game server, it can still verify
+     * CreateBrowser / visibility / destroy and the protocol receipt chain.
      *
      *   adb shell am broadcast -a com.sampmobile.CEFDEBUG -p <pkg> \
      *       --es action connect --es host 127.0.0.1 --ei port 7900 --ei playerid 1
@@ -1191,8 +1190,8 @@ public final class CefManager {
                         break;
                     }
                     case "chatstate": {
-                        // 走游戏自己的入口（UI.showKeyboard），与原生代码打开聊天框时
-                        // 完全同一条链路，因此同时也验证了 shouldBlockChat 闸门。
+                        // Goes through the game's own entry point (UI.showKeyboard), the same chain as when native code opens the chat box,
+                        // so it also verifies the shouldBlockChat gate.
                         boolean open = intent.getIntExtra("on", 1) != 0;
                         Activity activity = sActivity.get();
                         if (activity instanceof com.sampmobile.game.SAMP) {
@@ -1209,8 +1208,8 @@ public final class CefManager {
                         break;
                     }
                     case "world2d": {
-                        // 阶段7 调试入口：把 World2D 页面放到玩家头顶，验证投影与命中。
-                        // 世界坐标由 native 读本地 ped 位置算，这里只传尺寸/高度。
+                        // Stage 7 debug entry: puts a World2D page above the player's head to verify projection and hit-testing.
+                        // World coordinates are computed by native from the local ped position; only size/height are passed here.
                         int id = intent.getIntExtra("id", 12);
                         float above = intent.getIntExtra("above", 150) / 100.0f;
                         float w = intent.getIntExtra("w", 512);
@@ -1219,15 +1218,15 @@ public final class CefManager {
                         break;
                     }
                     case "world2dprobe": {
-                        // 验收用：原版插件建的 World2D 不会带 debugProbe，打开这个
-                        // 开关后客户端会和调试入口一样上报 debug:world2d。
+                        // For acceptance: World2D pages built by the stock plugin carry no debugProbe; turning this
+                        // switch on makes the client report debug:world2d just like the debug entry.
                         nativeSetWorld2DProbe(intent.getIntExtra("on", 1) != 0);
                         break;
                     }
                     case "worldobj": {
-                        // 阶段7 第二批调试入口：在玩家前方生成一个真实物体，把页面
-                        // 贴到它表面。单机模式下没有 SA-MP 物体池，协议路径的
-                        // objectId 无从解析，所以贴图链路只能这样验。
+                        // Stage 7 second-batch debug entry: spawns a real object in front of the player and sticks the page
+                        // onto its surface. In single-player mode there is no SA-MP object pool, so the protocol path's
+                        // objectId cannot be resolved, so the texture path can only be verified this way.
                         int id = intent.getIntExtra("id", 12);
                         int model = intent.getIntExtra("model", 19377);
                         float dist = intent.getIntExtra("dist", 6);
@@ -1235,7 +1234,7 @@ public final class CefManager {
                         break;
                     }
                     case "worldobjsize": {
-                        // 只建离屏页面（不生成物体），用来单独验证抓帧。
+                        // Only builds the offscreen page (no object spawned), to verify frame capture on its own.
                         int id = intent.getIntExtra("id", 12);
                         int w = intent.getIntExtra("w", 512);
                         int h = intent.getIntExtra("h", 256);

@@ -88,12 +88,12 @@ public class ClientSettingsTest {
 
     @Test
     public void labels_lookupExplicitValuesNotArrayIndices() {
-        assertEquals("无限制", ClientSettings.labelForIntOption(ClientSettings.FPS_LIMITS, 0));
+        assertEquals("Unlimited", ClientSettings.labelForIntOption(ClientSettings.FPS_LIMITS, 0));
         assertEquals("90", ClientSettings.labelForIntOption(ClientSettings.FPS_LIMITS, 90));
-        assertEquals("无限制", ClientSettings.labelForIntOption(ClientSettings.FPS_LIMITS, 999));
+        assertEquals("Unlimited", ClientSettings.labelForIntOption(ClientSettings.FPS_LIMITS, 999));
 
-        assertEquals("标准", ClientSettings.labelForIntOption(ClientSettings.PED_ZOOM_OPTIONS, 2));
-        assertEquals("仅游戏画面", ClientSettings.labelForStringOption(ClientSettings.SCREENSHOT_MODES, "game"));
-        assertEquals("点击切换", ClientSettings.labelForStringOption(ClientSettings.VOICE_MIC_MODES, "toggle"));
+        assertEquals("Standard", ClientSettings.labelForIntOption(ClientSettings.PED_ZOOM_OPTIONS, 2));
+        assertEquals("Game view only", ClientSettings.labelForStringOption(ClientSettings.SCREENSHOT_MODES, "game"));
+        assertEquals("Tap to toggle", ClientSettings.labelForStringOption(ClientSettings.VOICE_MIC_MODES, "toggle"));
     }
 }

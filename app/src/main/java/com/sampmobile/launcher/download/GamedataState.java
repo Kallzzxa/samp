@@ -14,29 +14,29 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 数据就绪判定 —— 只此一处，避免 Splash 与下载任务各写一份导致口径漂移。
+ * Data-readiness check — only here, so Splash and the download task do not each write their own copy and drift apart.
  *
- * 判定规则：**安装记录存在** 且 **GTA 核心文件齐全**。
+ * Rule: **an install record exists** AND **GTA core files are complete**.
  *
- * 为什么不是只看核心文件：
- *   如果数据包只含联机资源（不含 texdb/gta3.img 等），每次启动都会判"未就绪"，
- *   形成"下完 → 重启 → 又要求下载"的死循环。
+ * Why not check core files only:
+ *   If a data package contains only online resources (no texdb/gta3.img etc.), every launch would judge it "not ready",
+ *   forming a "downloaded → restarted → asked to download again" loop.
  *
- * 为什么不是只看安装记录：
- *   记录写了但文件被用户从文件管理器清掉，游戏进去会崩。核心文件是最终凭据。
+ * Why not check the install record only:
+ *   The record may exist while the user deleted the files from a file manager, and the game would crash on entry. Core files are the final proof.
  */
 public final class GamedataState {
 
     private GamedataState() {}
 
-    /** 安装记录文件（与 ChunkDownloader 的缓存目录一致）。 */
+    /** Install record file (same directory as ChunkDownloader's cache). */
     public static File stateFile(Context context) {
         File root = context.getExternalFilesDir(null);
         if (root == null) root = new File(context.getFilesDir(), "ext");
         return new File(new File(root, ".dl"), "installed.json");
     }
 
-    /** 已安装版本号；没有记录返回 null。 */
+    /** Installed version; null if there is no record. */
     public static String installedVersion(Context context) {
         File f = stateFile(context);
         if (!f.isFile()) return null;
@@ -52,41 +52,41 @@ public final class GamedataState {
         }
     }
 
-    /** 数据是否就绪（可以被游戏直接使用）。 */
+    /** Whether the data is ready (usable by the game directly). */
     public static boolean isReady(Context context) {
         File root = context.getExternalFilesDir(null);
 
-        // 核心文件齐全就是可用 —— 不管这些文件是本下载器装的、还是玩家用
-        // GameDataImporter 手动导入的、还是 adb push 进去的。
-        // 早期实现要求必须有 installed.json，导致已经手动放好数据的老玩家
-        // 一配上下载地址就被强制重下，这是错的。
+        // Complete core files means usable — whether those files were installed by this downloader, or the player used
+        // GameDataImporter to import them manually, or pushed them in with adb.
+        // An early implementation required installed.json, which forced long-time players who had already placed their data manually
+        // to re-download as soon as a download URL was configured. That was wrong.
         if (GameDataImporter.isGameDataReady(root)) return true;
 
-        // 核心文件不全时，如果下载器曾经成功装过一次（有版本记录），
-        // 说明是后续被破坏（例如用户从文件管理器删了文件），需要重下。
-        // 没有记录也没有文件，是首次启动。
+        // When core files are incomplete, if the downloader once installed successfully (there is a version record),
+        // it means the data was damaged afterwards (e.g. the user deleted files from a file manager) and needs re-downloading.
+        // No record and no files means a first launch.
         return false;
     }
 
     /**
-     * 数据是否由本下载器安装（有版本记录）。
+     * Whether the data was installed by this downloader (has a version record).
      *
-     * 与 {@link #isReady} 的区别：这个用于"要不要检查新版本"，
-     * isReady 用于"能不能直接进游戏"。手动导入的老玩家前者为 false、
-     * 后者为 true —— 可以正常玩，只是不会自动追更新。
+     * Difference from {@link #isReady}: this one is for "should we check for a new version",
+     * while isReady is for "can we enter the game directly". For long-time players who imported manually, the former is false and
+     * the latter is true — they can play normally, they just do not get automatic updates.
      */
     public static boolean isManagedByDownloader(Context context) {
         return installedVersion(context) != null;
     }
 
-    /** 缺哪些核心文件（空表示齐全），用于给玩家更具体的提示。 */
+    /** Which core files are missing (empty means complete), to give the player a more specific hint. */
     public static java.util.List<String> missingCoreFiles(Context context) {
         return GameDataImporter.findMissingCoreFiles(context.getExternalFilesDir(null));
     }
 
     /**
-     * 解析内置下载清单地址：优先取构建期注入的 BuildConfig.GAMEDATA_MANIFEST_URL，
-     * 其次回退到 strings.xml 的 gamedata_manifest_url；两者皆空则返回空串。
+     * Resolve the built-in download manifest URL: prefer the build-time injected BuildConfig.GAMEDATA_MANIFEST_URL,
+     * then fall back to strings.xml's gamedata_manifest_url; if both are empty, return an empty string.
      */
     public static String resolveManifestUrl(Context context) {
         String url = BuildConfig.GAMEDATA_MANIFEST_URL;
