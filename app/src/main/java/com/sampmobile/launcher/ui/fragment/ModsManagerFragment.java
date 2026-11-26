@@ -476,13 +476,13 @@ public class ModsManagerFragment extends Fragment implements LauncherThemeManage
     private String emptyHintForTab(int tab) {
         switch (tab) {
             case TAB_MODLOADER:
-                return "No Modloader mod packs yet\nTap "Import skins/models (IMG+TXD)" or "Import full ZIP mod pack" on the right, or place files in files/modloader/ manually";
+                return "No Modloader mod packs yet\nTap “Import skins/models (IMG+TXD)” or “Import full ZIP mod pack” on the right, or place files in files/modloader/ manually";
             case TAB_AML:
-                return "No AML plugins (.so) yet\nTap "Import AML plugin (.so)" on the right, or place files in Android/data/com.sampmobile.launcher/mods/";
+                return "No AML plugins (.so) yet\nTap “Import AML plugin (.so)” on the right, or place files in Android/data/com.sampmobile.launcher/mods/";
             case TAB_MONET:
-                return "No MonetLoader Lua scripts yet\nTap "Import Lua script (.lua)" on the right, or place files in files/monetloader/";
+                return "No MonetLoader Lua scripts yet\nTap “Import Lua script (.lua)” on the right, or place files in files/monetloader/";
             case TAB_CLEO:
-                return "No CLEO scripts yet\nTap "Import CLEO script" on the right, or place files in files/cleo/";
+                return "No CLEO scripts yet\nTap “Import CLEO script” on the right, or place files in files/cleo/";
             default:
                 return "No entries";
         }
@@ -731,7 +731,7 @@ public class ModsManagerFragment extends Fragment implements LauncherThemeManage
         Context ctx = requireContext();
         new AlertDialog.Builder(ctx)
                 .setTitle("Confirm delete")
-                .setMessage("Permanently delete "" + item.title + ""? This can't be undone.")
+                .setMessage("Permanently delete “" + item.title + "”? This can't be undone.")
                 .setPositiveButton("Delete", (d, w) -> {
                     Context appCtx = ctx.getApplicationContext();
                     ioExecutor.execute(() -> {

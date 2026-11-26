@@ -72,7 +72,7 @@ final class SettingsDiagnosticsController {
                     if (hasCrash) {
                         tvStatusTitle.setText("Diagnostics status: past crash records found");
                         tvStatusDesc.setText(String.format(Locale.US,
-                                "The system has auto-saved %d diagnostics records in the background. If you just had a crash or freeze, tap "Copy bug report" below and send it to support or a developer for help.",
+                                "The system has auto-saved %d diagnostics records in the background. If you just had a crash or freeze, tap “Copy bug report” below and send it to support or a developer for help.",
                                 finalLogCount));
                     } else if (finalLogCount > 0) {
                         tvStatusTitle.setText("Diagnostics status: OK");

@@ -141,7 +141,7 @@ public class MainActivity extends AppCompatActivity implements LauncherThemeMana
         }
         StringBuilder msg = new StringBuilder("No complete game data package detected (missing ");
         msg.append(String.join(", ", missing));
-        msg.append(").\n\nGo to "Settings → File Verification" to see detailed file status and choose local import or download the lite resources from the launcher.");
+        msg.append(").\n\nGo to “Settings → File Verification” to see detailed file status and choose local import or download the lite resources from the launcher.");
         new AlertDialog.Builder(this)
                 .setTitle("Missing game data package")
                 .setMessage(msg.toString())

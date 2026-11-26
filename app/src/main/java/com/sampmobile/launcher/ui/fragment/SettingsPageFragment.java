@@ -1066,29 +1066,29 @@ public class SettingsPageFragment extends Fragment implements LauncherThemeManag
     private void populateHelpAndAbout() {
         tv_help_mods_body.setText(
                 "1. Where do I enable and manage mods?\n"
-                + "Go back to the launcher home screen and tap the "Mods" section in the leftmost navigation bar. There you can turn each loader on or off, and manage every mod pack and script individually.\n\n"
+                + "Go back to the launcher home screen and tap the “Mods” section in the leftmost navigation bar. There you can turn each loader on or off, and manage every mod pack and script individually.\n\n"
                 + "2. How do I install vehicle packs, character skins, weapons, and texture/sound mods?\n"
-                + "The client supports loose-file replacement with no packing needed. Just put the downloaded mod folder (with .dff models, .txd textures, or sound files) under the modloader/ folder in the game data directory, then enable the asset loader in the "Mods" section on the home screen — it takes effect automatically without touching the original data pack.\n\n"
+                + "The client supports loose-file replacement with no packing needed. Just put the downloaded mod folder (with .dff models, .txd textures, or sound files) under the modloader/ folder in the game data directory, then enable the asset loader in the “Mods” section on the home screen — it takes effect automatically without touching the original data pack.\n\n"
                 + "3. How do I use Lua helper scripts and native extension plugins?\n"
-                + "• Lua scripts: put .lua script files in the monetloader/ directory and enable the script loader in the "Mods" section on the home screen;\n"
-                + "• Native plugins and graphics patches: turn extension plugins and engine fix patches on with one tap in the "Mods" section on the home screen, and tap "Graphics patch settings" to toggle individual rendering optimizations.\n\n"
+                + "• Lua scripts: put .lua script files in the monetloader/ directory and enable the script loader in the “Mods” section on the home screen;\n"
+                + "• Native plugins and graphics patches: turn extension plugins and engine fix patches on with one tap in the “Mods” section on the home screen, and tap “Graphics patch settings” to toggle individual rendering optimizations.\n\n"
                 + "4. What do I do if the game crashes after installing a new mod?\n"
-                + "Different mods can conflict over model IDs or use outdated scripts. Just turn off the most recently added mod in the "Mods" section on the home screen to get back in game right away; you can also copy the bug report from "Report an issue" on this page and send it to a developer.");
+                + "Different mods can conflict over model IDs or use outdated scripts. Just turn off the most recently added mod in the “Mods” section on the home screen to get back in game right away; you can also copy the bug report from “Report an issue” on this page and send it to a developer.");
 
         tv_help_faq_body.setText(
                 "1. How do I use free camera, adjust the joystick size, or customize game button positions?\n"
-                + "• Free camera: turn on "Free camera (camera won't auto-center)" in "Camera settings" — while walking or driving, the camera stays where you rotated it;\n"
-                + "• Per-mode sensitivity: adjust separate camera sensitivity for walking, driving, and aiming in "Camera settings";\n"
-                + "• Custom button positions: in "Controls settings", tap "Open button position editor automatically when entering the game" (or expand the bottom quick bar in game and tap the HUD key, or type /hudedit) to drag and resize the on-screen buttons like in single-player.\n\n"
+                + "• Free camera: turn on “Free camera (camera won't auto-center)” in “Camera settings” — while walking or driving, the camera stays where you rotated it;\n"
+                + "• Per-mode sensitivity: adjust separate camera sensitivity for walking, driving, and aiming in “Camera settings”;\n"
+                + "• Custom button positions: in “Controls settings”, tap “Open button position editor automatically when entering the game” (or expand the bottom quick bar in game and tap the HUD key, or type /hudedit) to drag and resize the on-screen buttons like in single-player.\n\n"
                 + "2. On foot, how do I switch camera distance, aim, block, or ride as a passenger?\n"
-                + "• Switch camera distance: tap the camera icon at the top-right of the game screen to cycle near, standard, and far views; you can also set the default distance in "Camera settings";\n"
+                + "• Switch camera distance: tap the camera icon at the top-right of the game screen to cycle near, standard, and far views; you can also set the default distance in “Camera settings”;\n"
                 + "• Aim and shoot: while holding a gun, tap the separate crosshair button on the right to aim; tap the fire button for single shots, hold it for continuous fire;\n"
                 + "• Melee block: while unarmed or holding a melee weapon, hold the block button to stay in a defensive stance;\n"
                 + "• Ride as passenger: near a vehicle, tap the G key icon that appears on the right of the screen, or expand the bottom function keyboard and tap G.\n\n"
                 + "3. How do I fix garbled Chinese text after joining a server?\n"
-                + "In "Online settings", change "Server text encoding": most Chinese servers use GBK, some newer servers use UTF-8, and Hong Kong/Taiwan servers often use BIG5.\n\n"
+                + "In “Online settings”, change “Server text encoding”: most Chinese servers use GBK, some newer servers use UTF-8, and Hong Kong/Taiwan servers often use BIG5.\n\n"
                 + "4. How do I take a clean game screenshot with no chat box or UI buttons?\n"
-                + "In "Screenshots", set the screenshot range to "Game view only", or type /ss game in the in-game chat to capture a clean shot with all UI and buttons hidden.");
+                + "In “Screenshots”, set the screenshot range to “Game view only”, or type /ss game in the in-game chat to capture a clean shot with all UI and buttons hidden.");
 
         tv_help_commands.setText(
                 "/ss or /screenshot      Take a screenshot now (or tap F8 on the bottom quick keyboard)\n"

@@ -183,7 +183,7 @@ final class SettingsArtworkCacheController {
         new AlertDialog.Builder(act)
                 .setTitle("Delete cache folder")
                 .setMessage(String.format(Locale.US,
-                        "Delete %,d cached files (%s) from "%s"?\nThe required models will be re-downloaded next time you join that server.",
+                        "Delete %,d cached files (%s) from “%s”?\nThe required models will be re-downloaded next time you join that server.",
                         entry.name, entry.fileCount, GameDataVerifier.formatBytes(entry.totalBytes)))
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Confirm delete", (d, w) -> {

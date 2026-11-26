@@ -261,7 +261,7 @@ final class SettingsGameDataController {
         if (selectedEdition == GameDataVerifier.Edition.FULL) {
             new AlertDialog.Builder(host.requireActivity())
                     .setTitle("Full edition download not available yet")
-                    .setMessage("The launcher currently only offers the Lite game data download; the Full edition (2.10 GiB) can only be installed and verified via "Local import".\n\nSwitch to the Lite edition and start downloading?")
+                    .setMessage("The launcher currently only offers the Lite game data download; the Full edition (2.10 GiB) can only be installed and verified via “Local import”.\n\nSwitch to the Lite edition and start downloading?")
                     .setPositiveButton("Switch to Lite and download", (d, w) -> {
                         selectedEdition = GameDataVerifier.Edition.LITE;
                         if (optionEdition != null) {
@@ -283,7 +283,7 @@ final class SettingsGameDataController {
         if (manifestUrl.isEmpty()) {
             new AlertDialog.Builder(host.requireActivity())
                     .setTitle("No download source configured")
-                    .setMessage("This build has no built-in Lite data download source.\n\nPrepare a game data .zip first, then tap "Local import" to import it into the launcher.")
+                    .setMessage("This build has no built-in Lite data download source.\n\nPrepare a game data .zip first, then tap “Local import” to import it into the launcher.")
                     .setPositiveButton("Go to local import", (d, w) ->
                             host.gameDataZipPicker.launch(new String[]{"application/zip", "application/octet-stream", "*/*"}))
                     .setNegativeButton("Got it", null)
