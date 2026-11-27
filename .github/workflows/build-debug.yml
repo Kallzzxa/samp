@@ -35,7 +35,7 @@ jobs:
       - name: Build debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug -PskipGtasaCheck=true --no-daemon -Dorg.gradle.jvmargs="-Xmx4g"
+          ./gradlew assembleDebug --no-daemon -Dorg.gradle.jvmargs="-Xmx4g"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
